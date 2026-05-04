@@ -67,6 +67,10 @@ export default function AdminDashboardPage() {
     setUploadingLogo(false)
   }
 
+  function removeLogo() {
+    setEditForm((p: any) => ({ ...p, logo_url: null }))
+  }
+
   async function saveEdit() {
     setSaving(true)
     const s = createClient()
@@ -220,6 +224,11 @@ export default function AdminDashboardPage() {
                         <input ref={logoRef} type="file" accept="image/*" style={{ display: 'none' }}
                           onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f) }} />
                         <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>Logo<br/>max 2MB</div>
+                        {editForm.logo_url && (
+                          <button onClick={removeLogo} style={{ fontSize: 9, color: '#F87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', marginTop: 2 }}>
+                            ✕ Supprimer
+                          </button>
+                        )}
                       </div>
 
                       {/* Colonne 1 */}
