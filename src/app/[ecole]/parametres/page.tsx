@@ -402,7 +402,7 @@ function ClassesLegacyTab({ ecoleId }: { ecoleId: string }) {
   useEffect(() => {
     const s = createClient()
     Promise.all([
-      s.from('classes').select('*, secteurs(nom)').eq('ecole_id', ecoleId).order('nom'),
+      s.from('classes').select('id, nom, secteur_id, secteurs(nom)').eq('ecole_id', ecoleId).order('nom'),
       s.from('secteurs').select('id, nom').eq('ecole_id', ecoleId).eq('actif', true).order('ordre'),
     ]).then(([{ data: cl }, { data: sec }]) => { setClasses(cl ?? []); setSecteurs(sec ?? []) })
   }, [ecoleId])
