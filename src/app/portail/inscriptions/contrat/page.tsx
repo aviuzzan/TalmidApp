@@ -50,7 +50,7 @@ export default function ContratPage() {
     setEnfants(enf ?? []); setSecteurs(sec ?? []); setTarifs(tar ?? [])
     setModes(mod ?? []); setConfig(cfg); setContrat(cont)
     if (red?.statut === 'accepte') { setReductionAccordee(red); setCasReduction(true) }
-    if (mod?.length > 0 && !modeReglement) setModeReglement(mod[0].type)
+    if (mod && mod.length > 0 && !modeReglement) setModeReglement(mod[0].type)
 
     // Pré-remplir si contrat existant
     if (cont) {
