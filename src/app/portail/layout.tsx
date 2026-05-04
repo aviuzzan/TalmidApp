@@ -21,7 +21,16 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         .eq('id', session.user.id)
         .single()
 
-      if (profile?.role === 'admin') { router.push('/dashboard'); return }
+      if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+        const { data: adminProfile } = await supabase
+          .from('profiles')
+          .select('ecoles(slug)')
+          .eq('id', session.user.id)
+          .single()
+        const slug = (adminProfile as any)?.ecoles?.slug || 'hederloubavitch'
+        router.push(`/${slug}/dashboard`)
+        return
+      }
       if (!profile?.famille_id) {
         // Compte parent pas encore lié à une famille
         setEmail(session.user.email ?? '')

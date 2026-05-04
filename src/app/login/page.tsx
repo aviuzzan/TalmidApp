@@ -13,13 +13,33 @@ export default function LoginPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true); setError('')
-    const { error } = await createClient().auth.signInWithPassword({ email, password })
-    if (error) {
-      setError(error.message.includes('Invalid') ? 'Email ou mot de passe incorrect.' : 'Une erreur est survenue.')
+    setLoading(true)
+    setError('')
+
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError) {
+      setError(authError.message.includes('Invalid') ? 'Email ou mot de passe incorrect.' : 'Une erreur est survenue.')
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
+    }
+
+    // Récupérer le profil + l'école associée pour savoir où rediriger
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, ecoles(slug)')
+        .eq('id', session.user.id)
+        .single()
+
+      if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+        const slug = (profile as any).ecoles?.slug || 'hederloubavitch'
+        router.push(`/${slug}/dashboard`)
+      } else {
+        router.push('/portail')
+      }
     }
   }
 
