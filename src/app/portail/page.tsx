@@ -100,6 +100,7 @@ export default function PortailPage() {
         {[
           { icon: '🎓', title: 'Mes enfants', desc: 'Consulter les informations de vos enfants', href: '/portail/enfants' },
           { icon: '💰', title: 'Mes factures', desc: 'Voir vos factures et règlements', href: '/portail/factures' },
+          { icon: '📝', title: 'Inscriptions N+1', desc: 'Gérer les inscriptions 2026/2027', href: '/portail/inscriptions' },
           { icon: '📄', title: 'Documents', desc: 'Envoyer et consulter vos documents', href: '/portail/documents' },
           { icon: '📞', title: 'Contact', desc: 'Contacter l\'administration', href: 'mailto:admin@talmid.fr' },
         ].map(item => (
