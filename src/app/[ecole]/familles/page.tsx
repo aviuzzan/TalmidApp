@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useEcole } from '@/lib/ecole-context'
 
 const SITUATIONS = [
   { value: 'marie', label: 'Marié(e)' }, { value: 'celibataire', label: 'Célibataire' },
