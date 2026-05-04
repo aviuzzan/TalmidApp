@@ -151,6 +151,16 @@ export default function LandingPage() {
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(59,130,246,0.15)' }}>
             Connexion →
           </button>
+          <button onClick={() => router.push('/admin')}
+            style={{
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, padding: '8px 14px', color: 'rgba(255,255,255,0.25)',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
+            ⚙
+          </button>
         </div>
       </nav>
 
