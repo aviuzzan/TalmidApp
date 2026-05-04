@@ -12,6 +12,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   const NAV = [
     { href: `/${slug}/dashboard`, icon: '◈', label: 'Tableau de bord' },
     { href: `/${slug}/familles`, icon: '👨‍👩‍👧', label: 'Familles' },
+    { href: `/${slug}/enfants`, icon: '🎓', label: 'Élèves' },
     { href: `/${slug}/finances`, icon: '💰', label: 'Finances' },
     { href: `/${slug}/gestion-n1`, icon: '📅', label: 'Gestion N+1' },
     { href: `/${slug}/comptes-parents`, icon: '👥', label: 'Comptes parents' },
