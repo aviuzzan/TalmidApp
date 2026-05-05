@@ -464,6 +464,21 @@ export default function ContratPage() {
         </div>
       </div>
 
+      {/* ── DEBUG PANEL (temporaire) ── */}
+      <div style={{ background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 10, padding: 14, fontSize: 11, fontFamily: 'monospace' }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>🔍 Debug (temporaire)</div>
+        <div>enfants.length = {enfants.length}</div>
+        <div>tarifs.length = {tarifs.length}</div>
+        <div>reductions.length = {reductions.length}</div>
+        <div>reductions = {JSON.stringify(reductions)}</div>
+        <div>enfantsContrat = {JSON.stringify(enfantsContrat.map(e => ({id: e.enfant_id, classe_id: e.classe_id, sous_total: e.sous_total})))}</div>
+        <div>totalScolarite = {totalScolarite}</div>
+        <div>nbEnfants = {nbEnfants}</div>
+        <div>nbEnfantsAvecClasse = {nbEnfantsAvecClasse}</div>
+        <div>reductionFN = {reductionFN}</div>
+        <div>totalAnnuel = {totalAnnuel}</div>
+      </div>
+
       {/* ── RÈGLEMENT ── */}
       <Section title="4. Mode de règlement *">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
