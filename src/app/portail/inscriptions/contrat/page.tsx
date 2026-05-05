@@ -94,15 +94,26 @@ export default function ContratPage() {
     const maxEch = payCfg?.nb_echeances_max || 12
     setNbEcheances(Math.min(maxEch, 10))
 
-    // Pré-sélectionner tous les enfants
+    // Pré-sélectionner tous les enfants avec leurs tarifs calculés
     if (enf && enf.length > 0 && !cont) {
-      setEnfantsContrat(enf.map((e: any) => ({
-        enfant_id: e.id,
-        classe_id: e.classe_id || '',
-        classe_nom: e.classes?.nom || '',
-        postes: [],
-        sous_total: 0,
-      })))
+      setEnfantsContrat(enf.map((e: any) => {
+        const classeObj = e.classes
+        const secteurId = classeObj?.secteur_id || ''
+        // Tarifs applicables pour ce secteur
+        const tarifsApplicables = (tar ?? []).filter((t: any) => !t.secteur_id || t.secteur_id === secteurId)
+        const postesObligatoires = e.classe_id
+          ? tarifsApplicables.filter((t: any) => t.obligatoire).map((t: any) => ({
+              tarif_id: t.id, nom: t.nom_poste, montant: parseFloat(t.montant) || 0,
+            }))
+          : []
+        return {
+          enfant_id: e.id,
+          classe_id: e.classe_id || '',
+          classe_nom: classeObj?.nom || e.classe || '',
+          postes: postesObligatoires,
+          sous_total: postesObligatoires.reduce((s: number, p: any) => s + p.montant, 0),
+        }
+      }))
     } else if (cont?.contrat_enfants) {
       setEnfantsContrat(cont.contrat_enfants)
     }
@@ -121,8 +132,8 @@ export default function ContratPage() {
       const postesObligatoires = tarifsDispos.filter((t: any) => t.obligatoire)
       return {
         ...e, classe_id: classeId, classe_nom: cls?.nom || '',
-        postes: postesObligatoires.map((t: any) => ({ tarif_id: t.id, nom: t.nom_poste, montant: t.montant })),
-        sous_total: postesObligatoires.reduce((s: number, t: any) => s + t.montant, 0),
+        postes: postesObligatoires.map((t: any) => ({ tarif_id: t.id, nom: t.nom_poste, montant: parseFloat(t.montant) || 0 })),
+        sous_total: postesObligatoires.reduce((s: number, t: any) => s + (parseFloat(t.montant) || 0), 0),
       }
     }))
   }
@@ -134,7 +145,7 @@ export default function ContratPage() {
       const newPostes = exists
         ? e.postes.filter((p: any) => p.tarif_id !== tarif.id)
         : [...e.postes, { tarif_id: tarif.id, nom: tarif.nom_poste, montant: tarif.montant }]
-      return { ...e, postes: newPostes, sous_total: newPostes.reduce((s: number, p: any) => s + p.montant, 0) }
+      return { ...e, postes: newPostes, sous_total: newPostes.reduce((s: number, p: any) => s + (parseFloat(p.montant) || 0), 0) }
     }))
   }
 
