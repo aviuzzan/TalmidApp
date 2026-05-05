@@ -348,24 +348,24 @@ export default function DemandeReductionPage() {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom *</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => setFam('parent1_prenom', e.target.value)} /></div>
-          <div><label style={lbl}>Nom *</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => setFam('parent1_nom', e.target.value)} /></div>
-          <div><label style={lbl}>Adresse *</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => setFam('parent1_adresse', e.target.value)} /></div>
+          <div><label style={lbl}>Prénom *</label><input style={inp} defaultValue={famForm.parent1_prenom || ''} onBlur={e => setFam('parent1_prenom', e.target.value)} /></div>
+          <div><label style={lbl}>Nom *</label><input style={inp} defaultValue={famForm.parent1_nom || ''} onBlur={e => setFam('parent1_nom', e.target.value)} /></div>
+          <div><label style={lbl}>Adresse *</label><input style={inp} defaultValue={famForm.parent1_adresse || ''} onBlur={e => setFam('parent1_adresse', e.target.value)} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div><label style={lbl}>Code postal *</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => setFam('parent1_code_postal', e.target.value)} /></div>
-            <div><label style={lbl}>Ville *</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => setFam('parent1_ville', e.target.value)} /></div>
+            <div><label style={lbl}>Code postal *</label><input style={inp} defaultValue={famForm.parent1_code_postal || ''} onBlur={e => setFam('parent1_code_postal', e.target.value)} /></div>
+            <div><label style={lbl}>Ville *</label><input style={inp} defaultValue={famForm.parent1_ville || ''} onBlur={e => setFam('parent1_ville', e.target.value)} /></div>
           </div>
-          <div><label style={lbl}>Téléphone *</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => setFam('parent1_telephone', e.target.value)} /></div>
-          <div><label style={lbl}>Email *</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => setFam('parent1_email', e.target.value)} /></div>
+          <div><label style={lbl}>Téléphone *</label><input style={inp} defaultValue={famForm.parent1_telephone || ''} onBlur={e => setFam('parent1_telephone', e.target.value)} /></div>
+          <div><label style={lbl}>Email *</label><input style={inp} type="email" defaultValue={famForm.parent1_email || ''} onBlur={e => setFam('parent1_email', e.target.value)} /></div>
         </div>
       </Section>
 
       <Section title="2. Responsable 2 (si applicable)">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => setFam('parent2_prenom', e.target.value)} /></div>
-          <div><label style={lbl}>Nom</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => setFam('parent2_nom', e.target.value)} /></div>
-          <div><label style={lbl}>Téléphone</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => setFam('parent2_telephone', e.target.value)} /></div>
-          <div><label style={lbl}>Email</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => setFam('parent2_email', e.target.value)} /></div>
+          <div><label style={lbl}>Prénom</label><input style={inp} defaultValue={famForm.parent2_prenom || ''} onBlur={e => setFam('parent2_prenom', e.target.value)} /></div>
+          <div><label style={lbl}>Nom</label><input style={inp} defaultValue={famForm.parent2_nom || ''} onBlur={e => setFam('parent2_nom', e.target.value)} /></div>
+          <div><label style={lbl}>Téléphone</label><input style={inp} defaultValue={famForm.parent2_telephone || ''} onBlur={e => setFam('parent2_telephone', e.target.value)} /></div>
+          <div><label style={lbl}>Email</label><input style={inp} type="email" defaultValue={famForm.parent2_email || ''} onBlur={e => setFam('parent2_email', e.target.value)} /></div>
         </div>
       </Section>
 
@@ -459,11 +459,11 @@ export default function DemandeReductionPage() {
           <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus par personne *</div>
           {revenus.map((r, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom / Prénom</label><input style={inp} placeholder="Jean Dupont" value={r.nom_prenom} onChange={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} placeholder="Père" value={r.lien_parente} onChange={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} value={r.employeur} onChange={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net/mois</label><input style={inp} type="number" value={r.salaire_mensuel_net} onChange={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label><input style={inp} type="number" min="1" max="12" value={r.nb_mois} onChange={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom / Prénom</label><input style={inp} placeholder="Jean Dupont" defaultValue={r.nom_prenom} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} placeholder="Père" defaultValue={r.lien_parente} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} defaultValue={r.employeur} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net/mois</label><input style={inp} type="number" defaultValue={r.salaire_mensuel_net} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label><input style={inp} type="number" min="1" max="12" defaultValue={r.nb_mois} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x))} /></div>
               <div style={{ paddingBottom: 2 }}>
                 {i > 0 && <button onClick={() => setRevenus(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}
               </div>
@@ -495,16 +495,16 @@ export default function DemandeReductionPage() {
           <div>
             <label style={lbl}>Tarif annuel proposé pour l'ensemble du dossier (€) *</label>
             <input style={{ ...inp, fontSize: 18, fontWeight: 700, color: '#1D4ED8', textAlign: 'center', padding: '12px' }}
-              type="number" value={reponses['tarif_propose'] || ''} placeholder="Ex: 3 000"
-              onChange={e => setRep('tarif_propose', parseFloat(e.target.value) || '')} />
+              type="number" defaultValue={reponses['tarif_propose'] || ''} placeholder="Ex: 3 000"
+              onBlur={e => setRep('tarif_propose', parseFloat(e.target.value) || '')} />
           </div>
         </div>
       </Section>
 
       {/* ── SECTION 8 : COMMENTAIRE ── */}
       <Section title="8. Commentaire (optionnel)">
-        <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={commentaire}
-          onChange={e => setCommentaire(e.target.value)}
+        <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} defaultValue={commentaire}
+          onBlur={e => setCommentaire(e.target.value)}
           placeholder="Précisions sur votre situation, éléments que vous souhaitez porter à la connaissance de la commission..." />
       </Section>
 
@@ -535,7 +535,7 @@ export default function DemandeReductionPage() {
           En soumettant ce dossier, je soussigné(e) <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, atteste sur l'honneur que tous les renseignements portés sont conformes, sincères et véritables. J'accepte que l'établissement transmette les informations nécessaires à tout organisme susceptible d'accorder une aide. Je m'engage à informer le service comptabilité de toute modification de ma situation.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
-          <div><label style={lbl}>Fait à *</label><input style={inp} value={reponses['attestation_lieu'] || ''} onChange={e => setRep('attestation_lieu', e.target.value)} placeholder="Ville" /></div>
+          <div><label style={lbl}>Fait à *</label><input style={inp} defaultValue={reponses['attestation_lieu'] || ''} onBlur={e => setRep('attestation_lieu', e.target.value)} placeholder="Ville" /></div>
           <div><label style={lbl}>Le</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} onChange={e => setRep('attestation_date', e.target.value)} /></div>
         </div>
       </div>
@@ -563,7 +563,7 @@ function QuestionField({ q, val, onChange, inp, lbl }: { q: any; val: any; onCha
     return (
       <div>
         <label style={lbl}>{q.label}{q.obligatoire ? ' *' : ''}</label>
-        <select style={inp} value={val || ''} onChange={e => onChange(e.target.value)}>
+        <select style={inp} defaultValue={val || ''} onBlur={e => onChange(e.target.value)}>
           <option value="">Choisir...</option>
           {options.map(([v, l]: any) => <option key={v} value={v}>{l}</option>)}
         </select>
@@ -573,13 +573,13 @@ function QuestionField({ q, val, onChange, inp, lbl }: { q: any; val: any; onCha
   if (q.type === 'textarea') return (
     <div>
       <label style={lbl}>{q.label}{q.obligatoire ? ' *' : ''}</label>
-      <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} />
+      <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} defaultValue={val || ''} onBlur={e => onChange(e.target.value)} />
     </div>
   )
   return (
     <div>
       <label style={lbl}>{q.label}{q.obligatoire ? ' *' : ''}</label>
-      <input style={inp} type={q.type === 'number' ? 'number' : 'text'} value={val || ''} onChange={e => onChange(e.target.value)} />
+      <input style={inp} type={q.type === 'number' ? 'number' : 'text'} defaultValue={val || ''} onBlur={e => onChange(e.target.value)} />
     </div>
   )
 }
