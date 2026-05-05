@@ -144,7 +144,10 @@ export default function ContratPage() {
 
   // Calculs
   const totalScolarite = enfantsContrat.reduce((s, e) => s + (e.sous_total || 0), 0)
-  const nbEnfants = enfantsContrat.filter(e => e.classe_id).length
+  // Pour le tarif : enfants avec classe sélectionnée
+  const nbEnfantsAvecClasse = enfantsContrat.filter(e => e.classe_id).length
+  // Pour la réduction famille nombreuse : total enfants de la famille
+  const nbEnfants = enfants.length
 
   // Réduction famille nombreuse
   const getReductionFamilleNombreuse = () => {
@@ -155,7 +158,7 @@ export default function ContratPage() {
   }
 
   const reductionFN = reductionAccordee ? 0 : (getReductionFamilleNombreuse() || 0)
-  const totalAssurance = assuranceEcole ? (config?.montant_assurance || 12) * nbEnfants : 0
+  const totalAssurance = assuranceEcole ? (config?.montant_assurance || 12) * Math.max(1, nbEnfantsAvecClasse) : 0
 
   const totalAnnuel = reductionAccordee?.tarif_accorde
     ? reductionAccordee.tarif_accorde + totalAssurance
@@ -398,7 +401,7 @@ export default function ContratPage() {
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
             <input type="radio" checked={assuranceEcole} onChange={() => setAssuranceEcole(true)} />
             <div>Assurance proposée par l'établissement
-              <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>{config?.montant_assurance || 12} € × {Math.max(1, nbEnfants)} = {totalAssurance} €</span>
+              <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>{config?.montant_assurance || 12} € × {Math.max(1, nbEnfantsAvecClasse)} = {totalAssurance} €</span>
             </div>
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: !assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${!assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
@@ -424,7 +427,7 @@ export default function ContratPage() {
 
         {reductionFN > 0 && !reductionAccordee && (
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}>
-            <span>Réduction famille nombreuse ({nbEnfants} enfants)</span>
+            <span>Réduction famille nombreuse ({enfants.length} enfant{enfants.length > 1 ? 's' : ''})</span>
             <span>- {reductionFN.toLocaleString('fr-FR')} €</span>
           </div>
         )}
