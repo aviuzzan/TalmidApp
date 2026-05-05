@@ -38,9 +38,10 @@ export async function POST(req: NextRequest) {
     if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 })
 
     // URL signée valable 1 an
-    const { data: { signedUrl } } = await supabaseAdmin.storage
+    const signedUrlResult = await supabaseAdmin.storage
       .from('dossiers')
       .createSignedUrl(path, 365 * 24 * 3600)
+    const signedUrl = signedUrlResult.data?.signedUrl || ''
 
     // Enregistrer en base si demandeId fourni
     if (demandeId) {
