@@ -149,12 +149,12 @@ export default function ContratPage() {
   // Réduction famille nombreuse
   const getReductionFamilleNombreuse = () => {
     if (nbEnfants < 2) return 0
-    const applicable = reductions.filter(r => r.nb_enfants <= nbEnfants)
+    const applicable = reductions.filter(r => parseInt(r.nb_enfants) <= nbEnfants)
     if (applicable.length === 0) return 0
-    return applicable[applicable.length - 1].montant_reduction
+    return parseFloat(applicable[applicable.length - 1].montant_reduction) || 0
   }
 
-  const reductionFN = reductionAccordee ? 0 : getReductionFamilleNombreuse()
+  const reductionFN = reductionAccordee ? 0 : (getReductionFamilleNombreuse() || 0)
   const totalAssurance = assuranceEcole ? (config?.montant_assurance || 12) * nbEnfants : 0
 
   const totalAnnuel = reductionAccordee?.tarif_accorde
