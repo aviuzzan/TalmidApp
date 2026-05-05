@@ -423,14 +423,14 @@ export default function DemandeReductionPage() {
       {/* ── SECTION 4 : LOGEMENT ── */}
       {questionsParSection('logement').length > 0 && (
         <Section title="4. Logement">
-          {questionsParSection('logement').map(q => <QuestionField key={q.id} q={q} val={reponses[q.cle]} onChange={v => setRep(q.cle, v)} inp={inp} lbl={lbl} />)}
+          {questionsParSection('logement').map(q => <QuestionField key={q.id} q={q} val={reponses[q.cle]} onChange={(v: any) => setRep(q.cle, v)} inp={inp} lbl={lbl} />)}
         </Section>
       )}
 
       {/* ── SECTION 5 : REVENUS ── */}
       <Section title="5. Revenus du foyer *">
         <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Listez toutes les personnes percevant des revenus au foyer.</p>
-        {questionsParSection('revenus').map(q => <QuestionField key={q.id} q={q} val={reponses[q.cle]} onChange={v => setRep(q.cle, v)} inp={inp} lbl={lbl} />)}
+        {questionsParSection('revenus').map(q => <QuestionField key={q.id} q={q} val={reponses[q.cle]} onChange={(v: any) => setRep(q.cle, v)} inp={inp} lbl={lbl} />)}
 
         <div style={{ marginTop: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus par personne *</div>
@@ -457,7 +457,7 @@ export default function DemandeReductionPage() {
       {questionsParSection('allocations').length > 0 && (
         <Section title="6. Allocations et autres revenus">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {questionsParSection('allocations').map(q => <QuestionField key={q.id} q={q} val={reponses[q.cle]} onChange={v => setRep(q.cle, v)} inp={inp} lbl={lbl} />)}
+            {questionsParSection('allocations').map(q => <QuestionField key={q.id} q={q} val={reponses[q.cle]} onChange={(v: any) => setRep(q.cle, v)} inp={inp} lbl={lbl} />)}
           </div>
         </Section>
       )}
@@ -532,7 +532,7 @@ export default function DemandeReductionPage() {
 }
 
 // Composant question dynamique
-function QuestionField({ q, val, onChange, inp, lbl }: any) {
+function QuestionField({ q, val, onChange, inp, lbl }: { q: any; val: any; onChange: (v: any) => void; inp: any; lbl: any }) {
   if (q.type === 'select') {
     const options = q.cle === 'logement_type'
       ? [['proprietaire', 'Propriétaire'], ['locataire', 'Locataire'], ['autre', 'Autre']]
