@@ -1,190 +1,307 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useEcole } from '@/lib/ecole-context'
 
 export default function ComptesParentsPage() {
-  const [profiles, setProfiles] = useState<any[]>([])
+  const ecole = useEcole()
   const [familles, setFamilles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [search, setSearch] = useState('')
 
-  const emptyForm = { email: '', password: '', prenom: '', nom: '', famille_id: '' }
-  const [form, setForm] = useState(emptyForm)
+  // Modal création
+  const [modal, setModal] = useState<any>(null) // { famille }
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '' })
+  const [creating, setCreating] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [showPwd, setShowPwd] = useState(false)
 
-  const supabase = createClient()
+  useEffect(() => { load() }, [ecole.id])
 
-  const load = useCallback(async () => {
-    const [{ data: p }, { data: f }] = await Promise.all([
-      supabase.from('profiles_with_email').select('*, familles(nom, numero)').eq('role', 'parent').order('created_at', { ascending: false }),
-      supabase.from('familles').select('id, nom, numero').order('nom'),
-    ])
-    setProfiles(p ?? [])
-    setFamilles(f ?? [])
+  async function load() {
+    setLoading(true)
+    const s = createClient()
+
+    // Récupérer familles + leurs comptes parents
+    const { data: fams } = await s
+      .from('familles')
+      .select('id, nom, numero, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email')
+      .eq('ecole_id', ecole.id)
+      .order('nom')
+
+    // Récupérer les profiles parents liés
+    const { data: parentProfiles } = await s
+      .from('profiles')
+      .select('id, famille_id, ecole_id')
+      .eq('role', 'parent')
+      .eq('ecole_id', ecole.id)
+
+    // Récupérer les emails des parents (via auth — on a juste les IDs)
+    // On fait un join manuel
+    const familleMap = new Map()
+    parentProfiles?.forEach(p => {
+      if (!familleMap.has(p.famille_id)) familleMap.set(p.famille_id, [])
+      familleMap.get(p.famille_id).push(p)
+    })
+
+    const enriched = (fams ?? []).map(f => ({
+      ...f,
+      comptes: familleMap.get(f.id) || [],
+    }))
+
+    setFamilles(enriched)
     setLoading(false)
-  }, [])
+  }
 
-  useEffect(() => { load() }, [load])
+  function openModal(famille: any) {
+    setModal({ famille })
+    // Pré-remplir avec email parent1 si disponible
+    setForm({
+      email: famille.parent1_email || '',
+      password: '',
+      confirmPassword: '',
+    })
+    setResult(null)
+  }
 
-  async function createParent(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true); setError(''); setSuccess('')
+  async function creerCompte() {
+    if (!form.email || !form.password) { setResult({ ok: false, msg: 'Email et mot de passe requis' }); return }
+    if (form.password.length < 8) { setResult({ ok: false, msg: 'Mot de passe trop court (8 min)' }); return }
+    if (form.password !== form.confirmPassword) { setResult({ ok: false, msg: 'Mots de passe différents' }); return }
 
-    const { data, error: authErr } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: { data: { role: 'parent' } }
+    setCreating(true); setResult(null)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    if (!session) { setResult({ ok: false, msg: 'Session expirée' }); setCreating(false); return }
+
+    const res = await fetch('/api/admin/creer-parent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        email: form.email,
+        password: form.password,
+        familleId: modal.famille.id,
+        ecoleId: ecole.id,
+      }),
     })
 
-    if (authErr || !data.user) {
-      setError(authErr?.message ?? 'Erreur lors de la création')
-      setSaving(false); return
+    const json = await res.json()
+    if (res.ok) {
+      setResult({ ok: true, msg: json.existed ? `Compte existant lié à ${modal.famille.nom} ✓` : `Compte créé pour ${form.email} ✓` })
+      await load()
+      setTimeout(() => { setModal(null); setResult(null) }, 2000)
+    } else {
+      setResult({ ok: false, msg: json.error || 'Erreur' })
     }
-
-    // Mettre à jour le profil
-    await supabase.from('profiles').upsert({
-      id: data.user.id,
-      role: 'parent',
-      famille_id: form.famille_id || null,
-      prenom: form.prenom,
-      nom: form.nom,
-    })
-
-    setSuccess(`✓ Compte créé pour ${form.email}`)
-    setShowForm(false); setForm(emptyForm); load(); setSaving(false)
+    setCreating(false)
   }
 
-  async function linkFamille(profileId: string, familleId: string) {
-    await supabase.from('profiles').update({ famille_id: familleId || null }).eq('id', profileId)
-    load()
-  }
+  const filtered = familles.filter(f => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return f.nom?.toLowerCase().includes(q) ||
+      f.parent1_nom?.toLowerCase().includes(q) ||
+      f.parent1_prenom?.toLowerCase().includes(q) ||
+      f.parent1_email?.toLowerCase().includes(q)
+  })
 
-  async function deleteParent(profileId: string) {
-    if (!confirm('Supprimer ce compte parent ?')) return
-    await supabase.from('profiles').delete().eq('id', profileId)
-    load()
-  }
+  const avecCompte = familles.filter(f => f.comptes.length > 0).length
+  const sansCompte = familles.filter(f => f.comptes.length === 0).length
 
-  const inp = { width: '100%', padding: '9px 12px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, color: '#1E293B', fontSize: 13, outline: 'none' }
+  const inp = {
+    background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8,
+    padding: '9px 12px', fontSize: 13, outline: 'none',
+    width: '100%', boxSizing: 'border-box' as const,
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>Comptes parents</h1>
-          <p style={{ color: '#64748B', fontSize: 13 }}>Gérer les accès au portail famille — {profiles.length} compte{profiles.length > 1 ? 's' : ''}</p>
-        </div>
-        <button className="btn-primary" onClick={() => { setShowForm(true); setError(''); setSuccess('') }}>
-          + Créer un compte parent
-        </button>
+      {/* Header */}
+      <div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Comptes parents</h1>
+        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
+          Créez les accès portail pour chaque famille
+        </p>
       </div>
 
-      {success && (
-        <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, padding: '12px 16px', color: '#059669', fontSize: 13 }}>
-          {success}
-        </div>
-      )}
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {[
+          { label: 'Total familles', value: familles.length, color: '#2563EB', bg: '#EFF6FF' },
+          { label: 'Avec compte portail', value: avecCompte, color: '#10B981', bg: '#ECFDF5' },
+          { label: 'Sans compte', value: sansCompte, color: '#F59E0B', bg: '#FFFBEB' },
+        ].map(s => (
+          <div key={s.label} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px' }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: s.color }}>{loading ? '—' : s.value}</div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ background: '#F8FAFC' }}>
-            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-              {['Nom', 'Email', 'Famille liée', 'Lier à une famille', 'Action'].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
-            ) : profiles.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucun compte parent créé</td></tr>
-            ) : profiles.map((p, i) => (
-              <tr key={p.id} style={{ borderBottom: i < profiles.length - 1 ? '1px solid #F1F5F9' : 'none' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                <td style={{ padding: '12px 16px', fontWeight: 500 }}>
-                  {p.prenom || p.nom ? `${p.prenom ?? ''} ${p.nom ?? ''}`.trim() : <span style={{ color: '#94A3B8', fontSize: 12 }}>—</span>}
-                </td>
-                <td style={{ padding: '12px 16px', color: '#475569', fontSize: 13 }}>{p.email}</td>
-                <td style={{ padding: '12px 16px' }}>
-                  {p.familles ? (
-                    <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
-                      {p.familles.nom} ({p.familles.numero})
-                    </span>
-                  ) : (
-                    <span style={{ color: '#F59E0B', fontSize: 12, fontWeight: 500 }}>⚠ Non lié</span>
-                  )}
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <select style={{ ...inp, width: 'auto', fontSize: 12 }}
-                    value={p.famille_id ?? ''}
-                    onChange={e => linkFamille(p.id, e.target.value)}>
-                    <option value="">-- Sélectionner --</option>
-                    {familles.map((f: any) => (
-                      <option key={f.id} value={f.id}>{f.nom} ({f.numero})</option>
-                    ))}
-                  </select>
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <button onClick={() => deleteParent(p.id)} className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }}>
-                    🗑️ Supprimer
-                  </button>
-                </td>
+      {/* Barre recherche */}
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}>🔍</span>
+        <input style={{ ...inp, paddingLeft: 36 }} value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher une famille..." />
+      </div>
+
+      {/* Tableau */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+            {search ? `Aucun résultat pour « ${search} »` : 'Aucune famille'}
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                {['Famille', 'Responsable 1', 'Email', 'Portail', ''].map(h => (
+                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((f, i) => {
+                const aCompte = f.comptes.length > 0
+                return (
+                  <tr key={f.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #F8FAFC' : 'none' }}>
+                    <td style={{ padding: '13px 16px' }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{f.nom}</div>
+                      {f.numero && <div style={{ fontSize: 11, color: '#94A3B8' }}>N° {f.numero}</div>}
+                    </td>
+                    <td style={{ padding: '13px 16px', fontSize: 13, color: '#475569' }}>
+                      {[f.parent1_prenom, f.parent1_nom].filter(Boolean).join(' ') || '—'}
+                    </td>
+                    <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B' }}>
+                      {f.parent1_email || '—'}
+                    </td>
+                    <td style={{ padding: '13px 16px' }}>
+                      {aCompte ? (
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#10B981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 20, padding: '3px 12px' }}>
+                          ✓ Actif ({f.comptes.length})
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 20, padding: '3px 12px' }}>
+                          Aucun compte
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '13px 16px' }}>
+                      <button onClick={() => openModal(f)}
+                        style={{
+                          fontSize: 12, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 500,
+                          background: aCompte ? '#F1F5F9' : '#2563EB',
+                          color: aCompte ? '#475569' : '#fff',
+                          border: aCompte ? '1px solid #E2E8F0' : 'none',
+                        }}>
+                        {aCompte ? '+ Ajouter compte' : 'Créer accès'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Modal créer compte */}
-      {showForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 480, width: '100%', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700 }}>👨‍👩‍👧 Créer un compte parent</h2>
-              <button onClick={() => setShowForm(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: '#64748B', fontSize: 16 }}>✕</button>
+      {/* Modal création compte */}
+      {modal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: 20,
+        }} onClick={e => e.target === e.currentTarget && setModal(null)}>
+          <div style={{
+            background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+          }}>
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', margin: 0 }}>
+                Créer un accès portail
+              </h2>
+              <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
+                Famille <strong>{modal.famille.nom}</strong>
+              </p>
             </div>
-            <form onSubmit={createParent} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Prénom *</label>
-                  <input style={inp} value={form.prenom} onChange={e => setForm(p => ({ ...p, prenom: e.target.value }))} required />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Adresse email
+                </label>
+                <input style={inp} type="email" value={form.email}
+                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  placeholder="parent@email.fr" />
+                {modal.famille.parent1_email && form.email !== modal.famille.parent1_email && (
+                  <button onClick={() => setForm(p => ({ ...p, email: modal.famille.parent1_email }))}
+                    style={{ fontSize: 11, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4, padding: 0 }}>
+                    Utiliser {modal.famille.parent1_email}
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Mot de passe
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input style={{ ...inp, paddingRight: 40 }} type={showPwd ? 'text' : 'password'}
+                    value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                    placeholder="8 caractères minimum" />
+                  <button type="button" onClick={() => setShowPwd(!showPwd)}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 15 }}>
+                    {showPwd ? '🙈' : '👁'}
+                  </button>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Nom *</label>
-                  <input style={inp} value={form.nom} onChange={e => setForm(p => ({ ...p, nom: e.target.value }))} required />
-                </div>
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Email *</label>
-                <input style={inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Confirmer le mot de passe
+                </label>
+                <input style={{
+                  ...inp,
+                  borderColor: form.confirmPassword && form.confirmPassword !== form.password ? '#FCA5A5' : '#E2E8F0',
+                }} type={showPwd ? 'text' : 'password'}
+                  value={form.confirmPassword} onChange={e => setForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                  placeholder="Même mot de passe" />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Mot de passe *</label>
-                <input style={inp} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required minLength={6} placeholder="Minimum 6 caractères" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Famille à lier</label>
-                <select style={inp} value={form.famille_id} onChange={e => setForm(p => ({ ...p, famille_id: e.target.value }))}>
-                  <option value="">-- Sélectionner une famille --</option>
-                  {familles.map((f: any) => <option key={f.id} value={f.id}>{f.nom} ({f.numero})</option>)}
-                </select>
-              </div>
-              {error && (
-                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#DC2626', fontSize: 13 }}>
-                  {error}
+
+              {result && (
+                <div style={{
+                  background: result.ok ? 'rgba(16,185,129,0.1)' : '#FEF2F2',
+                  border: `1px solid ${result.ok ? 'rgba(16,185,129,0.3)' : '#FECACA'}`,
+                  borderRadius: 8, padding: '10px 14px',
+                  color: result.ok ? '#059669' : '#DC2626', fontSize: 13,
+                }}>
+                  {result.msg}
                 </div>
               )}
-              <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#0369A1' }}>
-                ℹ️ Le parent pourra se connecter sur l'application avec cet email et mot de passe. Il accèdera uniquement aux informations de sa famille.
+
+              <div style={{ background: '#F8FAFC', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#64748B' }}>
+                💡 Le parent se connectera sur{' '}
+                <strong>talmidapp.fr/{ecole.slug}/login</strong>{' '}
+                → Espace Parents
               </div>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
-                <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Création...' : '✓ Créer le compte'}</button>
-              </div>
-            </form>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={() => setModal(null)}
+                style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 9, padding: '10px 18px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button onClick={creerCompte} disabled={creating}
+                style={{ background: '#2563EB', border: 'none', borderRadius: 9, padding: '10px 22px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1 }}>
+                {creating ? 'Création...' : '✓ Créer l\'accès'}
+              </button>
+            </div>
           </div>
         </div>
       )}
