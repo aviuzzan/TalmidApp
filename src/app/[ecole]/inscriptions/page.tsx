@@ -351,8 +351,8 @@ function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee:
 
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
 
-  const STATUT_PRIORITY = { soumis: 0, en_etude: 1, accepte: 2, refuse: 3, brouillon: 4 }
-  const sorted = [...liste].sort((a, b) => (STATUT_PRIORITY[a.statut as keyof typeof STATUT_PRIORITY] ?? 9) - (STATUT_PRIORITY[b.statut as keyof typeof STATUT_PRIORITY] ?? 9))
+  const priorite: Record<string, number> = { soumis: 0, en_etude: 1, accepte: 2, refuse: 3, brouillon: 4 }
+  const sorted = [...liste].sort((a, b) => (priorite[a.statut] ?? 9) - (priorite[b.statut] ?? 9))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -401,7 +401,6 @@ function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee:
           )
         })}
       </div>
-    </div>
     </div>
   )
 }
