@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useLayoutEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
@@ -10,6 +10,12 @@ export default function DemandeReductionPage() {
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
   const [loading, setLoading] = useState(true)
+
+  // ── Préservation du scroll ──
+  const _scrollY = useRef(0)
+  useLayoutEffect(() => { window.scrollTo(0, _scrollY.current) })
+  function keepScroll() { _scrollY.current = window.scrollY }
+
   const [saving, setSaving] = useState(false)
 
   // Données
@@ -339,7 +345,7 @@ export default function DemandeReductionPage() {
         <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Ces informations sont pré-remplies depuis votre dossier. Vous pouvez les corriger si nécessaire — elles seront mises à jour dans votre dossier.</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div><label style={lbl}>Situation familiale *</label>
-            <select style={inp} value={famForm.situation_maritale || ''} onChange={e => setFam('situation_maritale', e.target.value)}>
+            <select style={inp} value={famForm.situation_maritale || ''} onChange={e => { keepScroll(); setFam('situation_maritale', e.target.value) }>
               <option value="marie">Marié(e)</option>
               <option value="veuf">Veuf/Veuve</option>
               <option value="divorce">Divorcé(e)</option>
@@ -348,24 +354,24 @@ export default function DemandeReductionPage() {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom *</label><input style={inp} defaultValue={famForm.parent1_prenom || ''} onBlur={e => setFam('parent1_prenom', e.target.value)} /></div>
-          <div><label style={lbl}>Nom *</label><input style={inp} defaultValue={famForm.parent1_nom || ''} onBlur={e => setFam('parent1_nom', e.target.value)} /></div>
-          <div><label style={lbl}>Adresse *</label><input style={inp} defaultValue={famForm.parent1_adresse || ''} onBlur={e => setFam('parent1_adresse', e.target.value)} /></div>
+          <div><label style={lbl}>Prénom *</label><input style={inp} defaultValue={famForm.parent1_prenom || ''} onBlur={e => { keepScroll(); setFam('parent1_prenom', e.target.value) } /></div>
+          <div><label style={lbl}>Nom *</label><input style={inp} defaultValue={famForm.parent1_nom || ''} onBlur={e => { keepScroll(); setFam('parent1_nom', e.target.value) } /></div>
+          <div><label style={lbl}>Adresse *</label><input style={inp} defaultValue={famForm.parent1_adresse || ''} onBlur={e => { keepScroll(); setFam('parent1_adresse', e.target.value) } /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div><label style={lbl}>Code postal *</label><input style={inp} defaultValue={famForm.parent1_code_postal || ''} onBlur={e => setFam('parent1_code_postal', e.target.value)} /></div>
-            <div><label style={lbl}>Ville *</label><input style={inp} defaultValue={famForm.parent1_ville || ''} onBlur={e => setFam('parent1_ville', e.target.value)} /></div>
+            <div><label style={lbl}>Code postal *</label><input style={inp} defaultValue={famForm.parent1_code_postal || ''} onBlur={e => { keepScroll(); setFam('parent1_code_postal', e.target.value) } /></div>
+            <div><label style={lbl}>Ville *</label><input style={inp} defaultValue={famForm.parent1_ville || ''} onBlur={e => { keepScroll(); setFam('parent1_ville', e.target.value) } /></div>
           </div>
-          <div><label style={lbl}>Téléphone *</label><input style={inp} defaultValue={famForm.parent1_telephone || ''} onBlur={e => setFam('parent1_telephone', e.target.value)} /></div>
-          <div><label style={lbl}>Email *</label><input style={inp} type="email" defaultValue={famForm.parent1_email || ''} onBlur={e => setFam('parent1_email', e.target.value)} /></div>
+          <div><label style={lbl}>Téléphone *</label><input style={inp} defaultValue={famForm.parent1_telephone || ''} onBlur={e => { keepScroll(); setFam('parent1_telephone', e.target.value) } /></div>
+          <div><label style={lbl}>Email *</label><input style={inp} type="email" defaultValue={famForm.parent1_email || ''} onBlur={e => { keepScroll(); setFam('parent1_email', e.target.value) } /></div>
         </div>
       </Section>
 
       <Section title="2. Responsable 2 (si applicable)">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom</label><input style={inp} defaultValue={famForm.parent2_prenom || ''} onBlur={e => setFam('parent2_prenom', e.target.value)} /></div>
-          <div><label style={lbl}>Nom</label><input style={inp} defaultValue={famForm.parent2_nom || ''} onBlur={e => setFam('parent2_nom', e.target.value)} /></div>
-          <div><label style={lbl}>Téléphone</label><input style={inp} defaultValue={famForm.parent2_telephone || ''} onBlur={e => setFam('parent2_telephone', e.target.value)} /></div>
-          <div><label style={lbl}>Email</label><input style={inp} type="email" defaultValue={famForm.parent2_email || ''} onBlur={e => setFam('parent2_email', e.target.value)} /></div>
+          <div><label style={lbl}>Prénom</label><input style={inp} defaultValue={famForm.parent2_prenom || ''} onBlur={e => { keepScroll(); setFam('parent2_prenom', e.target.value) } /></div>
+          <div><label style={lbl}>Nom</label><input style={inp} defaultValue={famForm.parent2_nom || ''} onBlur={e => { keepScroll(); setFam('parent2_nom', e.target.value) } /></div>
+          <div><label style={lbl}>Téléphone</label><input style={inp} defaultValue={famForm.parent2_telephone || ''} onBlur={e => { keepScroll(); setFam('parent2_telephone', e.target.value) } /></div>
+          <div><label style={lbl}>Email</label><input style={inp} type="email" defaultValue={famForm.parent2_email || ''} onBlur={e => { keepScroll(); setFam('parent2_email', e.target.value) } /></div>
         </div>
       </Section>
 
@@ -404,7 +410,7 @@ export default function DemandeReductionPage() {
                   <select
                     style={inp}
                     value={selected.classe_souhaitee || ''}
-                    onChange={e => setClasseEnfant(enfant.id, e.target.value)}
+                    onChange={e => { keepScroll(); setClasseEnfant(enfant.id, e.target.value) }
                   >
                     <option value="">— Choisir une classe —</option>
                     {classes.map(c => (
@@ -416,7 +422,7 @@ export default function DemandeReductionPage() {
                   {classeSuivante && selected.classe_souhaitee !== classeSuivante && (
                     <button
                       type="button"
-                      onClick={() => setClasseEnfant(enfant.id, classeSuivante)}
+                      onClick={() => { keepScroll(); setClasseEnfant(enfant.id, classeSuivante)}
                       style={{ fontSize: 11, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontWeight: 500 }}>
                       Utiliser la classe suggérée : {classeSuivante} →
                     </button>
@@ -459,17 +465,17 @@ export default function DemandeReductionPage() {
           <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus par personne *</div>
           {revenus.map((r, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom / Prénom</label><input style={inp} placeholder="Jean Dupont" defaultValue={r.nom_prenom} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} placeholder="Père" defaultValue={r.lien_parente} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} defaultValue={r.employeur} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net/mois</label><input style={inp} type="number" defaultValue={r.salaire_mensuel_net} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x))} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label><input style={inp} type="number" min="1" max="12" defaultValue={r.nb_mois} onBlur={e => setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom / Prénom</label><input style={inp} placeholder="Jean Dupont" defaultValue={r.nom_prenom} onBlur={e => { keepScroll(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} placeholder="Père" defaultValue={r.lien_parente} onBlur={e => { keepScroll(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} defaultValue={r.employeur} onBlur={e => { keepScroll(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net/mois</label><input style={inp} type="number" defaultValue={r.salaire_mensuel_net} onBlur={e => { keepScroll(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x))} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label><input style={inp} type="number" min="1" max="12" defaultValue={r.nb_mois} onBlur={e => { keepScroll(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x))} /></div>
               <div style={{ paddingBottom: 2 }}>
-                {i > 0 && <button onClick={() => setRevenus(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}
+                {i > 0 && <button onClick={() => { keepScroll(); setRevenus(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}
               </div>
             </div>
           ))}
-          <button onClick={() => setRevenus(p => [...p, { nom_prenom: '', lien_parente: '', employeur: '', qualification: '', salaire_mensuel_net: '', nb_mois: 12 }])}
+          <button onClick={() => { keepScroll(); setRevenus(p => [...p, { nom_prenom: '', lien_parente: '', employeur: '', qualification: '', salaire_mensuel_net: '', nb_mois: 12 }])}
             style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0, marginTop: 4 }}>
             + Ajouter une personne
           </button>
@@ -496,7 +502,7 @@ export default function DemandeReductionPage() {
             <label style={lbl}>Tarif annuel proposé pour l'ensemble du dossier (€) *</label>
             <input style={{ ...inp, fontSize: 18, fontWeight: 700, color: '#1D4ED8', textAlign: 'center', padding: '12px' }}
               type="number" defaultValue={reponses['tarif_propose'] || ''} placeholder="Ex: 3 000"
-              onBlur={e => setRep('tarif_propose', parseFloat(e.target.value) || '')} />
+              onBlur={e => { keepScroll(); setRep('tarif_propose', parseFloat(e.target.value) || '') } />
           </div>
         </div>
       </Section>
@@ -504,7 +510,7 @@ export default function DemandeReductionPage() {
       {/* ── SECTION 8 : COMMENTAIRE ── */}
       <Section title="8. Commentaire (optionnel)">
         <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} defaultValue={commentaire}
-          onBlur={e => setCommentaire(e.target.value)}
+          onBlur={e => { keepScroll(); setCommentaire(e.target.value) }
           placeholder="Précisions sur votre situation, éléments que vous souhaitez porter à la connaissance de la commission..." />
       </Section>
 
@@ -535,8 +541,8 @@ export default function DemandeReductionPage() {
           En soumettant ce dossier, je soussigné(e) <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, atteste sur l'honneur que tous les renseignements portés sont conformes, sincères et véritables. J'accepte que l'établissement transmette les informations nécessaires à tout organisme susceptible d'accorder une aide. Je m'engage à informer le service comptabilité de toute modification de ma situation.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
-          <div><label style={lbl}>Fait à *</label><input style={inp} defaultValue={reponses['attestation_lieu'] || ''} onBlur={e => setRep('attestation_lieu', e.target.value)} placeholder="Ville" /></div>
-          <div><label style={lbl}>Le</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} onChange={e => setRep('attestation_date', e.target.value)} /></div>
+          <div><label style={lbl}>Fait à *</label><input style={inp} defaultValue={reponses['attestation_lieu'] || ''} onBlur={e => { keepScroll(); setRep('attestation_lieu', e.target.value) } placeholder="Ville" /></div>
+          <div><label style={lbl}>Le</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} onChange={e => { keepScroll(); setRep('attestation_date', e.target.value) } /></div>
         </div>
       </div>
 
