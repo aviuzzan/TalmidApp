@@ -9,12 +9,6 @@ export default function ContratPage() {
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
   const [loading, setLoading] = useState(true)
-
-  // ── Préservation du scroll ──
-  const _scrollY = useRef(0)
-  useLayoutEffect(() => { window.scrollTo(0, _scrollY.current) })
-  function keepScroll() { _scrollY.current = window.scrollY }
-
   const [saving, setSaving] = useState(false)
 
   const [famille, setFamille] = useState<any>(null)
@@ -311,27 +305,27 @@ export default function ContratPage() {
         <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Vérifiez et corrigez vos informations si nécessaire.</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div><label style={lbl}>Situation *</label>
-            <select style={inp} value={famForm.situation_maritale || ''} onChange={e => { keepScroll(); setFam('situation_maritale', e.target.value) }}>
+            <select style={inp} value={famForm.situation_maritale || ''} onChange={e => setFam('situation_maritale', e.target.value)}>
               <option value="marie">Marié(e)</option><option value="veuf">Veuf/Veuve</option>
               <option value="divorce">Divorcé(e)</option><option value="autre">Autre</option>
             </select>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom resp. 1 *</label><input style={inp} defaultValue={famForm.parent1_prenom || ''} onBlur={e => { keepScroll(); setFam('parent1_prenom', e.target.value) }} /></div>
-          <div><label style={lbl}>Nom resp. 1 *</label><input style={inp} defaultValue={famForm.parent1_nom || ''} onBlur={e => { keepScroll(); setFam('parent1_nom', e.target.value) }} /></div>
-          <div><label style={lbl}>Adresse *</label><input style={inp} defaultValue={famForm.parent1_adresse || ''} onBlur={e => { keepScroll(); setFam('parent1_adresse', e.target.value) }} /></div>
+          <div><label style={lbl}>Prénom resp. 1 *</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFam('parent1_prenom', e.target.value) }} /></div>
+          <div><label style={lbl}>Nom resp. 1 *</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFam('parent1_nom', e.target.value) }} /></div>
+          <div><label style={lbl}>Adresse *</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFam('parent1_adresse', e.target.value) }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div><label style={lbl}>CP *</label><input style={inp} defaultValue={famForm.parent1_code_postal || ''} onBlur={e => { keepScroll(); setFam('parent1_code_postal', e.target.value) }} /></div>
-            <div><label style={lbl}>Ville *</label><input style={inp} defaultValue={famForm.parent1_ville || ''} onBlur={e => { keepScroll(); setFam('parent1_ville', e.target.value) }} /></div>
+            <div><label style={lbl}>CP *</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFam('parent1_code_postal', e.target.value) }} /></div>
+            <div><label style={lbl}>Ville *</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFam('parent1_ville', e.target.value) }} /></div>
           </div>
-          <div><label style={lbl}>Portable *</label><input style={inp} defaultValue={famForm.parent1_telephone || ''} onBlur={e => { keepScroll(); setFam('parent1_telephone', e.target.value) }} /></div>
-          <div><label style={lbl}>Email *</label><input style={inp} type="email" defaultValue={famForm.parent1_email || ''} onBlur={e => { keepScroll(); setFam('parent1_email', e.target.value) }} /></div>
+          <div><label style={lbl}>Portable *</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFam('parent1_telephone', e.target.value) }} /></div>
+          <div><label style={lbl}>Email *</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFam('parent1_email', e.target.value) }} /></div>
           {(famForm.parent2_prenom || famForm.parent2_nom) && <>
-            <div><label style={lbl}>Prénom resp. 2</label><input style={inp} defaultValue={famForm.parent2_prenom || ''} onBlur={e => { keepScroll(); setFam('parent2_prenom', e.target.value) }} /></div>
-            <div><label style={lbl}>Nom resp. 2</label><input style={inp} defaultValue={famForm.parent2_nom || ''} onBlur={e => { keepScroll(); setFam('parent2_nom', e.target.value) }} /></div>
-            <div><label style={lbl}>Portable resp. 2</label><input style={inp} defaultValue={famForm.parent2_telephone || ''} onBlur={e => { keepScroll(); setFam('parent2_telephone', e.target.value) }} /></div>
-            <div><label style={lbl}>Email resp. 2</label><input style={inp} type="email" defaultValue={famForm.parent2_email || ''} onBlur={e => { keepScroll(); setFam('parent2_email', e.target.value) }} /></div>
+            <div><label style={lbl}>Prénom resp. 2</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFam('parent2_prenom', e.target.value) }} /></div>
+            <div><label style={lbl}>Nom resp. 2</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFam('parent2_nom', e.target.value) }} /></div>
+            <div><label style={lbl}>Portable resp. 2</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFam('parent2_telephone', e.target.value) }} /></div>
+            <div><label style={lbl}>Email resp. 2</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFam('parent2_email', e.target.value) }} /></div>
           </>}
         </div>
       </Section>
@@ -377,7 +371,7 @@ export default function ContratPage() {
               {isSelected && <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label style={lbl}>Classe souhaitée 2026/2027 *</label>
-                  <select style={inp} value={enf.classe_id || ''} onChange={e => { keepScroll(); setEnfantClasse(enfant.id, e.target.value) }}>
+                  <select style={inp} value={enf.classe_id || ''} onChange={e => setEnfantClasse(enfant.id, e.target.value)}>
                     <option value="">Choisir une classe</option>
                     {classes.map(c => (
                       <option key={c.id} value={c.id}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}</option>
@@ -487,7 +481,7 @@ export default function ContratPage() {
                     <label style={lbl}>Nombre d'échéances *</label>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {Array.from({ length: maxEch - minEch + 1 }, (_, i) => minEch + i).map(n => (
-                        <button key={n} onClick={() => { keepScroll(); setNbEcheances(n)}
+                        <button key={n} onClick={() => setNbEcheances(n)}
                           style={{
                             width: 44, height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: nbEcheances === n ? 700 : 400,
                             background: nbEcheances === n ? '#2563EB' : '#F1F5F9',
@@ -510,7 +504,7 @@ export default function ContratPage() {
                       <label style={lbl}>Date d'encaissement mensuelle *</label>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {datesEncaissement.map(d => (
-                          <button key={d.id} onClick={() => { keepScroll(); setDateEncaissement(d.jour_du_mois)}
+                          <button key={d.id} onClick={() => setDateEncaissement(d.jour_du_mois)}
                             style={{
                               padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: dateEncaissement === d.jour_du_mois ? 600 : 400,
                               background: dateEncaissement === d.jour_du_mois ? '#2563EB' : '#F1F5F9',
@@ -532,7 +526,7 @@ export default function ContratPage() {
       {/* ── AUTORISATION IMAGE ── */}
       <Section title="5. Autorisation et engagement">
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', fontSize: 13, color: '#1E293B' }}>
-          <input type="checkbox" checked={autorisationImage} onChange={e => { keepScroll(); setAutorisationImage(e.target.checked) } style={{ marginTop: 2, flexShrink: 0 }} />
+          <input type="checkbox" checked={autorisationImage} onChange={e => setAutorisationImage(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
           <span>J'autorise la prise et l'utilisation d'image de mes enfants dans le cadre de la communication des institutions scolaires.</span>
         </label>
 
