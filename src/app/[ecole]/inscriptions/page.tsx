@@ -234,7 +234,7 @@ export default function InscriptionsAdminPage() {
 
       {/* ── RÉDUCTIONS ── */}
       {onglet === 'reduction' && (
-        <ReductionsList ecoleId={ecole.id} annee={annee} />
+        <ReductionsList ecoleId={ecole.id} annee={annee} ecoleSlug={ecole.slug} />
       )}
 
       {/* ── PÉDAGOGIQUE ── */}
@@ -335,69 +335,73 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
   )
 }
 
-function ReductionsList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee: string; ecoleSlug: string }) {
+  const router = useRouter()
   const [liste, setListe] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     createClient()
       .from('demandes_reduction')
-      .select('*, familles(nom, email_parent1)')
+      .select('*, familles(nom)')
       .eq('ecole_id', ecoleId).eq('annee_scolaire', annee)
       .order('soumis_le', { ascending: false })
       .then(({ data }) => { setListe(data ?? []); setLoading(false) })
   }, [ecoleId, annee])
 
-  async function changerStatut(id: string, statut: string, tarif?: number) {
-    const s = createClient()
-    const { data: { session } } = await s.auth.getSession()
-    await s.from('demandes_reduction').update({
-      statut, tarif_accorde: tarif, decide_par: session?.user.id, decide_le: new Date().toISOString(),
-    }).eq('id', id)
-    setListe(p => p.map(d => d.id === id ? { ...d, statut } : d))
-  }
-
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
 
+  const STATUT_PRIORITY = { soumis: 0, en_etude: 1, accepte: 2, refuse: 3, brouillon: 4 }
+  const sorted = [...liste].sort((a, b) => (STATUT_PRIORITY[a.statut as keyof typeof STATUT_PRIORITY] ?? 9) - (STATUT_PRIORITY[b.statut as keyof typeof STATUT_PRIORITY] ?? 9))
+
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
-        Demandes de réduction ({liste.length})
-      </div>
-      {liste.length === 0 ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucune demande</div>
-      ) : liste.map((d, i) => {
-        const st = formatStatut(d.statut)
-        return (
-          <div key={d.id} style={{ padding: '14px 20px', borderBottom: i < liste.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{d.familles?.nom}</div>
-              <div style={{ fontSize: 11, color: '#94A3B8' }}>
-                Proposé : {d.tarif_propose ? `${d.tarif_propose.toLocaleString('fr-FR')}€` : '—'}
-                {d.tarif_accorde ? ` · Accordé : ${d.tarif_accorde.toLocaleString('fr-FR')}€` : ''}
-                {' · '}{d.nb_enfants_concernes || 0} enfant(s)
-              </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Compteurs par statut */}
+      <div style={{ display: 'flex', gap: 10 }}>
+        {[
+          { statut: 'soumis', label: 'À traiter', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
+          { statut: 'en_etude', label: 'En étude', color: '#0891B2', bg: 'rgba(8,145,178,0.1)' },
+          { statut: 'accepte', label: 'Acceptés', color: '#10B981', bg: 'rgba(16,185,129,0.1)' },
+          { statut: 'refuse', label: 'Refusés', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
+        ].map(s => {
+          const n = liste.filter(d => d.statut === s.statut).length
+          return (
+            <div key={s.statut} style={{ background: s.bg, borderRadius: 10, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{n}</div>
+              <div style={{ fontSize: 11, color: s.color, fontWeight: 600 }}>{s.label}</div>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 20 }}>{st.label}</span>
-            {d.statut === 'soumis' && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => changerStatut(d.id, 'en_etude')}
-                  style={{ fontSize: 11, color: '#0891B2', background: 'rgba(8,145,178,0.1)', border: '1px solid rgba(8,145,178,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-                  En étude
-                </button>
-                <button onClick={() => changerStatut(d.id, 'accepte')}
-                  style={{ fontSize: 11, color: '#10B981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-                  Accepter
-                </button>
-                <button onClick={() => changerStatut(d.id, 'refuse')}
-                  style={{ fontSize: 11, color: '#EF4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-                  Refuser
-                </button>
+          )
+        })}
+      </div>
+
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
+          Dossiers de réduction ({liste.length})
+        </div>
+        {liste.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun dossier</div>
+        ) : sorted.map((d, i) => {
+          const st = formatStatut(d.statut)
+          return (
+            <div key={d.id} style={{ padding: '14px 20px', borderBottom: i < sorted.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', transition: 'background 0.1s' }}
+              onMouseEnter={ev => (ev.currentTarget as HTMLElement).style.background = '#F8FAFC'}
+              onMouseLeave={ev => (ev.currentTarget as HTMLElement).style.background = 'transparent'}
+              onClick={() => router.push(`/${ecoleSlug}/inscriptions/reduction/${d.id}`)}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{d.familles?.nom}</div>
+                <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                  {d.nb_enfants_concernes || 0} enfant(s) · Proposé : {d.tarif_propose ? `${parseFloat(d.tarif_propose).toLocaleString('fr-FR')} €` : '—'}
+                  {d.tarif_accorde ? ` · Accordé : ${parseFloat(d.tarif_accorde).toLocaleString('fr-FR')} €` : ''}
+                  {d.soumis_le ? ` · ${new Date(d.soumis_le).toLocaleDateString('fr-FR')}` : ''}
+                </div>
               </div>
-            )}
-          </div>
-        )
-      })}
+              <span style={{ fontSize: 11, fontWeight: 600, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 20 }}>{st.label}</span>
+              <span style={{ fontSize: 13, color: '#94A3B8' }}>→</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
     </div>
   )
 }
