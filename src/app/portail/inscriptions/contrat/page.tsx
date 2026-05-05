@@ -9,6 +9,10 @@ export default function ContratPage() {
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const scrollY = useRef(0)
+  useLayoutEffect(() => { window.scrollTo(0, scrollY.current) })
+  const ks = () => { scrollY.current = window.scrollY }
   const [saving, setSaving] = useState(false)
 
   const [famille, setFamille] = useState<any>(null)
