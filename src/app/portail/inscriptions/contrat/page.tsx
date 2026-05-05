@@ -321,12 +321,29 @@ export default function ContratPage() {
         <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Sélectionnez la classe souhaitée pour chaque enfant — le tarif est calculé automatiquement.</p>
         {enfants.map(enfant => {
           const enf = enfantsContrat.find(e => e.enfant_id === enfant.id) || { classe_id: '', postes: [], sous_total: 0 }
+          const isSelected = enfantsContrat.some(e => e.enfant_id === enfant.id)
           const cls = classes.find(c => c.id === enf.classe_id)
           const tarifsDispos = getTarifsForSecteur(cls?.secteur_id || '')
+
+          function toggleEnfantContrat() {
+            setEnfantsContrat(prev => {
+              if (prev.some(e => e.enfant_id === enfant.id)) {
+                return prev.filter(e => e.enfant_id !== enfant.id)
+              }
+              return [...prev, { enfant_id: enfant.id, classe_id: '', classe_nom: '', postes: [], sous_total: 0 }]
+            })
+          }
+
           return (
-            <div key={enfant.id} style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13 }}>
+            <div key={enfant.id} style={{ border: `2px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`, borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s' }}>
+              <div style={{ padding: '12px 16px', background: isSelected ? '#EFF6FF' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={toggleEnfantContrat}
+                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
+                />
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
                   {enfant.prenom?.[0]}
                 </div>
                 <div style={{ flex: 1 }}>
@@ -337,7 +354,7 @@ export default function ContratPage() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{enf.sous_total.toLocaleString('fr-FR')} €</div>
                 )}
               </div>
-              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {isSelected && <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label style={lbl}>Classe souhaitée 2026/2027 *</label>
                   <select style={inp} value={enf.classe_id || ''} onChange={e => setEnfantClasse(enfant.id, e.target.value)}>
@@ -369,7 +386,7 @@ export default function ContratPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </div>}
             </div>
           )
         })}

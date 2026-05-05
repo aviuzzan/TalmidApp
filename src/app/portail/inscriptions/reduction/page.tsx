@@ -376,28 +376,51 @@ export default function DemandeReductionPage() {
           const selected = enfantsDossier.find(e => e.enfant_id === enfant.id)
           const classeSuivante = getClasseSuivante(enfant.classeActuelle)
           return (
-            <div key={enfant.id} style={{ border: `1px solid ${selected ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: 14, background: selected ? '#EFF6FF' : '#F8FAFC' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <input type="checkbox" checked={!!selected} onChange={() => toggleEnfant(enfant.id, classeSuivante)} style={{ width: 16, height: 16 }} />
+            <div key={enfant.id} style={{ border: `2px solid ${selected ? '#2563EB' : '#E2E8F0'}`, borderRadius: 12, padding: 16, background: selected ? '#EFF6FF' : '#fff', transition: 'all 0.15s' }}>
+              {/* Ligne principale : checkbox + nom — SÉPARÉS du select */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={!!selected}
+                  onChange={() => toggleEnfant(enfant.id, classeSuivante)}
+                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
+                />
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</span>
-                  {enfant.source === 'inscription_ped' && (
-                    <span style={{ fontSize: 10, background: '#FEF3C7', color: '#D97706', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 600 }}>Inscription en cours</span>
-                  )}
-                  {enfant.classeActuelle && <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 8 }}>Classe actuelle : {enfant.classeActuelle}</span>}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                    {enfant.classeActuelle ? `Classe actuelle : ${enfant.classeActuelle}` : 'Nouvel élève'}
+                    {enfant.source === 'inscription_ped' && (
+                      <span style={{ background: '#FEF3C7', color: '#D97706', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 600, fontSize: 10 }}>Inscription en cours</span>
+                    )}
+                  </div>
                 </div>
-              </label>
+                {selected && <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 600 }}>✓ Sélectionné</span>}
+              </div>
+
+              {/* Sélecteur de classe — en dehors du label, visible uniquement si sélectionné */}
               {selected && (
-                <div style={{ marginTop: 10, marginLeft: 28 }}>
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #BFDBFE' }}>
                   <label style={lbl}>Classe souhaitée 2026/2027 *</label>
-                  <select style={{ ...inp }} value={selected.classe_souhaitee || ''} onChange={e => setClasseEnfant(enfant.id, e.target.value)}>
-                    <option value="">Choisir une classe</option>
+                  <select
+                    style={inp}
+                    value={selected.classe_souhaitee || ''}
+                    onChange={e => setClasseEnfant(enfant.id, e.target.value)}
+                  >
+                    <option value="">— Choisir une classe —</option>
                     {classes.map(c => (
                       <option key={c.id} value={c.nom}>
-                        {c.nom}{c.secteurs?.nom ? ` (${c.secteurs.nom})` : ''}{c.nom === classeSuivante ? ' ← suggérée' : ''}
+                        {c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}{c.nom === classeSuivante ? ' ★' : ''}
                       </option>
                     ))}
                   </select>
+                  {classeSuivante && selected.classe_souhaitee !== classeSuivante && (
+                    <button
+                      type="button"
+                      onClick={() => setClasseEnfant(enfant.id, classeSuivante)}
+                      style={{ fontSize: 11, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontWeight: 500 }}>
+                      Utiliser la classe suggérée : {classeSuivante} →
+                    </button>
+                  )}
                 </div>
               )}
             </div>
