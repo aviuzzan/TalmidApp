@@ -311,27 +311,27 @@ export default function ContratPage() {
         <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Vérifiez et corrigez vos informations si nécessaire.</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div><label style={lbl}>Situation *</label>
-            <select style={inp} value={famForm.situation_maritale || ''} onChange={e => { keepScroll(); setFam('situation_maritale', e.target.value) }>
+            <select style={inp} value={famForm.situation_maritale || ''} onChange={e => { keepScroll(); setFam('situation_maritale', e.target.value) }}>
               <option value="marie">Marié(e)</option><option value="veuf">Veuf/Veuve</option>
               <option value="divorce">Divorcé(e)</option><option value="autre">Autre</option>
             </select>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom resp. 1 *</label><input style={inp} defaultValue={famForm.parent1_prenom || ''} onBlur={e => { keepScroll(); setFam('parent1_prenom', e.target.value) } /></div>
-          <div><label style={lbl}>Nom resp. 1 *</label><input style={inp} defaultValue={famForm.parent1_nom || ''} onBlur={e => { keepScroll(); setFam('parent1_nom', e.target.value) } /></div>
-          <div><label style={lbl}>Adresse *</label><input style={inp} defaultValue={famForm.parent1_adresse || ''} onBlur={e => { keepScroll(); setFam('parent1_adresse', e.target.value) } /></div>
+          <div><label style={lbl}>Prénom resp. 1 *</label><input style={inp} defaultValue={famForm.parent1_prenom || ''} onBlur={e => { keepScroll(); setFam('parent1_prenom', e.target.value) }} /></div>
+          <div><label style={lbl}>Nom resp. 1 *</label><input style={inp} defaultValue={famForm.parent1_nom || ''} onBlur={e => { keepScroll(); setFam('parent1_nom', e.target.value) }} /></div>
+          <div><label style={lbl}>Adresse *</label><input style={inp} defaultValue={famForm.parent1_adresse || ''} onBlur={e => { keepScroll(); setFam('parent1_adresse', e.target.value) }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div><label style={lbl}>CP *</label><input style={inp} defaultValue={famForm.parent1_code_postal || ''} onBlur={e => { keepScroll(); setFam('parent1_code_postal', e.target.value) } /></div>
-            <div><label style={lbl}>Ville *</label><input style={inp} defaultValue={famForm.parent1_ville || ''} onBlur={e => { keepScroll(); setFam('parent1_ville', e.target.value) } /></div>
+            <div><label style={lbl}>CP *</label><input style={inp} defaultValue={famForm.parent1_code_postal || ''} onBlur={e => { keepScroll(); setFam('parent1_code_postal', e.target.value) }} /></div>
+            <div><label style={lbl}>Ville *</label><input style={inp} defaultValue={famForm.parent1_ville || ''} onBlur={e => { keepScroll(); setFam('parent1_ville', e.target.value) }} /></div>
           </div>
-          <div><label style={lbl}>Portable *</label><input style={inp} defaultValue={famForm.parent1_telephone || ''} onBlur={e => { keepScroll(); setFam('parent1_telephone', e.target.value) } /></div>
-          <div><label style={lbl}>Email *</label><input style={inp} type="email" defaultValue={famForm.parent1_email || ''} onBlur={e => { keepScroll(); setFam('parent1_email', e.target.value) } /></div>
+          <div><label style={lbl}>Portable *</label><input style={inp} defaultValue={famForm.parent1_telephone || ''} onBlur={e => { keepScroll(); setFam('parent1_telephone', e.target.value) }} /></div>
+          <div><label style={lbl}>Email *</label><input style={inp} type="email" defaultValue={famForm.parent1_email || ''} onBlur={e => { keepScroll(); setFam('parent1_email', e.target.value) }} /></div>
           {(famForm.parent2_prenom || famForm.parent2_nom) && <>
-            <div><label style={lbl}>Prénom resp. 2</label><input style={inp} defaultValue={famForm.parent2_prenom || ''} onBlur={e => { keepScroll(); setFam('parent2_prenom', e.target.value) } /></div>
-            <div><label style={lbl}>Nom resp. 2</label><input style={inp} defaultValue={famForm.parent2_nom || ''} onBlur={e => { keepScroll(); setFam('parent2_nom', e.target.value) } /></div>
-            <div><label style={lbl}>Portable resp. 2</label><input style={inp} defaultValue={famForm.parent2_telephone || ''} onBlur={e => { keepScroll(); setFam('parent2_telephone', e.target.value) } /></div>
-            <div><label style={lbl}>Email resp. 2</label><input style={inp} type="email" defaultValue={famForm.parent2_email || ''} onBlur={e => { keepScroll(); setFam('parent2_email', e.target.value) } /></div>
+            <div><label style={lbl}>Prénom resp. 2</label><input style={inp} defaultValue={famForm.parent2_prenom || ''} onBlur={e => { keepScroll(); setFam('parent2_prenom', e.target.value) }} /></div>
+            <div><label style={lbl}>Nom resp. 2</label><input style={inp} defaultValue={famForm.parent2_nom || ''} onBlur={e => { keepScroll(); setFam('parent2_nom', e.target.value) }} /></div>
+            <div><label style={lbl}>Portable resp. 2</label><input style={inp} defaultValue={famForm.parent2_telephone || ''} onBlur={e => { keepScroll(); setFam('parent2_telephone', e.target.value) }} /></div>
+            <div><label style={lbl}>Email resp. 2</label><input style={inp} type="email" defaultValue={famForm.parent2_email || ''} onBlur={e => { keepScroll(); setFam('parent2_email', e.target.value) }} /></div>
           </>}
         </div>
       </Section>
@@ -377,7 +377,7 @@ export default function ContratPage() {
               {isSelected && <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label style={lbl}>Classe souhaitée 2026/2027 *</label>
-                  <select style={inp} value={enf.classe_id || ''} onChange={e => { keepScroll(); setEnfantClasse(enfant.id, e.target.value) }>
+                  <select style={inp} value={enf.classe_id || ''} onChange={e => { keepScroll(); setEnfantClasse(enfant.id, e.target.value) }}>
                     <option value="">Choisir une classe</option>
                     {classes.map(c => (
                       <option key={c.id} value={c.id}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}</option>
