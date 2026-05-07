@@ -122,7 +122,7 @@ export default function DossierReductionPage() {
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }
 
-  const InfoBlock = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+  const InfoBlock = ({ label, value, color }: { label: string; value: string | null | undefined; color?: string }) => (
     <div>
       <div style={lbl}>{label}</div>
       <div style={{ fontSize: 13, color: color || '#1E293B', fontWeight: color ? 700 : 400 }}>{value || '—'}</div>
