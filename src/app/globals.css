@@ -213,3 +213,50 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
     padding: 16px 14px !important;
   }
 }
+
+
+/* ==================================================
+   PORTAIL FAMILLE — Pages mobile (auto-stack grids, padding, tables)
+   ================================================== */
+@media (max-width: 768px) {
+  /* All grids inside portail stack to single column */
+  .portail-main [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tighten paddings on inline-styled containers */
+  .portail-main [style*="padding: 32px 24px"] {
+    padding: 24px 14px !important;
+  }
+  .portail-main [style*="padding: 40px 24px"] {
+    padding: 32px 14px !important;
+  }
+  .portail-main [style*="padding: '32px 24px'"] {
+    padding: 24px 14px !important;
+  }
+
+  /* Tables: scroll horizontally rather than break layout */
+  .portail-main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Touch-friendly buttons in portail (44pt min) */
+  .portail-main button,
+  .portail-main a[role="button"] {
+    min-height: 44px;
+  }
+
+  /* Stronger override for input padding/min-height on mobile */
+  .portail-main input,
+  .portail-main select,
+  .portail-main textarea {
+    padding: 12px 14px !important;
+    min-height: 44px !important;
+  }
+
+  /* Hide scrollbars on the nav scroller */
+  .portail-nav::-webkit-scrollbar { height: 0 !important; }
+}
