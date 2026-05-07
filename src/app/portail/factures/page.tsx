@@ -21,7 +21,7 @@ export default function PortailFacturesPage() {
       const { data: fact } = await supabase
         .from('factures_solde').select('*')
         .eq('famille_id', profile.famille_id)
-        .eq('annee_scolaire', '2025/2026')
+        .eq('annee_scolaire', '2025-2026')
         .single()
 
       if (fact) {
