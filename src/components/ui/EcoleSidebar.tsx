@@ -18,6 +18,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
     { href: `/${slug}/comptes-parents`, icon: '👥', label: 'Comptes parents' },
     { href: `/${slug}/notifications`, icon: '📧', label: 'Notifications' },
     { href: `/${slug}/inscriptions`, icon: '📝', label: 'Inscriptions N+1' },
+    { href: `/${slug}/inscriptions/sepa`, icon: '🏦', label: 'Export SEPA' },
     { href: `/${slug}/parametres`, icon: '⚙️', label: 'Paramètres' },
   ]
 
