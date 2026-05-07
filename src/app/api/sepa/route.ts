@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Récupérer les mandats pour chaque famille
-    const familleIds = [...new Set(cheques.map(c => c.famille_id))]
+    const familleIds = Array.from(new Set(cheques.map(c => c.famille_id)))
     const { data: mandats } = await supabase
       .from('mandats_sepa')
       .select('*')
