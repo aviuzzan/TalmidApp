@@ -196,8 +196,8 @@ export default function EnfantDetailPage() {
           </div>
           {[
             { label: 'Nom de famille', value: famille?.nom },
-            { label: 'Email', value: famille?.email_parent1 },
-            { label: 'Téléphone', value: famille?.telephone_parent1 },
+            { label: 'Email', value: famille?.parent1_email },
+            { label: 'Téléphone', value: famille?.parent1_telephone },
             { label: 'Adresse', value: famille?.adresse_parent1 },
             { label: 'Situation', value: famille?.situation_familiale },
           ].map(f => (
