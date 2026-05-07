@@ -89,7 +89,7 @@ export default function InscriptionsAdminPage() {
       </div>
 
       {/* Onglets */}
-      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4 }}>
+      <div className="ecole-tabs" style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4 }}>
         {ONGLETS.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
             style={{
