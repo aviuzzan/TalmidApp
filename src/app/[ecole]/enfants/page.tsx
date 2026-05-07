@@ -19,7 +19,7 @@ export default function EnfantsPage() {
     const s = createClient()
     const [{ data: enf }, { data: cls }] = await Promise.all([
       s.from('enfants')
-        .select('*, familles(id, nom, email_parent1, telephone_parent1), classes(nom)')
+        .select('*, familles(id, nom, parent1_email, parent1_telephone), classes(nom)')
         .order('nom'),
       s.from('classes').select('id, nom').order('nom'),
     ])
@@ -141,7 +141,7 @@ export default function EnfantsPage() {
                     }
                   </td>
                   <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B' }}>
-                    {e.familles?.telephone_parent1 || e.familles?.email_parent1 || '—'}
+                    {e.familles?.parent1_telephone || e.familles?.parent1_email || '—'}
                   </td>
                   <td style={{ padding: '13px 16px' }}>
                     <span style={{ fontSize: 12, color: '#94A3B8' }}>→</span>
