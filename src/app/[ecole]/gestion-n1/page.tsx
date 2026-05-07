@@ -13,7 +13,7 @@ export default function GestionN1Page() {
   useEffect(() => {
     createClient().from('enfants')
       .select('*, familles(nom, numero)')
-      .eq('annee_scolaire', '2026/2027')
+      .eq('annee_scolaire', '2026-2027')
       .order('nom')
       .then(({ data }) => { setEnfants(data ?? []); setLoading(false) })
   }, [])
@@ -47,7 +47,7 @@ export default function GestionN1Page() {
                 <td colSpan={5} style={{ padding: 48, textAlign: 'center' }}>
                   <div style={{ color: '#CBD5E1', fontSize: 14 }}>Aucune inscription N+1 pour l'instant</div>
                   <div style={{ color: '#94A3B8', fontSize: 12, marginTop: 6 }}>
-                    Pour inscrire un élève en N+1, allez dans la fiche famille → onglet Élèves → choisir "2026/2027"
+                    Pour inscrire un élève en N+1, allez dans la fiche famille → onglet Élèves → choisir "2026-2027"
                   </div>
                 </td>
               </tr>
