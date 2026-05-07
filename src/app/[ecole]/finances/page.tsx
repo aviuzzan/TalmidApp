@@ -19,7 +19,7 @@ export default function FinancesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = '2025/2026'
+  const ANNEE = '2025-2026'
 
   const emptyTarif = { nom: '', montant: '', annee_scolaire: ANNEE, description: '' }
   const [tarifForm, setTarifForm] = useState(emptyTarif)
@@ -210,8 +210,8 @@ export default function FinancesPage() {
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Année scolaire</label>
                 <select style={inp} value={tarifForm.annee_scolaire} onChange={e => setTarifForm(p => ({ ...p, annee_scolaire: e.target.value }))}>
-                  <option value="2025/2026">2025/2026</option>
-                  <option value="2026/2027">2026/2027</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
                 </select>
               </div>
               <div>
@@ -248,8 +248,8 @@ export default function FinancesPage() {
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Année scolaire</label>
                 <select style={inp} value={factureForm.annee_scolaire} onChange={e => setFactureForm(p => ({ ...p, annee_scolaire: e.target.value }))}>
-                  <option value="2025/2026">2025/2026</option>
-                  <option value="2026/2027">2026/2027</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
                 </select>
               </div>
               <div>
