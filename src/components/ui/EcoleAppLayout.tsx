@@ -52,7 +52,7 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#F0F4FA' }}>
       <EcoleSidebar userEmail={email} role={role} />
-      <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto', maxWidth: '100%' }}>
+      <main className="ecole-main" style={{ flex: 1, overflowY: 'auto', maxWidth: '100%' }}>
         {children}
       </main>
     </div>
