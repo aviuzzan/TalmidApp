@@ -36,7 +36,7 @@ export default function InscriptionsAdminPage() {
       s.from('demandes_reduction').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('annee_scolaire', annee),
       s.from('contrats_scolarisation').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('annee_scolaire', annee),
       s.from('cheques_prevus').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut', 'prevu').lte('date_echeance', new Date().toISOString().split('T')[0]),
-      s.from('contrats_scolarisation').select('*, familles(nom, email_parent1), contrat_enfants(*, enfants(prenom, nom))').eq('ecole_id', ecole.id).eq('annee_scolaire', annee).order('created_at', { ascending: false }),
+      s.from('contrats_scolarisation').select('*, familles(nom, parent1_email), contrat_enfants(*, enfants(prenom, nom))').eq('ecole_id', ecole.id).eq('annee_scolaire', annee).order('created_at', { ascending: false }),
     ])
     setConfig(cfg)
     setStats({ pedagogique: ped ?? 0, reduction: red ?? 0, contrats: cont ?? 0, cheques_a_encaisser: chq ?? 0 })
@@ -260,7 +260,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
   useEffect(() => {
     createClient()
       .from('contrats_scolarisation')
-      .select('*, familles(nom, email_parent1, telephone_parent1), contrat_enfants(*, enfants(prenom, nom))')
+      .select('*, familles(nom, parent1_email, parent1_telephone), contrat_enfants(*, enfants(prenom, nom))')
       .eq('ecole_id', ecoleId).eq('annee_scolaire', annee)
       .order('soumis_le', { ascending: false })
       .then(({ data }) => { setContrats(data ?? []); setLoading(false) })
