@@ -260,3 +260,90 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
   /* Hide scrollbars on the nav scroller */
   .portail-nav::-webkit-scrollbar { height: 0 !important; }
 }
+
+
+/* ==================================================
+   ADMIN ECOLE — Pages mobile (auto-stack grids, tables, modals)
+   ================================================== */
+@media (max-width: 768px) {
+  .ecole-main [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ecole-main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Modal padding tightens on mobile */
+  .ecole-main [style*="padding: 28"] {
+    padding: 18px !important;
+  }
+  .ecole-main [style*="padding: 32px"] {
+    padding: 20px 16px !important;
+  }
+
+  /* Touch-friendly buttons */
+  .ecole-main button {
+    min-height: 40px;
+  }
+
+  .ecole-main input,
+  .ecole-main select,
+  .ecole-main textarea {
+    padding: 12px 14px !important;
+    min-height: 44px !important;
+  }
+}
+
+/* ==================================================
+   SUPER-ADMIN — Sidebar drawer + main responsive (mobile)
+   ================================================== */
+.admin-main { padding: 32px 36px; overflow-y: auto; color: #E2E8F0; flex: 1; }
+.admin-hamburger { display: none; }
+.admin-backdrop { display: none; }
+.admin-sidebar-close { display: none; }
+
+@media (max-width: 768px) {
+  .admin-main { padding: 64px 14px 16px !important; }
+  .admin-hamburger { display: flex !important; }
+  .admin-sidebar-close { display: flex !important; }
+
+  .admin-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease-out;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.55);
+    z-index: 100;
+  }
+  .admin-sidebar.is-open { transform: translateX(0); }
+  .admin-backdrop.is-visible { display: block !important; }
+
+  /* Auto-stack grids in admin-main */
+  .admin-main [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tables scrollable */
+  .admin-main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Touch buttons */
+  .admin-main button { min-height: 40px; }
+
+  .admin-main input,
+  .admin-main select,
+  .admin-main textarea {
+    padding: 12px 14px !important;
+    min-height: 44px !important;
+  }
+}
