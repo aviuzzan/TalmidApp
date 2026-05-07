@@ -45,7 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#060B18', fontFamily: 'Inter, sans-serif' }}>
       <AdminSidebar email={email} />
-      <main style={{ flex: 1, padding: '32px 36px', overflowY: 'auto', color: '#E2E8F0' }}>
+      <main className="admin-main" style={{ color: '#E2E8F0' }}>
         {children}
       </main>
     </div>
