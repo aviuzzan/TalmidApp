@@ -69,6 +69,13 @@ export default function EnfantDetailPage() {
     setSaving(false)
   }
 
+  async function validerInscription() {
+    setSaving(true)
+    await createClient().from('enfants').update({ statut_inscription: 'inscrit' }).eq('id', enfantId)
+    await load()
+    setSaving(false)
+  }
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
   if (!enfant) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Élève introuvable</div>
 
@@ -117,6 +124,32 @@ export default function EnfantDetailPage() {
           <button onClick={() => { setEditMode(false); setForm({ ...enfant }) }}
             style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>
             Annuler
+          </button>
+        )}
+      </div>
+
+      {/* Statut d'inscription (banner avec bouton Valider si en_attente) */}
+      <div style={{
+        background: enfant.statut_inscription === 'inscrit' ? '#ECFDF5' : '#FFFBEB',
+        border: `1px solid ${enfant.statut_inscription === 'inscrit' ? '#A7F3D0' : '#FDE68A'}`,
+        borderRadius: 12, padding: '14px 18px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 22 }}>{enfant.statut_inscription === 'inscrit' ? '✓' : '⏳'}</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: enfant.statut_inscription === 'inscrit' ? '#059669' : '#D97706' }}>
+              {enfant.statut_inscription === 'inscrit' ? 'Inscription validée' : 'En attente d\'inscription'}
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+              Année {enfant.annee_scolaire} · {enfant.classes?.nom || 'Sans classe'}
+            </div>
+          </div>
+        </div>
+        {enfant.statut_inscription !== 'inscrit' && (
+          <button onClick={validerInscription} disabled={saving}
+            style={{ background: '#10B981', border: 'none', borderRadius: 9, padding: '10px 18px', fontSize: 13, color: '#fff', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', minHeight: 40 }}>
+            {saving ? '…' : '✓ Valider l\'inscription'}
           </button>
         )}
       </div>
