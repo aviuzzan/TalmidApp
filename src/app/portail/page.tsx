@@ -32,7 +32,7 @@ export default function PortailPage() {
           .or(`date_sortie.is.null,date_sortie.gte.${now}`),
         supabase.from('factures_solde').select('*')
           .eq('famille_id', familleId)
-          .eq('annee_scolaire', '2025/2026')
+          .eq('annee_scolaire', '2025-2026')
           .single(),
       ])
 
