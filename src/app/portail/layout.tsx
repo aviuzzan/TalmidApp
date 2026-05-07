@@ -59,7 +59,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   return (
     <div style={{ minHeight: '100vh', background: '#F0F4FA', fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
-      <header style={{
+      <header className="portail-header" style={{
         background: '#fff', borderBottom: '1px solid #E2E8F0',
         padding: '0 32px', height: 64,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -81,7 +81,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {famille && (
-            <div style={{ textAlign: 'right' }}>
+            <div className="portail-header-info" style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>Famille {famille.nom}</div>
               <div style={{ fontSize: 11, color: '#94A3B8' }}>{famille.numero}</div>
             </div>
@@ -96,7 +96,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       </header>
 
       {/* Nav */}
-      <nav style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', display: 'flex', gap: 4 }}>
+      <nav className="portail-nav" style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', display: 'flex', gap: 4 }}>
         {[
           { href: '/portail', label: '🏠 Accueil' },
           { href: '/portail/enfants', label: '🎓 Mes enfants' },
@@ -113,7 +113,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       </nav>
 
       {/* Content */}
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '28px 24px' }}>
+      <main className="portail-main" style={{ maxWidth: 900, margin: '0 auto', padding: '28px 24px' }}>
         {children}
       </main>
     </div>
