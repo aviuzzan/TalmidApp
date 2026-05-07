@@ -35,7 +35,7 @@ export default function FamilleDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = '2025/2026'
+  const ANNEE = '2025-2026'
 
   const emptyEnfant = {
     prenom: '', deuxieme_prenom: '', nom: '', date_naissance: '', genre: '',
@@ -404,7 +404,7 @@ export default function FamilleDetailPage() {
                   <div>{lbl('Classe', true)}<select style={inp} value={enfantForm.classe} onChange={e => setE('classe', e.target.value)} required><option value="">-- Sélectionner --</option>{classes.map((c: any) => <option key={c.id} value={c.nom}>{c.nom}</option>)}</select></div>
                   <div>{lbl('Régime', true)}<select style={inp} value={enfantForm.regime} onChange={e => setE('regime', e.target.value)}><option value="demi_pension">🍽 Demi-pension</option><option value="externe">🏠 Externe</option><option value="interne">🛏 Interne</option></select></div>
                   <div>{lbl('Statut')}<select style={inp} value={enfantForm.statut_inscription} onChange={e => setE('statut_inscription', e.target.value)}><option value="en_attente">⏳ En attente</option><option value="inscrit">✓ Inscrit</option><option value="refuse">✗ Refusé</option></select></div>
-                  <div>{lbl('Année scolaire')}<select style={inp} value={enfantForm.annee_scolaire} onChange={e => setE('annee_scolaire', e.target.value)}><option value="2025/2026">2025/2026</option><option value="2026/2027">2026/2027</option></select></div>
+                  <div>{lbl('Année scolaire')}<select style={inp} value={enfantForm.annee_scolaire} onChange={e => setE('annee_scolaire', e.target.value)}><option value="2025-2026">2025-2026</option><option value="2026-2027">2026-2027</option></select></div>
                   <div>{lbl('Date d\'entrée', true)}<input style={inp} type="date" value={enfantForm.date_entree} onChange={e => setE('date_entree', e.target.value)} required /></div>
                   <div>{lbl('Date de sortie')}<input style={inp} type="date" value={enfantForm.date_sortie} onChange={e => setE('date_sortie', e.target.value)} /></div>
                   <div>{lbl('Établissement d\'origine')}<input style={inp} value={enfantForm.etablissement_origine} onChange={e => setE('etablissement_origine', e.target.value)} /></div>
