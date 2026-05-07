@@ -408,7 +408,12 @@ export default function ContratPage() {
                 <input type="checkbox" checked={isSelected} onChange={() => toggleEnfantContrat(enfant.id)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }} />
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{enfant.prenom?.[0]}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
+                    {enfant.statut_inscription === 'en_attente' && (
+                      <span style={{ background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em' }}>⏳ En attente</span>
+                    )}
+                  </div>
                   {enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>Classe actuelle : {enfant.classes.nom}</div>}
                 </div>
                 {enf.sous_total > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{enf.sous_total.toLocaleString('fr-FR')} €</div>}
