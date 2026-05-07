@@ -4,18 +4,12 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
 
-const PIECES_DEFAULT = [
-  '3 derniers bulletins de salaire ou justificatifs France Travail',
-  'Bulletin de salaire de décembre ou justificatif des revenus annuels',
-  "Avis d'imposition 2025 sur revenus 2024 (document complet avec QR code)",
-  'Attestation de paiement des allocations familiales (moins de 3 mois)',
-  'Attestation de quotient familial de la CAF',
-  "Dernière quittance de loyer ou tableau d'amortissement",
-  "Justificatif de règlement des scolarités dans les autres écoles juives",
-]
-
 export default function DemandeReductionPage() {
   const router = useRouter()
+  const scrollY = useRef(0)
+  useLayoutEffect(() => { window.scrollTo(0, scrollY.current) })
+  const ks = () => { scrollY.current = window.scrollY }
+
   const [session, setSession] = useState<any>(null)
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
@@ -31,31 +25,56 @@ export default function DemandeReductionPage() {
   const [docsUploaded, setDocsUploaded] = useState<Record<string, any>>({})
   const [uploading, setUploading] = useState<Record<string, boolean>>({})
 
-  // State formulaire — tout contrôlé, scroll fix via useLayoutEffect
-  const scrollY = useRef(0)
-  useLayoutEffect(() => { window.scrollTo(0, scrollY.current) })
-  const ks = () => { scrollY.current = window.scrollY } // keepScroll
-
+  // ── Infos famille ──
   const [famForm, setFamForm] = useState<any>({})
   const [famModified, setFamModified] = useState(false)
-  const [enfantsDossier, setEnfantsDossier] = useState<any[]>([])
-  const [inscPed, setInscPed] = useState<any[]>([])
-  const [revenus, setRevenus] = useState<any[]>([
-    { nom_prenom: '', lien_parente: '', employeur: '', salaire_mensuel_net: '', nb_mois: 12 }
-  ])
   const [situation, setSituation] = useState('marie')
-  const [logementType, setLogementType] = useState('locataire')
-  const [logementPieces, setLogementPieces] = useState('')
-  const [logementLoyer, setLogementLoyer] = useState('')
-  const [logementCharges, setLogementCharges] = useState('')
+
+  // ── Enfants dossier ──
+  const [enfantsDossier, setEnfantsDossier] = useState<any[]>([])
+
+  // ── Logement ──
+  const [logType, setLogType] = useState('locataire')
+  const [logPieces, setLogPieces] = useState('')
+  const [logLoyer, setLogLoyer] = useState('')
+  const [logCharges, setLogCharges] = useState('')
+  const [logDateOccupation, setLogDateOccupation] = useState('')
+  const [logHandicape, setLogHandicape] = useState(false)
+
+  // ── Revenus ──
+  const [revenus, setRevenus] = useState<any[]>([{ nom_prenom: '', lien_parente: '', employeur: '', qualification: '', salaire_mensuel_net: '', nb_mois: 12 }])
+  const [artisanProfession, setArtisanProfession] = useState('')
+  const [artisanRegime, setArtisanRegime] = useState('')
+  const [artisanMontantAnnuel, setArtisanMontantAnnuel] = useState('')
   const [quotientFamilial, setQuotientFamilial] = useState('')
+
+  // ── Allocations ──
   const [allocFamiliales, setAllocFamiliales] = useState('')
   const [allocChomage, setAllocChomage] = useState('')
   const [apl, setApl] = useState('')
   const [autresRevenus, setAutresRevenus] = useState('')
+  const [aidesMensuelles, setAidesMensuelles] = useState('')
+
+  // ── Autres enfants / charges ──
+  const [enfantsAutres, setEnfantsAutres] = useState<any[]>([{ prenom: '', age: '', classe: '', etablissement: '', tarif_mensuel: '', nb_mois: 10 }])
+  const [personnesCharge, setPersonnesCharge] = useState<any[]>([{ nom: '', prenom: '', age: '', lien_parente: '', montant_annuel_frais: '' }])
+
+  // ── Documents ──
+  const [pasDeJustificatif, setPasDeJustificatif] = useState(false)
+  const [pasDeJustificatifDetail, setPasDeJustificatifDetail] = useState('')
+
+  // ── Proposition ──
   const [tarifPropose, setTarifPropose] = useState('')
   const [commentaire, setCommentaire] = useState('')
+
+  // ── Attestation ──
   const [attestationLieu, setAttestationLieu] = useState('')
+  const [signatureData, setSignatureData] = useState('')
+
+  // Signature canvas
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const isDrawing = useRef(false)
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => { load() }, [])
 
@@ -69,91 +88,147 @@ export default function DemandeReductionPage() {
     if (!profile?.famille_id) { setLoading(false); return }
     setFamilleId(profile.famille_id); setEcoleId(profile.ecole_id)
 
-    const [{ data: fam }, { data: enf }, { data: cls }, { data: sec },
-      { data: dem }, { data: docs }, { data: inscped }] = await Promise.all([
+    const [
+      { data: fam }, { data: enf }, { data: cls }, { data: sec },
+      { data: dem }, { data: docs },
+    ] = await Promise.all([
       s.from('familles').select('*').eq('id', profile.famille_id).single(),
       s.from('enfants').select('*, classes(id, nom, secteur_id, secteurs(nom))').eq('famille_id', profile.famille_id),
       s.from('classes').select('id, nom, secteur_id, secteurs(nom)').eq('ecole_id', profile.ecole_id).order('nom'),
       s.from('secteurs').select('id, nom').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
       s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).single(),
       s.from('reduction_documents_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', ANNEE_COURANTE).eq('actif', true).order('ordre'),
-      s.from('inscriptions_pedagogiques').select('*, enfants(id, prenom, nom)').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).in('statut', ['soumis', 'accepte']),
     ])
 
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? []); setSecteurs(sec ?? [])
-    setDocsConfig(docs?.length ? docs : PIECES_DEFAULT.map((label, i) => ({ id: `default_${i}`, label, obligatoire: i < 6 })))
-    setInscPed(inscped ?? [])
-
-    if (fam) {
-      setFamForm(fam)
-      setSituation(fam.situation_maritale || 'marie')
-    }
+    setDocsConfig(docs ?? [])
+    if (fam) { setFamForm(fam); setSituation(fam.situation_maritale || 'marie') }
 
     if (dem) {
       setDemande(dem)
       setSituation(dem.situation_familiale || 'marie')
-      setLogementType(dem.logement_type || 'locataire')
-      setLogementPieces(dem.logement_nb_pieces?.toString() || '')
-      setLogementLoyer(dem.logement_loyer_mensuel?.toString() || '')
-      setLogementCharges(dem.logement_charges_mensuelles?.toString() || '')
+      setLogType(dem.logement_type || 'locataire')
+      setLogPieces(dem.logement_nb_pieces?.toString() || '')
+      setLogLoyer(dem.logement_loyer_mensuel?.toString() || '')
+      setLogCharges(dem.logement_charges_mensuelles?.toString() || '')
+      setLogDateOccupation(dem.logement_date_occupation || '')
+      setLogHandicape(dem.logement_personne_handicapee || false)
       setQuotientFamilial(dem.quotient_familial?.toString() || '')
       setAllocFamiliales(dem.alloc_familiales_mensuelles?.toString() || '')
       setAllocChomage(dem.alloc_chomage_mensuelle?.toString() || '')
       setApl(dem.apl_mensuelle?.toString() || '')
       setAutresRevenus(dem.autres_revenus_mensuels?.toString() || '')
+      setAidesMensuelles(dem.aides_mensuelles?.toString() || '')
+      setArtisanProfession(dem.revenus_artisans_profession || '')
+      setArtisanRegime(dem.revenus_artisans_regime || '')
+      setArtisanMontantAnnuel(dem.revenus_artisans_montant_annuel?.toString() || '')
       setTarifPropose(dem.tarif_propose?.toString() || '')
       setCommentaire(dem.commentaire || '')
-      if (dem.enfants_dossier) setEnfantsDossier(dem.enfants_dossier)
+      setPasDeJustificatif(dem.pas_de_justificatif || false)
+      setPasDeJustificatifDetail(dem.pas_de_justificatif_detail || '')
+      setAttestationLieu(dem.attestation_lieu || '')
+      if (dem.enfants_dossier?.length) setEnfantsDossier(dem.enfants_dossier)
+      if (dem.enfants_autres_etablissements?.length) setEnfantsAutres(dem.enfants_autres_etablissements)
+      if (dem.personnes_charge?.length) setPersonnesCharge(dem.personnes_charge)
 
       const { data: revs } = await s.from('demandes_reduction_revenus').select('*').eq('demande_id', dem.id)
-      if (revs?.length) setRevenus(revs.map(r => ({ ...r, salaire_mensuel_net: r.salaire_mensuel_net?.toString() || '' })))
+      if (revs?.length) setRevenus(revs.map((r: any) => ({ ...r, salaire_mensuel_net: r.salaire_mensuel_net?.toString() || '' })))
 
       const { data: docsUp } = await s.from('reduction_documents_uploaded').select('*').eq('demande_id', dem.id)
       const m: Record<string, any> = {}
-      docsUp?.forEach(d => { m[d.config_id || d.label] = d })
+      docsUp?.forEach((d: any) => { m[d.config_id || d.label] = d })
       setDocsUploaded(m)
     }
     setLoading(false)
   }
 
-  function setFam(key: string, val: any) {
-    setFamForm((p: any) => ({ ...p, [key]: val }))
-    setFamModified(true)
+  // ── Total revenus mensuel auto-calculé ──
+  const totalRevenusMensuel = () => {
+    const salaires = revenus.reduce((sum, r) => sum + (parseFloat(r.salaire_mensuel_net) || 0), 0)
+    const artisan = artisanMontantAnnuel ? (parseFloat(artisanMontantAnnuel) || 0) / 12 : 0
+    return salaires
+      + (parseFloat(allocFamiliales) || 0)
+      + (parseFloat(allocChomage) || 0)
+      + (parseFloat(apl) || 0)
+      + (parseFloat(autresRevenus) || 0)
+      + (parseFloat(aidesMensuelles) || 0)
+      + artisan
   }
 
-  function toggleEnfant(enfantId: string, classeSuivante: string) {
-    ks()
-    setEnfantsDossier(prev => {
-      const exists = prev.find(e => e.enfant_id === enfantId)
-      if (exists) return prev.filter(e => e.enfant_id !== enfantId)
-      return [...prev, { enfant_id: enfantId, classe_souhaitee: classeSuivante }]
-    })
-  }
-
-  function setClasseEnfant(enfantId: string, classe: string) {
-    ks()
-    setEnfantsDossier(prev => prev.map(e => e.enfant_id === enfantId ? { ...e, classe_souhaitee: classe } : e))
-  }
-
-  const classesSorted = classes.map(c => c.nom).sort()
+  // ── Enfants dossier ──
+  const classesSorted = classes.map((c: any) => c.nom).sort()
   function getClasseSuivante(classeActuelle: string): string {
     const idx = classesSorted.indexOf(classeActuelle)
     return idx >= 0 && idx < classesSorted.length - 1 ? classesSorted[idx + 1] : classeActuelle
   }
 
+  function toggleEnfant(enfantId: string, classeSuivante: string) {
+    ks()
+    setEnfantsDossier(prev => {
+      const exists = prev.find((e: any) => e.enfant_id === enfantId)
+      if (exists) return prev.filter((e: any) => e.enfant_id !== enfantId)
+      return [...prev, { enfant_id: enfantId, classe_souhaitee: classeSuivante }]
+    })
+  }
+
+  function setClasseEnfant(enfantId: string, classe: string) {
+    ks(); setEnfantsDossier(prev => prev.map((e: any) => e.enfant_id === enfantId ? { ...e, classe_souhaitee: classe } : e))
+  }
+
   const nbEnfantsTotal = enfantsDossier.length
   const nbParSecteur = () => {
     const map: Record<string, number> = {}
-    enfantsDossier.forEach(ed => {
-      const cls = classes.find(c => c.nom === ed.classe_souhaitee)
-      const sec = secteurs.find(s => s.id === cls?.secteur_id)
+    enfantsDossier.forEach((ed: any) => {
+      const cls = classes.find((c: any) => c.nom === ed.classe_souhaitee)
+      const sec = secteurs.find((s: any) => s.id === cls?.secteur_id)
       if (sec) map[sec.nom] = (map[sec.nom] || 0) + 1
     })
     return map
   }
 
-  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  // ── Signature canvas ──
+  function initCanvas() {
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.strokeStyle = '#1E293B'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+  }
+  useEffect(() => { initCanvas() }, [loading])
 
+  function getCanvasPos(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    if ('touches' in e) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY }
+    }
+    return { x: ((e as MouseEvent).clientX - rect.left) * scaleX, y: ((e as MouseEvent).clientY - rect.top) * scaleY }
+  }
+
+  function startSign(e: React.MouseEvent | React.TouchEvent) {
+    isDrawing.current = true
+    const canvas = canvasRef.current!; const ctx = canvas.getContext('2d')!
+    const pos = getCanvasPos(e.nativeEvent as any, canvas)
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y)
+  }
+
+  function drawSign(e: React.MouseEvent | React.TouchEvent) {
+    if (!isDrawing.current) return; e.preventDefault()
+    const canvas = canvasRef.current!; const ctx = canvas.getContext('2d')!
+    const pos = getCanvasPos(e.nativeEvent as any, canvas)
+    ctx.lineTo(pos.x, pos.y); ctx.stroke()
+  }
+
+  function stopSign() {
+    isDrawing.current = false
+    if (canvasRef.current) setSignatureData(canvasRef.current.toDataURL('image/png'))
+  }
+
+  function clearSign() {
+    const canvas = canvasRef.current!; const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height); setSignatureData('')
+  }
+
+  // ── Upload documents ──
   async function uploadDoc(configId: string, label: string, file: File) {
     setUploading(p => ({ ...p, [configId]: true }))
     let demandeIdActuel = demande?.id
@@ -162,8 +237,7 @@ export default function DemandeReductionPage() {
       const { data: nd } = await s.from('demandes_reduction').insert({
         famille_id: familleId, ecole_id: ecoleId, annee_scolaire: ANNEE_COURANTE, statut: 'brouillon',
       }).select().single()
-      demandeIdActuel = nd?.id
-      if (nd) setDemande(nd)
+      demandeIdActuel = nd?.id; if (nd) setDemande(nd)
     }
     const fd = new FormData()
     fd.append('file', file); fd.append('demandeId', demandeIdActuel || '')
@@ -174,10 +248,25 @@ export default function DemandeReductionPage() {
     setUploading(p => ({ ...p, [configId]: false }))
   }
 
+  // ── Upload signature ──
+  async function uploadSignature(dataUrl: string, demandeId: string): Promise<string> {
+    if (!dataUrl) return ''
+    const blob = await (await fetch(dataUrl)).blob()
+    const file = new File([blob], 'signature.png', { type: 'image/png' })
+    const fd = new FormData()
+    fd.append('file', file); fd.append('demandeId', demandeId)
+    fd.append('familleId', familleId); fd.append('configId', 'signature'); fd.append('label', 'Signature')
+    const res = await fetch('/api/upload', { method: 'POST', headers: { 'Authorization': `Bearer ${session.access_token}` }, body: fd })
+    const json = await res.json()
+    return json.url || ''
+  }
+
+  // ── Soumission ──
   async function soumettre() {
     if (enfantsDossier.length === 0) { alert('Sélectionnez au moins un enfant'); return }
     if (!tarifPropose) { alert('Saisissez votre tarif annuel proposé'); return }
     if (!attestationLieu) { alert('Renseignez le lieu de l\'attestation'); return }
+    if (!signatureData) { alert('Veuillez signer l\'attestation'); return }
 
     setSaving(true)
     const s = createClient()
@@ -193,26 +282,40 @@ export default function DemandeReductionPage() {
       }).eq('id', familleId)
     }
 
+    const totalRev = Math.round(totalRevenusMensuel() * 100) / 100
+
     const payload: any = {
       famille_id: familleId, ecole_id: ecoleId, annee_scolaire: ANNEE_COURANTE,
       statut: 'soumis', soumis_le: new Date().toISOString(),
       situation_familiale: situation,
-      logement_type: logementType,
-      logement_nb_pieces: logementPieces ? parseInt(logementPieces) : null,
-      logement_loyer_mensuel: logementLoyer ? parseFloat(logementLoyer) : null,
-      logement_charges_mensuelles: logementCharges ? parseFloat(logementCharges) : null,
+      logement_type: logType,
+      logement_nb_pieces: logPieces ? parseInt(logPieces) : null,
+      logement_loyer_mensuel: logLoyer ? parseFloat(logLoyer) : null,
+      logement_charges_mensuelles: logCharges ? parseFloat(logCharges) : null,
+      logement_date_occupation: logDateOccupation || null,
+      logement_personne_handicapee: logHandicape,
       quotient_familial: quotientFamilial ? parseFloat(quotientFamilial) : null,
       alloc_familiales_mensuelles: allocFamiliales ? parseFloat(allocFamiliales) : null,
       alloc_chomage_mensuelle: allocChomage ? parseFloat(allocChomage) : null,
       apl_mensuelle: apl ? parseFloat(apl) : null,
       autres_revenus_mensuels: autresRevenus ? parseFloat(autresRevenus) : null,
+      aides_mensuelles: aidesMensuelles ? parseFloat(aidesMensuelles) : null,
+      revenus_artisans_profession: artisanProfession || null,
+      revenus_artisans_regime: artisanRegime || null,
+      revenus_artisans_montant_annuel: artisanMontantAnnuel ? parseFloat(artisanMontantAnnuel) : null,
+      revenus_total_mensuel: totalRev,
       tarif_propose: parseFloat(tarifPropose),
       nb_enfants_concernes: nbEnfantsTotal,
       enfants_dossier: enfantsDossier,
+      enfants_autres_etablissements: enfantsAutres.filter((e: any) => e.prenom || e.etablissement),
+      personnes_charge: personnesCharge.filter((p: any) => p.nom || p.prenom),
+      pas_de_justificatif: pasDeJustificatif,
+      pas_de_justificatif_detail: pasDeJustificatifDetail || null,
       commentaire: commentaire || null,
       attestation_honneur: true,
       attestation_lieu: attestationLieu,
       attestation_date: new Date().toISOString().split('T')[0],
+      signature_date: new Date().toISOString(),
     }
 
     let demandeId = demande?.id
@@ -225,12 +328,14 @@ export default function DemandeReductionPage() {
     }
 
     if (demandeId) {
-      const revsFiltres = revenus.filter(r => r.nom_prenom?.trim())
+      const revsFiltres = revenus.filter((r: any) => r.nom_prenom?.trim())
       if (revsFiltres.length > 0) {
         await s.from('demandes_reduction_revenus').insert(
-          revsFiltres.map(r => ({ ...r, demande_id: demandeId, salaire_mensuel_net: parseFloat(r.salaire_mensuel_net) || 0 }))
+          revsFiltres.map((r: any) => ({ ...r, demande_id: demandeId, salaire_mensuel_net: parseFloat(r.salaire_mensuel_net) || 0 }))
         )
       }
+      const sigUrl = await uploadSignature(signatureData, demandeId)
+      if (sigUrl) await s.from('demandes_reduction').update({ signature_url: sigUrl }).eq('id', demandeId)
     }
 
     setSaving(false)
@@ -246,7 +351,7 @@ export default function DemandeReductionPage() {
         <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>← Retour</button>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📨</div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>Demande soumise</h2>
-        <p style={{ color: '#64748B', fontSize: 14, margin: '8px 0 20px' }}>Votre dossier est en cours d'examen.</p>
+        <p style={{ color: '#64748B', fontSize: 14, margin: '8px 0 20px' }}>Votre dossier est en cours d'examen par la commission.</p>
         <span style={{ fontSize: 14, fontWeight: 700, color: st.color, background: st.bg, padding: '8px 20px', borderRadius: 20 }}>{st.label}</span>
         {demande.tarif_accorde && (
           <div style={{ marginTop: 24, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 12, padding: 20 }}>
@@ -258,8 +363,9 @@ export default function DemandeReductionPage() {
     )
   }
 
-  const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
-  const lbl = { fontSize: 11, fontWeight: 600 as const, color: '#64748B', display: 'block' as const, marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' as const }
+  const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }
+
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>{title}</div>
@@ -268,26 +374,19 @@ export default function DemandeReductionPage() {
   )
 
   const secteurCounts = nbParSecteur()
-  const tousEnfants = [
-    ...enfants.map(e => ({ ...e, source: 'base', classeActuelle: e.classes?.nom || '' })),
-    ...inscPed.filter(ip => !enfants.find(e => e.id === ip.enfant_id)).map((ip: any) => ({
-      id: ip.enfant_id, prenom: ip.enfants?.prenom, nom: ip.enfants?.nom, source: 'inscription_ped', classeActuelle: '',
-    })),
-  ]
+  const totalRev = totalRevenusMensuel()
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>
-        ← Retour
-      </button>
+      <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>← Retour</button>
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demande de réduction {ANNEE_COURANTE}</h1>
-        <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>Toutes les informations sont confidentielles. Les champs * sont obligatoires.</p>
+        <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>Toutes les informations restent confidentielles. Les champs * sont obligatoires.</p>
       </div>
 
       {/* ── 1. RESPONSABLE 1 ── */}
       <Section title="1. Vos informations — Responsable 1">
-        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Vérifiez et corrigez si nécessaire — vos informations seront mises à jour.</p>
+        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Vérifiez et corrigez si nécessaire.</p>
         <div>
           <label style={lbl}>Situation familiale *</label>
           <select style={inp} value={situation} onChange={e => { ks(); setSituation(e.target.value); setFamModified(true) }}>
@@ -296,67 +395,50 @@ export default function DemandeReductionPage() {
           </select>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom *</label>
-            <input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFam('parent1_prenom', e.target.value) }} /></div>
-          <div><label style={lbl}>Nom *</label>
-            <input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFam('parent1_nom', e.target.value) }} /></div>
-          <div><label style={lbl}>Adresse *</label>
-            <input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFam('parent1_adresse', e.target.value) }} /></div>
+          <div><label style={lbl}>Prénom *</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_prenom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>Nom *</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_nom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>Adresse *</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_adresse: e.target.value })); setFamModified(true) }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div><label style={lbl}>CP *</label>
-              <input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFam('parent1_code_postal', e.target.value) }} /></div>
-            <div><label style={lbl}>Ville *</label>
-              <input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFam('parent1_ville', e.target.value) }} /></div>
+            <div><label style={lbl}>CP *</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_code_postal: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>Ville *</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_ville: e.target.value })); setFamModified(true) }} /></div>
           </div>
-          <div><label style={lbl}>Téléphone *</label>
-            <input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFam('parent1_telephone', e.target.value) }} /></div>
-          <div><label style={lbl}>Email *</label>
-            <input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFam('parent1_email', e.target.value) }} /></div>
+          <div><label style={lbl}>Téléphone *</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_telephone: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>Email *</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_email: e.target.value })); setFamModified(true) }} /></div>
         </div>
       </Section>
 
       {/* ── 2. RESPONSABLE 2 ── */}
       <Section title="2. Responsable 2 (si applicable)">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Prénom</label>
-            <input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFam('parent2_prenom', e.target.value) }} /></div>
-          <div><label style={lbl}>Nom</label>
-            <input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFam('parent2_nom', e.target.value) }} /></div>
-          <div><label style={lbl}>Téléphone</label>
-            <input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFam('parent2_telephone', e.target.value) }} /></div>
-          <div><label style={lbl}>Email</label>
-            <input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFam('parent2_email', e.target.value) }} /></div>
+          <div><label style={lbl}>Prénom</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_prenom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>Nom</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_nom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>Téléphone</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_telephone: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>Email</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_email: e.target.value })); setFamModified(true) }} /></div>
         </div>
       </Section>
 
       {/* ── 3. ENFANTS ── */}
       <Section title="3. Enfants concernés par la demande *">
-        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Sélectionnez les enfants et indiquez la classe souhaitée.</p>
-        {tousEnfants.map(enfant => {
-          const selected = enfantsDossier.find(e => e.enfant_id === enfant.id)
-          const classeSuivante = getClasseSuivante(enfant.classeActuelle)
+        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Sélectionnez les enfants et indiquez la classe souhaitée pour 2026/2027.</p>
+        {enfants.map((enfant: any) => {
+          const selected = enfantsDossier.find((e: any) => e.enfant_id === enfant.id)
+          const classeSuivante = getClasseSuivante(enfant.classes?.nom || '')
           return (
             <div key={enfant.id} style={{ border: `2px solid ${selected ? '#2563EB' : '#E2E8F0'}`, borderRadius: 12, padding: 16, background: selected ? '#EFF6FF' : '#fff', transition: 'border-color 0.15s' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input type="checkbox" checked={!!selected}
-                  onChange={() => toggleEnfant(enfant.id, classeSuivante)}
+                <input type="checkbox" checked={!!selected} onChange={() => toggleEnfant(enfant.id, classeSuivante)}
                   style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
-                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
-                    {enfant.classeActuelle ? `Classe actuelle : ${enfant.classeActuelle}` : 'Nouvel élève'}
-                    {enfant.source === 'inscription_ped' && <span style={{ background: '#FEF3C7', color: '#D97706', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontSize: 10, fontWeight: 600 }}>Inscription en cours</span>}
-                  </div>
+                  {enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Classe actuelle : {enfant.classes.nom}</div>}
                 </div>
               </div>
               {selected && (
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #BFDBFE' }}>
-                  <label style={lbl}>Classe souhaitée 2026/2027 *</label>
+                  <label style={lbl}>Classe souhaitée *</label>
                   <select style={inp} value={selected.classe_souhaitee || ''} onChange={e => setClasseEnfant(enfant.id, e.target.value)}>
-                    <option value="">— Choisir une classe —</option>
-                    {classes.map(c => (
-                      <option key={c.id} value={c.nom}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}{c.nom === classeSuivante ? ' ★' : ''}</option>
-                    ))}
+                    <option value="">— Choisir —</option>
+                    {classes.map((c: any) => <option key={c.id} value={c.nom}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}{c.nom === classeSuivante ? ' ★' : ''}</option>)}
                   </select>
                 </div>
               )}
@@ -364,84 +446,125 @@ export default function DemandeReductionPage() {
           )
         })}
         {nbEnfantsTotal > 0 && (
-          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8', marginBottom: 4 }}>Récapitulatif</div>
-            <div style={{ fontSize: 13, color: '#1E293B' }}>
-              Total : <strong>{nbEnfantsTotal} enfant{nbEnfantsTotal > 1 ? 's' : ''}</strong>
-              {Object.entries(secteurCounts).map(([sec, nb]) => ` · ${nb} en ${sec}`)}
-            </div>
+          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 14, fontSize: 13 }}>
+            <strong>{nbEnfantsTotal} enfant{nbEnfantsTotal > 1 ? 's' : ''}</strong>
+            {Object.entries(secteurCounts).map(([sec, nb]) => ` · ${nb} en ${sec}`)}
           </div>
         )}
       </Section>
 
       {/* ── 4. LOGEMENT ── */}
-      <Section title="4. Logement">
-        <div>
-          <label style={lbl}>Type de logement *</label>
-          <select style={inp} value={logementType} onChange={e => { ks(); setLogementType(e.target.value) }}>
-            <option value="proprietaire">Propriétaire</option>
-            <option value="locataire">Locataire</option>
-            <option value="autre">Autre</option>
-          </select>
+      <Section title="4. Logement *">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div><label style={lbl}>Type *</label>
+            <select style={inp} value={logType} onChange={e => { ks(); setLogType(e.target.value) }}>
+              <option value="locataire">Locataire</option><option value="proprietaire">Propriétaire</option><option value="autre">Autre</option>
+            </select>
+          </div>
+          <div><label style={lbl}>Nb de pièces *</label><input style={inp} type="number" value={logPieces} onChange={e => { ks(); setLogPieces(e.target.value) }} /></div>
+          <div><label style={lbl}>Loyer / remb. mensuel (€) *</label><input style={inp} type="number" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>
+          <div><label style={lbl}>Charges mensuelles (€) *</label><input style={inp} type="number" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>
+          <div><label style={lbl}>Occupé depuis</label><input style={inp} type="date" value={logDateOccupation} onChange={e => { ks(); setLogDateOccupation(e.target.value) }} /></div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Nb de pièces</label>
-            <input style={inp} type="number" value={logementPieces} onChange={e => { ks(); setLogementPieces(e.target.value) }} /></div>
-          <div><label style={lbl}>Loyer/remb. mensuel (€)</label>
-            <input style={inp} type="number" value={logementLoyer} onChange={e => { ks(); setLogementLoyer(e.target.value) }} /></div>
-          <div><label style={lbl}>Charges mensuelles (€)</label>
-            <input style={inp} type="number" value={logementCharges} onChange={e => { ks(); setLogementCharges(e.target.value) }} /></div>
-        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#475569' }}>
+          <input type="checkbox" checked={logHandicape} onChange={e => { ks(); setLogHandicape(e.target.checked) }} style={{ width: 16, height: 16, accentColor: '#2563EB' }} />
+          Personne handicapée vivant au foyer
+        </label>
       </Section>
 
       {/* ── 5. REVENUS ── */}
       <Section title="5. Revenus du foyer *">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Quotient familial CAF (€) *</label>
-            <input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>
+          <div><label style={lbl}>Quotient familial CAF (€) *</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>
         </div>
-        <div style={{ marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus par personne *</div>
-          {revenus.map((r, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom/Prénom</label>
-                <input style={inp} value={r.nom_prenom} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label>
-                <input style={inp} value={r.lien_parente} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label>
-                <input style={inp} value={r.employeur} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net</label>
-                <input style={inp} type="number" value={r.salaire_mensuel_net} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label>
-                <input style={inp} type="number" min="1" max="12" value={r.nb_mois} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x)) }} /></div>
-              <div style={{ paddingBottom: 2 }}>
-                {i > 0 && <button onClick={() => { ks(); setRevenus(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}
-              </div>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus salariés *</div>
+          {revenus.map((r: any, i: number) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr 1fr 1fr 1fr auto', gap: 7, marginBottom: 8, alignItems: 'end' }}>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom/Prénom</label><input style={inp} value={r.nom_prenom} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} value={r.lien_parente} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} value={r.employeur} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Qualif.</label><input style={inp} value={r.qualification || ''} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, qualification: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net</label><input style={inp} type="number" value={r.salaire_mensuel_net} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label><input style={inp} type="number" min="1" max="12" value={r.nb_mois} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x)) }} /></div>
+              <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setRevenus(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}</div>
             </div>
           ))}
-          <button onClick={() => { ks(); setRevenus(p => [...p, { nom_prenom: '', lien_parente: '', employeur: '', salaire_mensuel_net: '', nb_mois: 12 }]) }}
+          <button onClick={() => { ks(); setRevenus(p => [...p, { nom_prenom: '', lien_parente: '', employeur: '', qualification: '', salaire_mensuel_net: '', nb_mois: 12 }]) }}
             style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0, marginTop: 4 }}>
             + Ajouter une personne
           </button>
         </div>
-      </Section>
 
-      {/* ── 6. ALLOCATIONS ── */}
-      <Section title="6. Allocations et autres revenus">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div><label style={lbl}>Allocations familiales (€/mois)</label>
-            <input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>
-          <div><label style={lbl}>Allocation chômage (€/mois)</label>
-            <input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>
-          <div><label style={lbl}>APL / Aide logement (€/mois)</label>
-            <input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>
-          <div><label style={lbl}>Autres revenus divers (€/mois)</label>
-            <input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>
+        {/* Artisans */}
+        <div style={{ background: '#F8FAFC', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 12 }}>Revenus d'artisan, commerçant ou profession libérale</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+            <div><label style={lbl}>Profession</label><input style={inp} value={artisanProfession} onChange={e => { ks(); setArtisanProfession(e.target.value) }} placeholder="Ex: Médecin, Artisan..." /></div>
+            <div><label style={lbl}>Régime</label>
+              <select style={inp} value={artisanRegime} onChange={e => { ks(); setArtisanRegime(e.target.value) }}>
+                <option value="">Choisir</option><option value="reel">Régime réel</option><option value="forfaitaire">Forfaitaire</option>
+              </select>
+            </div>
+            <div><label style={lbl}>Montant annuel (€)</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>
+          </div>
         </div>
       </Section>
 
-      {/* ── 7. PROPOSITION ── */}
-      <Section title="7. Votre proposition tarifaire">
+      {/* ── 6. ALLOCATIONS ── */}
+      <Section title="6. Allocations et autres revenus *">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div><label style={lbl}>Allocations familiales (€/mois) *</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>
+          <div><label style={lbl}>Allocation chômage (€/mois) *</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>
+          <div><label style={lbl}>APL / Aide logement (€/mois) *</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>
+          <div><label style={lbl}>Autres revenus divers (€/mois) *</label><input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>
+          <div><label style={lbl}>Montant mensuel des aides perçues *</label><input style={inp} type="number" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>
+        </div>
+
+        {/* Total auto-calculé */}
+        <div style={{ background: totalRev > 0 ? '#EFF6FF' : '#F8FAFC', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>Total revenus mensuels</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>{totalRev.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €</span>
+        </div>
+      </Section>
+
+      {/* ── 7. AUTRES ENFANTS / CHARGES ── */}
+      <Section title="7. Enfants scolarisés dans d'autres établissements">
+        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Enfants scolarisés dans d'autres écoles juives.</p>
+        {enfantsAutres.map((e: any, i: number) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.5fr 1fr 2fr 1fr 0.5fr auto', gap: 8, alignItems: 'end', marginBottom: 8 }}>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Prénom</label><input style={inp} value={e.prenom} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Âge</label><input style={inp} type="number" value={e.age} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Classe</label><input style={inp} value={e.classe} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, classe: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Établissement</label><input style={inp} value={e.etablissement} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, etablissement: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Tarif/mois (€)</label><input style={inp} type="number" value={e.tarif_mensuel} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, tarif_mensuel: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Mois</label><input style={inp} type="number" min="1" max="12" value={e.nb_mois} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, nb_mois: ev.target.value } : x)) }} /></div>
+            <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setEnfantsAutres(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20 }}>×</button>}</div>
+          </div>
+        ))}
+        <button onClick={() => { ks(); setEnfantsAutres(p => [...p, { prenom: '', age: '', classe: '', etablissement: '', tarif_mensuel: '', nb_mois: 10 }]) }}
+          style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>+ Ajouter un enfant</button>
+      </Section>
+
+      <Section title="8. Personnes à charge non scolarisées et non salariées">
+        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Membres du foyer à charge ne percevant pas de revenus et non scolarisés.</p>
+        {personnesCharge.map((p: any, i: number) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.5fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 8 }}>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Nom</label><input style={inp} value={p.nom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, nom: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Prénom</label><input style={inp} value={p.prenom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Âge</label><input style={inp} type="number" value={p.age} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} value={p.lien_parente} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, lien_parente: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>Montant frais annuels (€)</label><input style={inp} type="number" value={p.montant_annuel_frais} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, montant_annuel_frais: ev.target.value } : x)) }} /></div>
+            <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setPersonnesCharge(prev => prev.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20 }}>×</button>}</div>
+          </div>
+        ))}
+        <button onClick={() => { ks(); setPersonnesCharge(p => [...p, { nom: '', prenom: '', age: '', lien_parente: '', montant_annuel_frais: '' }]) }}
+          style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>+ Ajouter une personne</button>
+      </Section>
+
+      {/* ── 9. PROPOSITION ── */}
+      <Section title="9. Votre proposition tarifaire *">
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 16 }}>
           <div style={{ fontSize: 12, color: '#1D4ED8', marginBottom: 10, fontWeight: 600 }}>
             Dossier pour <strong>{nbEnfantsTotal} enfant{nbEnfantsTotal > 1 ? 's' : ''}</strong>
@@ -452,20 +575,33 @@ export default function DemandeReductionPage() {
             type="number" value={tarifPropose} placeholder="Ex: 3 000"
             onChange={e => { ks(); setTarifPropose(e.target.value) }} />
         </div>
+        <div>
+          <label style={lbl}>Commentaire (optionnel)</label>
+          <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={commentaire}
+            onChange={e => { ks(); setCommentaire(e.target.value) }}
+            placeholder="Précisions sur votre situation..." />
+        </div>
       </Section>
 
-      {/* ── 8. COMMENTAIRE ── */}
-      <Section title="8. Commentaire (optionnel)">
-        <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={commentaire}
-          onChange={e => { ks(); setCommentaire(e.target.value) }}
-          placeholder="Précisions sur votre situation..." />
-      </Section>
-
-      {/* ── 9. PIÈCES JUSTIFICATIVES ── */}
+      {/* ── 10. PIÈCES JUSTIFICATIVES ── */}
       {docsConfig.length > 0 && (
-        <Section title="9. Pièces justificatives">
+        <Section title="10. Pièces justificatives">
           <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>PDF, JPG ou PNG — max 10 Mo. Les documents * sont obligatoires.</p>
-          {docsConfig.map(doc => {
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: pasDeJustificatif ? '#FEF9EC' : '#F8FAFC', border: `1px solid ${pasDeJustificatif ? '#F59E0B' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#475569' }}>
+            <input type="checkbox" checked={pasDeJustificatif} onChange={e => { ks(); setPasDeJustificatif(e.target.checked) }} style={{ marginTop: 2, flexShrink: 0, accentColor: '#F59E0B' }} />
+            <span>Je déclare sur l'honneur que je ne dispose d'aucun justificatif de revenus</span>
+          </label>
+
+          {pasDeJustificatif && (
+            <div>
+              <label style={lbl}>Décrivez votre source de revenus et votre salaire mensuel *</label>
+              <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={pasDeJustificatifDetail}
+                onChange={e => { ks(); setPasDeJustificatifDetail(e.target.value) }} />
+            </div>
+          )}
+
+          {docsConfig.map((doc: any) => {
             const uploaded = docsUploaded[doc.id]
             const isUploading = uploading[doc.id]
             return (
@@ -474,7 +610,7 @@ export default function DemandeReductionPage() {
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#1E293B' }}>{doc.label}{doc.obligatoire && <span style={{ color: '#EF4444', marginLeft: 3 }}>*</span>}</div>
                   {uploaded && <div style={{ fontSize: 11, color: '#10B981', marginTop: 3 }}>✓ {uploaded.nom_fichier} ({uploaded.taille_ko} Ko)</div>}
                 </div>
-                <input ref={el => { fileRefs.current[doc.id] = el }} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ display: 'none' }}
+                <input ref={(el: HTMLInputElement | null) => { fileRefs.current[doc.id] = el }} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ display: 'none' }}
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadDoc(doc.id, doc.label, f) }} />
                 <button onClick={() => fileRefs.current[doc.id]?.click()} disabled={isUploading}
                   style={{ fontSize: 12, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: isUploading ? 'not-allowed' : 'pointer', background: uploaded ? 'rgba(16,185,129,0.1)' : '#2563EB', color: uploaded ? '#10B981' : '#fff', border: uploaded ? '1px solid rgba(16,185,129,0.3)' : 'none', opacity: isUploading ? 0.7 : 1, whiteSpace: 'nowrap' }}>
@@ -486,17 +622,31 @@ export default function DemandeReductionPage() {
         </Section>
       )}
 
-      {/* ── ATTESTATION ── */}
-      <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 12 }}>Attestation sur l'honneur</div>
-        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: '0 0 14px' }}>
-          En soumettant ce dossier, je soussigné(e) <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, atteste sur l'honneur que tous les renseignements portés sont conformes, sincères et véritables.
+      {/* ── 11. ATTESTATION + SIGNATURE ── */}
+      <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>Attestation sur l'honneur</div>
+        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: '0 0 16px' }}>
+          Je soussigné(e), <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, atteste sur l'honneur que tous les renseignements portés sur cette demande et les pièces justificatives sont conformes, sincères et véritables. J'accepte que l'établissement transmette les informations nécessaires à tout organisme susceptible d'accorder une aide. Je m'engage à informer le service comptabilité de toute modification de ma situation.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Fait à *</label>
-            <input style={inp} value={attestationLieu} onChange={e => { ks(); setAttestationLieu(e.target.value) }} placeholder="Ville" /></div>
-          <div><label style={lbl}>Le</label>
-            <input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} /></div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div><label style={lbl}>Fait à *</label><input style={inp} value={attestationLieu} onChange={e => { ks(); setAttestationLieu(e.target.value) }} placeholder="Ville" /></div>
+          <div><label style={lbl}>Le</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} readOnly /></div>
+        </div>
+
+        <div>
+          <label style={lbl}>Signature *</label>
+          <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 8px' }}>Signez dans le cadre ci-dessous (doigt ou souris)</p>
+          <div style={{ border: `2px solid ${signatureData ? '#10B981' : '#E2E8F0'}`, borderRadius: 10, overflow: 'hidden', background: '#fff', touchAction: 'none' }}>
+            <canvas ref={canvasRef} width={600} height={150}
+              style={{ display: 'block', width: '100%', cursor: 'crosshair' }}
+              onMouseDown={startSign} onMouseMove={drawSign} onMouseUp={stopSign} onMouseLeave={stopSign}
+              onTouchStart={startSign} onTouchMove={drawSign} onTouchEnd={stopSign} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <button onClick={clearSign} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>↺ Effacer</button>
+            {signatureData && <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>✓ Signature enregistrée</span>}
+          </div>
         </div>
       </div>
 

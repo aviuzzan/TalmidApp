@@ -1,4 +1,3 @@
-import EcoleAppLayout from '@/components/ui/EcoleAppLayout'
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return <EcoleAppLayout>{children}</EcoleAppLayout>
+export default function ReductionFicheLayout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }
