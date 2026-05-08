@@ -380,12 +380,22 @@ export default function Home() {
       if (!session) { setShowLanding(true); return }
 
       const { data: profile } = await supabase
-        .from('profiles').select('role').eq('id', session.user.id).single()
+        .from('profiles').select('role, ecole_id, ecoles(slug)').eq('id', session.user.id).single()
+
+      const slug = (profile as any)?.ecoles?.slug
 
       if (profile?.role === 'admin' || profile?.role === 'super_admin') {
-        router.push('/dashboard')
+        if (profile?.role === 'super_admin' && !slug) {
+          router.push('/admin/dashboard')
+        } else if (slug) {
+          router.push(`/${slug}/dashboard`)
+        } else {
+          // Admin sans école rattachée — fallback portail
+          router.push('/portail')
+        }
       } else if (profile?.role === 'teacher') {
-        router.push('/teacher')
+        if (slug) router.push(`/${slug}/classes`)
+        else router.push('/portail')
       } else {
         router.push('/portail')
       }
