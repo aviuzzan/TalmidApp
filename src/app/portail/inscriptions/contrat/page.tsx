@@ -314,6 +314,15 @@ export default function ContratPage() {
       }
     }
 
+    // Notification email aux admins (best-effort)
+    try {
+      await fetch('/api/notify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ecole_id: ecoleId, famille_id: familleId, type: 'contrat_soumis' }),
+      })
+    } catch {}
+
     setSaving(false)
     router.push('/portail/inscriptions')
   }
