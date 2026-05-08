@@ -368,3 +368,17 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
     white-space: nowrap;
   }
 }
+
+
+/* ==================================================
+   PAGE LOGIN ÉCOLE — mobile (header padding, role buttons stack)
+   ================================================== */
+@media (max-width: 768px) {
+  .ecole-login-header {
+    padding: 14px 16px !important;
+  }
+  .ecole-login-roles {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+}
