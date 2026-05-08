@@ -11,11 +11,13 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
     "next": "14.2.29",
+    "nodemailer": "^6.9.13",
     "react": "^18",
     "react-dom": "^18"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/nodemailer": "^6.4.15",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "typescript": "^5",
