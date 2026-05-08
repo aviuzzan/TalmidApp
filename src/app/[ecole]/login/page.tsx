@@ -65,13 +65,13 @@ export default function EcoleLoginPage() {
   }
 
   return (
-    <div style={{
+    <div className="ecole-login" style={{
       minHeight: '100vh', display: 'flex', flexDirection: 'column',
       background: '#F0F4FA', fontFamily: 'Inter, sans-serif',
     }}>
 
       {/* Header école */}
-      <header style={{
+      <header className="ecole-login-header" style={{
         padding: '18px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#fff', borderBottom: '1px solid #E2E8F0',
       }}>
@@ -112,7 +112,7 @@ export default function EcoleLoginPage() {
             </div>
 
             {/* Boutons Admin + Professeur — petits, côte à côte */}
-            <div style={{ display: 'flex', gap: 12, width: '100%' }}>
+            <div className="ecole-login-roles" style={{ display: 'flex', gap: 12, width: '100%' }}>
               {(['admin', 'professeur'] as const).map(role => {
                 const cfg = ROLE_CONFIG[role]
                 return (
