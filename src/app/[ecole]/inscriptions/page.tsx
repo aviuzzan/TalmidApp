@@ -349,6 +349,21 @@ function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee:
       .then(({ data }) => { setListe(data ?? []); setLoading(false) })
   }, [ecoleId, annee])
 
+  async function validerReduction(id: string) {
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    await s.from('demandes_reduction').update({ statut: 'accepte', traite_le: new Date().toISOString(), traite_par: session?.user.id }).eq('id', id)
+    setListe(p => p.map(d => d.id === id ? { ...d, statut: 'accepte' } : d))
+  }
+
+  async function refuserReduction(id: string) {
+    if (!confirm('Refuser cette demande de réduction ?')) return
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    await s.from('demandes_reduction').update({ statut: 'refuse', traite_le: new Date().toISOString(), traite_par: session?.user.id }).eq('id', id)
+    setListe(p => p.map(d => d.id === id ? { ...d, statut: 'refuse' } : d))
+  }
+
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
 
   const priorite: Record<string, number> = { soumis: 0, en_etude: 1, accepte: 2, refuse: 3, brouillon: 4 }
@@ -396,6 +411,18 @@ function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee:
                 </div>
               </div>
               <span style={{ fontSize: 11, fontWeight: 600, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 20 }}>{st.label}</span>
+              {d.statut === 'soumis' && (
+                <div style={{ display: 'flex', gap: 6 }} onClick={ev => ev.stopPropagation()}>
+                  <button onClick={ev => { ev.stopPropagation(); validerReduction(d.id) }}
+                    style={{ background: '#10B981', color: '#fff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 32 }}>
+                    ✓ Valider
+                  </button>
+                  <button onClick={ev => { ev.stopPropagation(); refuserReduction(d.id) }}
+                    style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 32 }}>
+                    ✗ Refuser
+                  </button>
+                </div>
+              )}
               <span style={{ fontSize: 13, color: '#94A3B8' }}>→</span>
             </div>
           )
