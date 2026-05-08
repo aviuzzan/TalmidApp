@@ -143,7 +143,7 @@ export default function SepaExportPage() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>Coordonnées bancaires non configurées</div>
                 <div style={{ fontSize: 12, color: '#78350F' }}>Renseignez l'IBAN, BIC, ICS et nom créancier dans les paramètres de l'école.</div>
               </div>
-              <button onClick={() => router.push(`/${ecole.slug}/parametres`)} style={{ background: '#F59E0B', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, color: '#fff', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Configurer →</button>
+              <button onClick={() => router.push(`/${ecole.slug}/parametres?tab=sepa`)} style={{ background: '#F59E0B', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, color: '#fff', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Configurer →</button>
             </div>
           )}
         </div>
