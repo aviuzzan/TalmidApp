@@ -50,7 +50,7 @@ export default function PortailFacturesPage() {
 
       {!facture ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-          Aucune facture pour l'année 2025/2026
+          Aucune facture pour l'année {ANNEE_COURANTE.replace('-', '/')}
         </div>
       ) : (
         <>
