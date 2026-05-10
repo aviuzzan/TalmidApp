@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 export default function PortailFacturesPage() {
   const [facture, setFacture] = useState<any>(null)
@@ -21,8 +22,8 @@ export default function PortailFacturesPage() {
       const { data: fact } = await supabase
         .from('factures_solde').select('*')
         .eq('famille_id', profile.famille_id)
-        .eq('annee_scolaire', '2025-2026')
-        .single()
+        .eq('annee_scolaire', ANNEE_COURANTE)
+        .maybeSingle()
 
       if (fact) {
         setFacture(fact)
@@ -44,7 +45,7 @@ export default function PortailFacturesPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>Mes factures</h1>
-        <p style={{ color: '#64748B', fontSize: 13 }}>Année scolaire 2025/2026</p>
+        <p style={{ color: '#64748B', fontSize: 13 }}>Année scolaire {ANNEE_COURANTE}</p>
       </div>
 
       {!facture ? (
