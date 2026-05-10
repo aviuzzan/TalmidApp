@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 function StatCard({ icon, label, value, color, bg, sub }: any) {
   return (
@@ -52,7 +53,7 @@ export default function DashboardPage() {
           <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 2, textTransform: 'capitalize' }}>{today}</p>
         </div>
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '6px 14px', fontSize: 12, color: '#2563EB', fontWeight: 600 }}>
-          📅 2025 / 2026
+          📅 {ANNEE_COURANTE.replace('-', ' / ')}
         </div>
       </div>
 
