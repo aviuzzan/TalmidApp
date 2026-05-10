@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendEmail, isEmailConfigured } from '@/lib/email'
 
 // Variables disponibles dans les templates
 const VARIABLES = [
@@ -51,12 +52,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
     }
 
-    const brevoApiKey = process.env.BREVO_API_KEY
-    const fromEmail = process.env.BREVO_FROM_EMAIL
-    const fromName = process.env.BREVO_FROM_NAME ?? 'Heder Loubavitch'
-
-    if (!brevoApiKey || !fromEmail) {
-      return NextResponse.json({ error: 'Configuration Brevo manquante' }, { status: 500 })
+    if (!isEmailConfigured()) {
+      return NextResponse.json({ error: 'Configuration SMTP manquante (SMTP_HOST, SMTP_USER, SMTP_PASSWORD)' }, { status: 500 })
     }
 
     // Client Supabase avec service role pour bypasser RLS
@@ -84,42 +81,30 @@ export async function POST(req: NextRequest) {
         const htmlResolu = resolveVariables(contenu_html, vars)
 
         // Construire les destinataires
-        const to = [{ email: famille.parent1_email, name: `${vars.prenom_parent1} ${vars.nom_parent1}` }]
+        const to = [{ email: famille.parent1_email, name: `${vars.prenom_parent1} ${vars.nom_parent1}`.trim() }]
         if (famille.parent2_email) {
-          to.push({ email: famille.parent2_email, name: `${vars.prenom_parent2} ${vars.nom_parent2}` })
+          to.push({ email: famille.parent2_email, name: `${vars.prenom_parent2} ${vars.nom_parent2}`.trim() })
         }
 
-        // Envoyer via Brevo API transactionnelle
-        const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'api-key': brevoApiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sender: { name: fromName, email: fromEmail },
-            to,
-            subject: sujetResolu,
-            htmlContent: htmlResolu,
-          }),
+        // Envoyer via SMTP
+        const result = await sendEmail({
+          to,
+          subject: sujetResolu,
+          html: htmlResolu,
         })
 
-        const brevoData = await brevoRes.json()
-
-        if (!brevoRes.ok) {
-          // Log erreur
+        if (!result.ok) {
           await supabase.from('email_logs').insert({
             template_id: template_id || null,
             famille_id: familleId,
             destinataire: famille.parent1_email,
             sujet: sujetResolu,
             statut: 'erreur',
-            erreur: brevoData.message ?? 'Erreur Brevo',
+            erreur: result.error ?? 'Erreur SMTP',
             envoye_par: admin_id,
           })
-          results.push({ familleId, famille: famille.nom, status: 'erreur', error: brevoData.message })
+          results.push({ familleId, famille: famille.nom, status: 'erreur', error: result.error })
         } else {
-          // Log succès
           await supabase.from('email_logs').insert({
             template_id: template_id || null,
             famille_id: familleId,
