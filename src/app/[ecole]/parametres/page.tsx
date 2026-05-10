@@ -864,7 +864,7 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
       )}
 
       <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#1E40AF', lineHeight: 1.6 }}>
-        💡 Les emails sont envoyés via Brevo (configuration globale TalmidApp). Si aucun email ne part, vérifiez que Brevo est bien configuré côté plateforme.
+        💡 Les emails sont envoyés via le SMTP configuré côté plateforme (Gmail Workspace de talmidapp.fr). Si aucun email ne part, vérifiez les variables SMTP_* sur Vercel.
       </div>
     </div>
   )
