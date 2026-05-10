@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { uploadAttachments, fileIcon, formatSize, Attachment } from '@/lib/messages-upload'
 
 export default function EcoleThreadPage() {
   const params = useParams()
@@ -18,6 +19,7 @@ export default function EcoleThreadPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [files, setFiles] = useState<File[]>([])
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => { load() }, [threadId])
@@ -45,11 +47,17 @@ export default function EcoleThreadPage() {
     e.preventDefault(); setError(''); if (!reply.trim()) return
     setSending(true)
     const s = createClient()
+    let attachments: Attachment[] = []
+    if (files.length > 0) {
+      const { attachments: uploaded, errors: upErrs } = await uploadAttachments(s, threadId, files)
+      if (upErrs.length > 0) { setError(upErrs.join(' / ')); setSending(false); return }
+      attachments = uploaded
+    }
     const { error: errM } = await s.from('messages').insert({
-      thread_id: threadId, auteur_profile_id: profile.id, contenu: reply.trim(),
+      thread_id: threadId, auteur_profile_id: profile.id, contenu: reply.trim(), fichiers_urls: attachments,
     })
     if (errM) { setError(errM.message); setSending(false); return }
-    setReply('')
+    setReply(''); setFiles([])
     try {
       await fetch('/api/notify-message', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -135,6 +143,17 @@ export default function EcoleThreadPage() {
                     {isMe ? 'Vous' : auteurNom}{isParent && !isMe && ' (famille)'} · {new Date(m.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </div>
                   <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.contenu}</div>
+                  {Array.isArray(m.fichiers_urls) && m.fichiers_urls.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {m.fichiers_urls.map((f: any, i: number) => (
+                        <a key={i} href={f.url} target="_blank" rel="noopener" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.15)' : '#F1F5F9', borderRadius: 6, fontSize: 12, color: isMe ? '#fff' : '#1E293B', textDecoration: 'none' }}>
+                          <span>{fileIcon(f.type)}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                          <span style={{ opacity: 0.7 }}>{formatSize(f.size)}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -146,6 +165,18 @@ export default function EcoleThreadPage() {
           <form onSubmit={sendReply} style={{ padding: '16px 22px', borderTop: '1px solid #F1F5F9', background: '#fff' }}>
             <textarea value={reply} onChange={e => setReply(e.target.value)} rows={3} placeholder="Votre réponse…"
               style={{ width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+                📎 Joindre des fichiers
+                <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files || []))} style={{ display: 'none' }} />
+              </label>
+              {files.length > 0 && files.map((f, i) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 6, fontSize: 11, color: '#1E40AF' }}>
+                  {fileIcon(f.type)} {f.name} ({formatSize(f.size)})
+                  <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1E40AF', padding: 0, fontSize: 13 }}>×</button>
+                </span>
+              ))}
+            </div>
             {error && <div style={{ background: '#FEF2F2', color: '#991B1B', padding: 8, borderRadius: 6, fontSize: 12, marginTop: 8 }}>{error}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
               <button type="submit" disabled={sending || !reply.trim()} style={{ background: sending || !reply.trim() ? '#94A3B8' : '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: sending || !reply.trim() ? 'not-allowed' : 'pointer' }}>
