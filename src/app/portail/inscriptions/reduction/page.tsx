@@ -1,14 +1,14 @@
 'use client'
-import { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
 
 export default function DemandeReductionPage() {
   const router = useRouter()
-  const scrollY = useRef(0)
-  useLayoutEffect(() => { window.scrollTo(0, scrollY.current) })
-  const ks = () => { scrollY.current = window.scrollY }
+  // ks() est un no-op gardé pour compat avec les onChange existants — le hack scroll précédent
+  // (useLayoutEffect + window.scrollTo) cassait la saisie en remontant la page à chaque caractère.
+  const ks = () => {}
 
   const [session, setSession] = useState<any>(null)
   const [familleId, setFamilleId] = useState('')
@@ -320,11 +320,21 @@ export default function DemandeReductionPage() {
 
     let demandeId = demande?.id
     if (demandeId) {
-      await s.from('demandes_reduction').update(payload).eq('id', demandeId)
+      const { data: upd, error: updErr } = await s.from('demandes_reduction').update(payload).eq('id', demandeId).select()
+      if (updErr || !upd || upd.length === 0) {
+        setSaving(false)
+        alert('Erreur lors de la soumission : ' + (updErr?.message || 'aucune ligne modifiée. Contactez l\'administration.'))
+        return
+      }
       await s.from('demandes_reduction_revenus').delete().eq('demande_id', demandeId)
     } else {
-      const { data: nd } = await s.from('demandes_reduction').insert(payload).select().single()
-      demandeId = nd?.id
+      const { data: nd, error: insErr } = await s.from('demandes_reduction').insert(payload).select().single()
+      if (insErr || !nd) {
+        setSaving(false)
+        alert('Erreur lors de la création de la demande : ' + (insErr?.message || 'inconnue'))
+        return
+      }
+      demandeId = nd.id
     }
 
     if (demandeId) {
