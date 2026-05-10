@@ -350,11 +350,17 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
 
       if (ddr?.tarif_accorde) {
         // DDR validée : 1 ligne forfait commission + 1 ligne par enfant pour les options
-        const firstEnfantId = enfants[0]?.enfant_id || null
+        const enfantsLabels = enfants
+          .map((e: any) => `${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim())
+          .filter(Boolean)
+          .join(' + ')
+        const descForfait = enfantsLabels
+          ? `Forfait scolarité ${annee} — Famille (${enfants.length} enfant${enfants.length > 1 ? 's' : ''} : ${enfantsLabels}) — tarif accordé par la commission`
+          : `Forfait scolarité ${annee} (tarif accordé par la commission)`
         lignes.push({
           facture_id: nf.id,
-          enfant_id: firstEnfantId,
-          description: `Forfait scolarité ${annee} (tarif accordé par la commission)`,
+          enfant_id: null,
+          description: descForfait,
           montant: parseFloat(ddr.tarif_accorde) || 0,
         })
         for (const e of enfants) {
