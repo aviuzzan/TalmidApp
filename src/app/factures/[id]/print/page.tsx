@@ -168,7 +168,7 @@ export default function FacturePrintPage() {
               : lignes.map(l => (
                 <tr key={l.id}>
                   <td>{l.description}</td>
-                  <td style={{ color: '#64748B' }}>{l.enfants ? `${l.enfants.prenom ?? ''} ${l.enfants.nom ?? ''}`.trim() : '—'}</td>
+                  <td style={{ color: '#64748B' }}>{l.enfants ? `${l.enfants.prenom ?? ''} ${l.enfants.nom ?? ''}`.trim() : 'Famille'}</td>
                   <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(Number(l.montant))}</td>
                 </tr>
               ))}
