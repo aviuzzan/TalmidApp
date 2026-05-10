@@ -4,6 +4,16 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
 
+// IMPORTANT : Section est défini AU NIVEAU MODULE (hors du composant page).
+// Si on le définit dans le composant, à chaque render React voit une nouvelle
+// fonction et démonte/remonte tout le formulaire → focus perdu → scroll vers le haut.
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>{title}</div>
+    {children}
+  </div>
+)
+
 export default function DemandeReductionPage() {
   const router = useRouter()
   // ks() est un no-op gardé pour compat avec les onChange existants — le hack scroll précédent
@@ -384,13 +394,6 @@ export default function DemandeReductionPage() {
 
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>{title}</div>
-      {children}
-    </div>
-  )
 
   const secteurCounts = nbParSecteur()
   const totalRev = totalRevenusMensuel()
