@@ -298,7 +298,7 @@ export default function FamilleDetailPage() {
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                   <h3 style={{ fontSize: 14, fontWeight: 600 }}>📋 Détail par élève</h3>
-                  <button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button>
+                  <div style={{ display: 'flex', gap: 8 }}><a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12, textDecoration: 'none' }}>📥 PDF</a><button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button></div>
                 </div>
                 {lignes.length === 0 ? <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Aucune ligne</div> : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
