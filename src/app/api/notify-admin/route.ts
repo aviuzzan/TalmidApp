@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendEmail, isEmailConfigured } from '@/lib/email'
 
 /**
  * Notification email aux admins de l'école quand une famille soumet
@@ -28,12 +29,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Type invalide' }, { status: 400 })
     }
 
-    const brevoApiKey = process.env.BREVO_API_KEY
-    const fromEmail = process.env.BREVO_FROM_EMAIL
-    const fromName = process.env.BREVO_FROM_NAME ?? 'TalmidApp'
-
-    if (!brevoApiKey || !fromEmail) {
-      return NextResponse.json({ error: 'Configuration Brevo manquante' }, { status: 500 })
+    if (!isEmailConfigured()) {
+      return NextResponse.json({ error: 'Configuration SMTP manquante (SMTP_HOST, SMTP_USER, SMTP_PASSWORD)' }, { status: 500 })
     }
 
     // Service role pour bypass RLS
@@ -113,41 +110,28 @@ export async function POST(req: NextRequest) {
   </div>
 </body></html>`
 
-    const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'api-key': brevoApiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sender: { name: fromName, email: fromEmail },
-        to: dests.map((email) => ({ email })),
-        subject: sujet,
-        htmlContent: html,
-      }),
+    const result = await sendEmail({
+      to: dests.map((email) => ({ email })),
+      subject: sujet,
+      html,
     })
 
-    const brevoData = await brevoRes.json()
-
-    // Log dans email_logs (best-effort, on ignore les erreurs de log)
+    // Log dans email_logs (best-effort)
     try {
       await supabase.from('email_logs').insert({
         famille_id,
         destinataire: dests.join(', '),
         sujet,
-        statut: brevoRes.ok ? 'envoye' : 'erreur',
-        erreur: brevoRes.ok ? null : (brevoData?.message ?? 'Erreur Brevo'),
+        statut: result.ok ? 'envoye' : 'erreur',
+        erreur: result.ok ? null : result.error,
       })
     } catch {}
 
-    if (!brevoRes.ok) {
-      return NextResponse.json(
-        { error: brevoData?.message ?? 'Erreur Brevo', details: brevoData },
-        { status: 502 }
-      )
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error ?? 'Erreur SMTP' }, { status: 502 })
     }
 
-    return NextResponse.json({ success: true, destinataires: dests.length })
+    return NextResponse.json({ success: true, destinataires: dests.length, messageId: result.messageId })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? 'Erreur inconnue' }, { status: 500 })
   }
