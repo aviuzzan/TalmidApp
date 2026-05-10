@@ -177,8 +177,19 @@ export default function ContratPage() {
 
   const reductionFN = reductionAccordee ? 0 : getReductionFN()
   const totalAssurance = assuranceEcole ? 12 * Math.max(1, nbEnfantsAvecClasse) : 0
+
+  // Si DDR validée : le tarif accordé couvre uniquement les postes 'inclus_dans_reduction'
+  // (enseignement + demi-pension). Les options (transport, navette, etc.) restent à charge.
+  const totalOptionsHorsReduction = enfantsContrat.reduce((s, e) => {
+    return s + (e.postes || []).reduce((s2: number, p: any) => {
+      const tarif = tarifs.find((t: any) => t.id === p.tarif_id)
+      const inclus = tarif ? tarif.inclus_dans_reduction !== false : true
+      return s2 + (inclus ? 0 : (parseFloat(p.montant) || 0))
+    }, 0)
+  }, 0)
+
   const totalAnnuel = reductionAccordee?.tarif_accorde
-    ? parseFloat(reductionAccordee.tarif_accorde) + totalAssurance
+    ? parseFloat(reductionAccordee.tarif_accorde) + totalOptionsHorsReduction + totalAssurance
     : Math.max(0, totalScolarite - reductionFN) + totalAssurance
   const minEch = paiementConfig?.nb_echeances_min || 1
   const maxEch = paiementConfig?.nb_echeances_max || 12
@@ -231,7 +242,7 @@ export default function ContratPage() {
   async function soumettre() {
     if (enfantsContrat.filter(e => e.classe_id).length === 0) { alert('Veuillez sélectionner au moins une classe'); return }
     if (!modeReglement) { alert('Choisissez un mode de règlement'); return }
-    if (modeReglement === 'cheque' && !cautionAcceptee) { alert('Vous devez accepter de fournir les 4 chèques de caution'); return }
+    // (caution chèques retirée — plus exigée)
     if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { alert('Renseignez les informations du mandat SEPA (IBAN, BIC, titulaire)'); return }
     if (!signatureData) { alert('Veuillez signer le contrat'); return }
 
@@ -493,7 +504,8 @@ export default function ContratPage() {
           </div>
         })}
         {reductionFN > 0 && !reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>Réduction famille nombreuse</span><span>- {reductionFN.toLocaleString('fr-FR')} €</span></div>}
-        {reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>Tarif accordé (commission)</span><span>{parseFloat(reductionAccordee.tarif_accorde).toLocaleString('fr-FR')} €</span></div>}
+        {reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>Tarif accordé (enseignement + demi-pension)</span><span>{parseFloat(reductionAccordee.tarif_accorde).toLocaleString('fr-FR')} €</span></div>}
+        {reductionAccordee && totalOptionsHorsReduction > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#94A3B8' }}><span>Options (transport, etc.)</span><span>+ {totalOptionsHorsReduction.toLocaleString('fr-FR')} €</span></div>}
         {assuranceEcole && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}><span>Assurance scolaire</span><span>{totalAssurance} €</span></div>}
         <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '12px 0' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 800 }}>
@@ -538,20 +550,6 @@ export default function ContratPage() {
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
-
-                {/* Caution chèques */}
-                {m.type === 'cheque' && (
-                  <div style={{ background: '#FEF9EC', border: '1px solid #F59E0B', borderRadius: 10, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E', marginBottom: 8 }}>⚠️ Chèques de caution obligatoires</div>
-                    <p style={{ fontSize: 12, color: '#78350F', margin: '0 0 10px', lineHeight: 1.5 }}>
-                      Pour valider ce mode de règlement, vous devrez déposer au moins <strong>4 chèques de caution</strong> dont le montant total correspond à la scolarité de l'année ({totalAnnuel.toLocaleString('fr-FR')} €).
-                    </p>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
-                      <input type="checkbox" checked={cautionAcceptee} onChange={e => { ks(); setCautionAcceptee(e.target.checked) }} style={{ marginTop: 2, accentColor: '#F59E0B', flexShrink: 0 }} />
-                      J'accepte de fournir 4 chèques de caution au service comptabilité
-                    </label>
                   </div>
                 )}
 
