@@ -96,15 +96,16 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       </header>
 
       {/* Nav */}
-      <nav className="portail-nav" style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', display: 'flex', gap: 4 }}>
+      <nav className="portail-nav" style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', display: 'flex', gap: 4, overflowX: 'auto' }}>
         {[
           { href: '/portail', label: '🏠 Accueil' },
           { href: '/portail/enfants', label: '🎓 Mes enfants' },
           { href: '/portail/factures', label: '💰 Mes factures' },
+          { href: '/portail/inscriptions', label: '📝 Année N+1' },
           { href: '/portail/documents', label: '📄 Documents' },
         ].map(item => (
           <a key={item.href} href={item.href}
-            style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#64748B', textDecoration: 'none', borderBottom: '2px solid transparent', display: 'inline-block' }}
+            style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#64748B', textDecoration: 'none', borderBottom: '2px solid transparent', display: 'inline-block', whiteSpace: 'nowrap' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#2563EB')}
             onMouseLeave={e => (e.currentTarget.style.color = '#64748B')}>
             {item.label}
