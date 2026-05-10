@@ -253,6 +253,7 @@ export default function InscriptionsAdminPage() {
 // ── SOUS-COMPOSANTS ──
 
 function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlug: string; annee: string }) {
+  const router = useRouter()
   const [contrats, setContrats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState('tous')
@@ -314,7 +315,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
           annee_scolaire: annee,
           numero,
           date_emission: new Date().toISOString().split('T')[0],
-          statut: 'emise',
+          statut: 'en_attente',
           notes: 'Générée automatiquement à la validation du contrat ' + annee,
         })
         .select()
@@ -326,15 +327,62 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
         return
       }
 
-      // Une ligne par enfant (montant déjà calculé au contrat — réduit ou normal)
-      const lignes = (contrat.contrat_enfants || [])
-        .filter((e: any) => e?.sous_total != null)
-        .map((e: any) => ({
+      // Récup DDR validée + map tarifs (flag inclus_dans_reduction)
+      const [{ data: ddr }, { data: tarifsList }] = await Promise.all([
+        s.from('demandes_reduction').select('tarif_accorde, statut')
+          .eq('famille_id', contrat.famille_id).eq('annee_scolaire', annee)
+          .eq('statut', 'accepte').maybeSingle(),
+        s.from('tarifs_secteur').select('id, inclus_dans_reduction').eq('ecole_id', ecoleId),
+      ])
+      const tarifMap: Record<string, boolean> = {}
+      ;(tarifsList || []).forEach((t: any) => { tarifMap[t.id] = t.inclus_dans_reduction !== false })
+
+      const lignes: any[] = []
+      const enfants = contrat.contrat_enfants || []
+
+      if (ddr?.tarif_accorde) {
+        const firstEnfantId = enfants[0]?.enfant_id || null
+        lignes.push({
           facture_id: nf.id,
-          enfant_id: e.enfant_id,
-          description: 'Scolarité ' + annee + (e.classe_prevue ? ' — ' + e.classe_prevue : '') + (e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''),
-          montant: parseFloat(e.sous_total) || 0,
-        }))
+          enfant_id: firstEnfantId,
+          description: 'Forfait scolarité ' + annee + ' (tarif accordé par la commission)',
+          montant: parseFloat(ddr.tarif_accorde) || 0,
+        })
+        for (const e of enfants) {
+          const totalOptions = (e.postes || []).reduce((acc: number, p: any) => {
+            const inclus = tarifMap[p.tarif_id] !== false
+            return acc + (inclus ? 0 : (parseFloat(p.montant) || 0))
+          }, 0)
+          if (totalOptions > 0) {
+            lignes.push({
+              facture_id: nf.id,
+              enfant_id: e.enfant_id,
+              description: 'Options ' + annee + ' — ' + (e.enfants?.prenom || '') + ' ' + (e.enfants?.nom || ''),
+              montant: totalOptions,
+            })
+          }
+        }
+      } else {
+        for (const e of enfants) {
+          if (e.sous_total != null) {
+            lignes.push({
+              facture_id: nf.id,
+              enfant_id: e.enfant_id,
+              description: 'Scolarité ' + annee + (e.classe_prevue ? ' — ' + e.classe_prevue : '') + (e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''),
+              montant: parseFloat(e.sous_total) || 0,
+            })
+          }
+        }
+      }
+
+      if (contrat.assurance_ecole && contrat.assurance_montant_total) {
+        lignes.push({
+          facture_id: nf.id,
+          enfant_id: null,
+          description: 'Assurance scolaire ' + annee,
+          montant: parseFloat(contrat.assurance_montant_total) || 0,
+        })
+      }
 
       if (lignes.length) {
         const { error: ligErr } = await s.from('facture_lignes').insert(lignes)
@@ -398,7 +446,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
                       ✓ Valider
                     </button>
                   )}
-                  <button
+                  <button onClick={() => router.push(`/${ecoleSlug}/inscriptions/contrat/${c.id}`)}
                     style={{ fontSize: 12, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 7, padding: '5px 12px', cursor: 'pointer' }}>
                     Voir
                   </button>
