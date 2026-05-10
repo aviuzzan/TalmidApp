@@ -344,6 +344,19 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       }
     }
 
+    // Notifier la famille par email (best-effort)
+    try {
+      await fetch('/api/notify-famille', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ecole_id: ecoleId,
+          famille_id: contrat.famille_id,
+          type: 'contrat_valide',
+        }),
+      })
+    } catch {}
+
     setContrats(p => p.map(c => c.id === id ? { ...c, statut: 'valide' } : c))
   }
 
