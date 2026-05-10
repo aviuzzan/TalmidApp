@@ -266,21 +266,84 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       .then(({ data }) => { setContrats(data ?? []); setLoading(false) })
   }, [ecoleId, annee])
 
-  async function validerContrat(id: string, userId: string) {
+  async function validerContrat(id: string, _userId: string) {
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    await s.from('contrats_scolarisation').update({ statut: 'valide', valide_le: new Date().toISOString(), valide_par: session?.user.id }).eq('id', id)
-    // Créer facture automatiquement
     const contrat = contrats.find(c => c.id === id)
-    if (contrat?.montant_total) {
-      await s.from('factures').insert({
-        famille_id: contrat.famille_id,
-        description: `Scolarité ${annee}`,
-        montant_total: contrat.montant_total,
-        statut: 'envoyee',
-        date_emission: new Date().toISOString().split('T')[0],
-      })
+    if (!contrat) { alert('Contrat introuvable'); return }
+
+    // 1. Marquer contrat comme validé
+    const { data: upd, error: updErr } = await s
+      .from('contrats_scolarisation')
+      .update({ statut: 'valide', valide_le: new Date().toISOString(), valide_par: session?.user.id })
+      .eq('id', id)
+      .select()
+    if (updErr || !upd || upd.length === 0) {
+      alert('Erreur lors de la validation : ' + (updErr?.message || 'aucune ligne modifiée'))
+      return
     }
+
+    // 2. Créer facture (si pas déjà existante pour cette famille/année)
+    const { data: existing } = await s
+      .from('factures')
+      .select('id')
+      .eq('famille_id', contrat.famille_id)
+      .eq('annee_scolaire', annee)
+      .maybeSingle()
+
+    if (!existing) {
+      const yearSuffix = annee.split('-')[1] || new Date().getFullYear().toString()
+      const { data: lastFact } = await s
+        .from('factures')
+        .select('numero')
+        .like('numero', 'FACT-' + yearSuffix + '-%')
+        .order('numero', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      let nextNum = 1
+      if (lastFact?.numero) {
+        const m = lastFact.numero.match(/FACT-\d+-(\d+)$/)
+        if (m) nextNum = parseInt(m[1]) + 1
+      }
+      const numero = 'FACT-' + yearSuffix + '-' + String(nextNum).padStart(4, '0')
+
+      const { data: nf, error: insErr } = await s
+        .from('factures')
+        .insert({
+          famille_id: contrat.famille_id,
+          annee_scolaire: annee,
+          numero,
+          date_emission: new Date().toISOString().split('T')[0],
+          statut: 'emise',
+          notes: 'Générée automatiquement à la validation du contrat ' + annee,
+        })
+        .select()
+        .single()
+
+      if (insErr || !nf) {
+        alert('Contrat validé mais erreur création facture : ' + (insErr?.message || 'inconnue'))
+        setContrats(p => p.map(c => c.id === id ? { ...c, statut: 'valide' } : c))
+        return
+      }
+
+      // Une ligne par enfant (montant déjà calculé au contrat — réduit ou normal)
+      const lignes = (contrat.contrat_enfants || [])
+        .filter((e: any) => e?.sous_total != null)
+        .map((e: any) => ({
+          facture_id: nf.id,
+          enfant_id: e.enfant_id,
+          description: 'Scolarité ' + annee + (e.classe_prevue ? ' — ' + e.classe_prevue : '') + (e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''),
+          montant: parseFloat(e.sous_total) || 0,
+        }))
+
+      if (lignes.length) {
+        const { error: ligErr } = await s.from('facture_lignes').insert(lignes)
+        if (ligErr) {
+          alert('Facture créée mais erreur sur les lignes : ' + ligErr.message)
+        }
+      }
+    }
+
     setContrats(p => p.map(c => c.id === id ? { ...c, statut: 'valide' } : c))
   }
 
