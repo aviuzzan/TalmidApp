@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
@@ -10,6 +10,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   const ecole = useEcole()
   const slug = ecole.slug
   const [isOpen, setIsOpen] = useState(false)
+  const [nonLus, setNonLus] = useState(0)
 
   const NAV = [
     { href: `/${slug}/dashboard`, icon: '◈', label: 'Tableau de bord' },
@@ -25,7 +26,33 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
     { href: `/${slug}/parametres`, icon: '⚙️', label: 'Paramètres' },
   ]
 
-  async function logout() {
+useEffect(() => {
+    if (!ecole?.id) return
+    let cancelled = false
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || cancelled) return
+      const myId = session.user.id
+      const { data: threads } = await supabase
+        .from('message_threads')
+        .select('id, last_message_at, thread_participants(profile_id, last_read_at), messages(auteur_profile_id, created_at)')
+        .eq('ecole_id', ecole.id)
+      if (cancelled) return
+      let n = 0
+      for (const t of threads || []) {
+        const msgs = (t as any).messages || []
+        const lastMsg = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+        if (!lastMsg || lastMsg.auteur_profile_id === myId) continue
+        const tp = ((t as any).thread_participants || []).find((p: any) => p.profile_id === myId)
+        if (!tp?.last_read_at || new Date((t as any).last_message_at).getTime() > new Date(tp.last_read_at).getTime()) n++
+      }
+      setNonLus(n)
+    })()
+    return () => { cancelled = true }
+  }, [ecole?.id, pathname])
+
+    async function logout() {
     await createClient().auth.signOut()
     router.push(`/${slug}/login`)
   }
@@ -134,6 +161,9 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                 onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
                 <span style={{ fontSize: 16 }}>{item.icon}</span>
                 {item.label}
+                {item.href.endsWith('/messages') && nonLus > 0 && (
+                  <span style={{ marginLeft: 'auto', background: '#F97316', color: '#fff', fontSize: 10, padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>{nonLus}</span>
+                )}
               </button>
             )
           })}
