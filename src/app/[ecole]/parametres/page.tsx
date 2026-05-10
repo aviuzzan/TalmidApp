@@ -604,6 +604,7 @@ function SEPATab({ ecoleId }: { ecoleId: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveErr, setSaveErr] = useState<string | null>(null)
 
   useEffect(() => {
     createClient().from('ecoles').select('iban_ecole, bic_ecole, ics_sepa, nom_creancier').eq('id', ecoleId).single()
@@ -621,13 +622,22 @@ function SEPATab({ ecoleId }: { ecoleId: string }) {
   async function save() {
     setSaving(true)
     setSaved(false)
-    await createClient().from('ecoles').update({
+    setSaveErr(null)
+    const { data, error } = await createClient().from('ecoles').update({
       iban_ecole: form.iban_ecole || null,
       bic_ecole: form.bic_ecole || null,
       ics_sepa: form.ics_sepa || null,
       nom_creancier: form.nom_creancier || null,
-    }).eq('id', ecoleId)
+    }).eq('id', ecoleId).select()
     setSaving(false)
+    if (error) {
+      setSaveErr('Erreur lors de l\'enregistrement : ' + error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      setSaveErr('Enregistrement bloqué (aucune ligne modifiée). Vérifiez vos permissions.')
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -690,6 +700,11 @@ function SEPATab({ ecoleId }: { ecoleId: string }) {
         </button>
         {saved && <span style={{ color: '#059669', fontSize: 13, fontWeight: 600 }}>✓ Enregistré</span>}
       </div>
+      {saveErr && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '11px 14px', fontSize: 13, color: '#DC2626' }}>
+          ⚠️ {saveErr}
+        </div>
+      )}
     </div>
   )
 }
@@ -703,6 +718,7 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveErr, setSaveErr] = useState<string | null>(null)
   const [testing, setTesting] = useState<'ddr' | 'contrat' | null>(null)
   const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -735,13 +751,21 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
   }
 
   async function save() {
-    setSaving(true); setSaved(false)
-    await createClient().from('ecoles').update({
+    setSaving(true); setSaved(false); setSaveErr(null)
+    const { data, error } = await createClient().from('ecoles').update({
       notif_emails_admin: emails,
       notif_ddr_active: ddrActif,
       notif_contrat_active: contratActif,
-    }).eq('id', ecoleId)
+    }).eq('id', ecoleId).select()
     setSaving(false)
+    if (error) {
+      setSaveErr('Erreur lors de l\'enregistrement : ' + error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      setSaveErr('Enregistrement bloqué (aucune ligne modifiée). Vérifiez vos permissions.')
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -839,6 +863,12 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
       </div>
 
       {/* Test + Save */}
+      {saveErr && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '11px 14px', fontSize: 13, color: '#DC2626' }}>
+          ⚠️ {saveErr}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
         <button onClick={save} disabled={saving} className="btn-primary" style={{ minHeight: 44, padding: '10px 22px' }}>
           {saving ? 'Enregistrement…' : '💾 Enregistrer'}
