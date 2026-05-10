@@ -1,14 +1,12 @@
 'use client'
-import { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
 
 export default function ContratPage() {
   const router = useRouter()
-  const scrollY = useRef(0)
-  useLayoutEffect(() => { window.scrollTo(0, scrollY.current) })
-  const ks = () => { scrollY.current = window.scrollY }
+  const ks = () => {} // no-op (ancien hack scroll cassait la saisie)
 
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
@@ -270,11 +268,21 @@ export default function ContratPage() {
 
     let contratId = contrat?.id
     if (contratId) {
-      await s.from('contrats_scolarisation').update(payload).eq('id', contratId)
+      const { data: upd, error: updErr } = await s.from('contrats_scolarisation').update(payload).eq('id', contratId).select()
+      if (updErr || !upd || upd.length === 0) {
+        setSaving(false)
+        alert('Erreur lors de la soumission du contrat : ' + (updErr?.message || 'aucune ligne modifiée. Contactez l\'administration.'))
+        return
+      }
       await s.from('contrat_enfants').delete().eq('contrat_id', contratId)
     } else {
-      const { data: nc } = await s.from('contrats_scolarisation').insert(payload).select().single()
-      contratId = nc?.id
+      const { data: nc, error: insErr } = await s.from('contrats_scolarisation').insert(payload).select().single()
+      if (insErr || !nc) {
+        setSaving(false)
+        alert('Erreur lors de la création du contrat : ' + (insErr?.message || 'inconnue'))
+        return
+      }
+      contratId = nc.id
     }
 
     if (contratId) {
