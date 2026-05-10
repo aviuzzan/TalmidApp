@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 export default function PortailPage() {
   const router = useRouter()
@@ -32,7 +33,7 @@ export default function PortailPage() {
           .or(`date_sortie.is.null,date_sortie.gte.${now}`),
         supabase.from('factures_solde').select('*')
           .eq('famille_id', familleId)
-          .eq('annee_scolaire', '2025-2026')
+          .eq('annee_scolaire', ANNEE_COURANTE)
           .single(),
       ])
 
@@ -70,7 +71,7 @@ export default function PortailPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
             Bonjour, famille {data.famille.nom} 👋
           </h1>
-          <p style={{ opacity: 0.8, fontSize: 14 }}>Année scolaire 2025 / 2026</p>
+          <p style={{ opacity: 0.8, fontSize: 14 }}>Année scolaire {ANNEE_COURANTE.replace('-', ' / ')}</p>
         </div>
         <div style={{ fontSize: 48, opacity: 0.3 }}>🏫</div>
       </div>
@@ -79,7 +80,7 @@ export default function PortailPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
           { icon: '🎓', label: 'Élèves inscrits', value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
-          { icon: '📄', label: 'Facture 2025/2026', value: data.facture ? `${Number(data.facture.total_facture).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '📄', label: `Facture ${ANNEE_COURANTE.replace('-', '/')}`, value: data.facture ? `${Number(data.facture.total_facture).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
           { icon: '💳', label: 'Solde restant', value: data.facture ? `${solde.toLocaleString('fr-FR')} €` : '—', color: solde > 0 ? '#DC2626' : '#059669', bg: solde > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
         ].map(s => (
           <div key={s.label} onClick={s.action} style={{
