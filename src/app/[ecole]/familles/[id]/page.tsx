@@ -307,7 +307,7 @@ export default function FamilleDetailPage() {
                     </tr></thead>
                     <tbody>{lignes.map((l, i) => (
                       <tr key={l.id} style={{ borderBottom: i < lignes.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{l.enfants?.prenom} {l.enfants?.nom}</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : 'Famille'}</td>
                         <td style={{ padding: '10px 12px', color: '#475569', fontSize: 13 }}>{l.description}</td>
                         <td style={{ padding: '10px 12px', fontWeight: 700 }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
                         <td style={{ padding: '10px 12px' }}><button onClick={() => deleteLigne(l.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button></td>
