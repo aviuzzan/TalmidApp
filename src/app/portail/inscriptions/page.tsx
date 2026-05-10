@@ -296,7 +296,7 @@ function FactureTab() {
             <tbody>
               {lignes.map(l => (
                 <tr key={l.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : '—'}</td>
+                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : 'Famille'}</td>
                   <td style={{ padding: '12px 16px', color: '#475569', fontSize: 13 }}>{l.description}</td>
                   <td style={{ padding: '12px 16px', fontWeight: 700, color: '#1E293B' }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
                 </tr>
