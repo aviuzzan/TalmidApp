@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 type Tab = 'tarifs' | 'factures'
 
@@ -19,7 +20,7 @@ export default function FinancesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = '2025-2026'
+  const ANNEE = ANNEE_COURANTE
 
   const emptyTarif = { nom: '', montant: '', annee_scolaire: ANNEE, description: '' }
   const [tarifForm, setTarifForm] = useState(emptyTarif)
@@ -70,6 +71,33 @@ export default function FinancesPage() {
     })
     if (err) { setError(err.message); setSaving(false); return }
     setShowFactureForm(false); setFactureForm(emptyFacture); load(); setSaving(false)
+  }
+
+  async function markPaid(f: any) {
+    const reste = Number(f.solde_restant)
+    if (!confirm(`Marquer la facture ${f.numero} comme soldée ?\n\nCela enregistre un règlement manuel de ${reste.toLocaleString('fr-FR')} € (mode : manuel/régularisation).`)) return
+    if (reste > 0) {
+      const { error: regErr } = await supabase.from('reglements').insert({
+        facture_id: f.id, famille_id: f.famille_id,
+        montant: reste,
+        date_reglement: new Date().toISOString().split('T')[0],
+        mode_paiement: 'manuel',
+        notes: 'Régularisation manuelle (Marquer comme soldée)',
+      })
+      if (regErr) { alert('Erreur règlement : ' + regErr.message); return }
+    }
+    const { error: updErr } = await supabase.from('factures').update({ statut: 'solde' }).eq('id', f.id)
+    if (updErr) { alert('Erreur mise à jour statut : ' + updErr.message); return }
+    load()
+  }
+
+  async function cancelFacture(f: any) {
+    const reason = prompt(`Annuler la facture ${f.numero} ?\n\nMotif (sera ajouté aux notes) :`, 'Annulation manuelle')
+    if (reason === null) return
+    const newNotes = (f.notes ? f.notes + ' | ' : '') + `[Annulée le ${new Date().toLocaleDateString('fr-FR')}] ${reason}`
+    const { error } = await supabase.from('factures').update({ statut: 'annule', notes: newNotes }).eq('id', f.id)
+    if (error) { alert('Erreur : ' + error.message); return }
+    load()
   }
 
   function statutBadge(statut: string) {
@@ -163,10 +191,26 @@ export default function FinancesPage() {
                   </td>
                   <td style={{ padding: '13px 16px' }}>{statutBadge(f.statut)}</td>
                   <td style={{ padding: '13px 16px' }}>
-                    <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }}
-                      onClick={() => router.push(`/${ecole.slug}/familles/${f.famille_id}?tab=facturation`)}>
-                      Voir →
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {f.statut !== 'solde' && f.statut !== 'annule' && (
+                        <button onClick={() => markPaid(f)}
+                          title="Marquer comme soldée (enregistre un règlement manuel)"
+                          style={{ padding: '5px 10px', fontSize: 12, background: 'rgba(16,185,129,0.1)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          ✓ Soldée
+                        </button>
+                      )}
+                      {f.statut !== 'annule' && f.statut !== 'solde' && (
+                        <button onClick={() => cancelFacture(f)}
+                          title="Annuler la facture"
+                          style={{ padding: '5px 10px', fontSize: 12, background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                          ✕ Annuler
+                        </button>
+                      )}
+                      <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 12 }}
+                        onClick={() => router.push(`/${ecole.slug}/familles/${f.famille_id}?tab=facturation`)}>
+                        Voir →
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
