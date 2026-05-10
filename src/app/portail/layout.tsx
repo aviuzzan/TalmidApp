@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 export default function PortailLayout({ children }: { children: React.ReactNode }) {
@@ -8,6 +8,8 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const [email, setEmail] = useState('')
   const [famille, setFamille] = useState<any>(null)
   const [ready, setReady] = useState(false)
+  const [nonLus, setNonLus] = useState(0)
+  const pathname = usePathname()
 
   useEffect(() => {
     async function check() {
@@ -44,6 +46,31 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
     }
     check()
   }, [router])
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || cancelled) return
+      const myId = session.user.id
+      const { data: threads } = await supabase
+        .from('message_threads')
+        .select('id, last_message_at, thread_participants(profile_id, last_read_at), messages(auteur_profile_id, created_at)')
+      if (cancelled) return
+      let n = 0
+      for (const t of threads || []) {
+        const msgs = (t as any).messages || []
+        const lastMsg = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+        if (!lastMsg || lastMsg.auteur_profile_id === myId) continue
+        const tp = ((t as any).thread_participants || []).find((p: any) => p.profile_id === myId)
+        if (!tp?.last_read_at || new Date((t as any).last_message_at).getTime() > new Date(tp.last_read_at).getTime()) n++
+      }
+      setNonLus(n)
+    })()
+    return () => { cancelled = true }
+  }, [ready, pathname])
+
 
   async function logout() {
     await createClient().auth.signOut()
@@ -106,10 +133,13 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           { href: '/portail/documents', label: '📄 Documents' },
         ].map(item => (
           <a key={item.href} href={item.href}
-            style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#64748B', textDecoration: 'none', borderBottom: '2px solid transparent', display: 'inline-block', whiteSpace: 'nowrap' }}
+            style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: '#64748B', textDecoration: 'none', borderBottom: '2px solid transparent', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#2563EB')}
             onMouseLeave={e => (e.currentTarget.style.color = '#64748B')}>
             {item.label}
+            {item.href === '/portail/messages' && nonLus > 0 && (
+              <span style={{ background: '#F97316', color: '#fff', fontSize: 10, padding: '1px 7px', borderRadius: 10, fontWeight: 700, lineHeight: '14px' }}>{nonLus}</span>
+            )}
           </a>
         ))}
       </nav>
