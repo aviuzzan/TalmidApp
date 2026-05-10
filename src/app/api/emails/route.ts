@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
+import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 // Variables disponibles dans les templates
 const VARIABLES = [
@@ -18,7 +19,7 @@ function resolveVariables(template: string, data: Record<string, string>): strin
 }
 
 async function getFamilleData(supabase: any, familleId: string) {
-  const ANNEE = '2025-2026'
+  const ANNEE = ANNEE_COURANTE
   const [{ data: famille }, { data: facture }, { count: nbEnfants }] = await Promise.all([
     supabase.from('familles').select('*').eq('id', familleId).single(),
     supabase.from('factures_solde').select('*').eq('famille_id', familleId).eq('annee_scolaire', ANNEE).single(),
