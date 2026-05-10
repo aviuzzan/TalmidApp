@@ -74,14 +74,42 @@ export default function PortailFacturesPage() {
               <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>Facture {facture.numero}</span>
               <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>Émise le {new Date(facture.date_emission).toLocaleDateString('fr-FR')}</span>
             </div>
-            <span style={{
-              background: facture.statut === 'solde' ? '#ECFDF5' : facture.statut === 'partiel' ? '#EFF6FF' : '#FFFBEB',
-              color: facture.statut === 'solde' ? '#059669' : facture.statut === 'partiel' ? '#2563EB' : '#D97706',
-              borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 600,
-            }}>
-              {facture.statut === 'solde' ? '✓ Soldée' : facture.statut === 'partiel' ? '◑ Partielle' : '⏳ En attente'}
-            </span>
+            {(() => {
+              const map: any = {
+                en_attente: { label: '⏳ En attente de paiement', color: '#D97706', bg: '#FFFBEB' },
+                partiel: { label: '◑ Partiellement réglée', color: '#2563EB', bg: '#EFF6FF' },
+                solde: { label: '✓ Soldée', color: '#059669', bg: '#ECFDF5' },
+                annule: { label: '✕ Annulée', color: '#DC2626', bg: '#FEF2F2' },
+              }
+              const s = map[facture.statut] || { label: facture.statut, color: '#64748B', bg: '#F1F5F9' }
+              return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 600 }}>{s.label}</span>
+            })()}
           </div>
+
+          {facture.statut === 'en_attente' && (
+            <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 18 }}>💡</span>
+              <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
+                <strong>Paiement en attente.</strong> Votre facture vient d'être émise. L'école vous informera prochainement du moyen de règlement (chèques, prélèvement SEPA, ou virement). Aucune action n'est requise de votre part pour l'instant.
+              </div>
+            </div>
+          )}
+          {facture.statut === 'partiel' && Number(facture.solde_restant) > 0 && (
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 18 }}>ℹ️</span>
+              <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.5 }}>
+                <strong>Reste à régler : {Number(facture.solde_restant).toLocaleString('fr-FR')} €.</strong> Vos prochains règlements apparaîtront automatiquement dans l'historique ci-dessous.
+              </div>
+            </div>
+          )}
+          {facture.statut === 'annule' && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <div style={{ fontSize: 13, color: '#991B1B', lineHeight: 1.5 }}>
+                <strong>Cette facture a été annulée par l'école.</strong> Si vous avez une question, contactez l'administration.
+              </div>
+            </div>
+          )}
 
           {/* Détail */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
