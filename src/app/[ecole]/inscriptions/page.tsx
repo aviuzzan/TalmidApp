@@ -293,11 +293,12 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       .maybeSingle()
 
     if (!existing) {
+      // 2a. Numéro facture séquentiel : FACT-{YYYY}-{NNNN}
       const yearSuffix = annee.split('-')[1] || new Date().getFullYear().toString()
       const { data: lastFact } = await s
         .from('factures')
         .select('numero')
-        .like('numero', 'FACT-' + yearSuffix + '-%')
+        .like('numero', `FACT-${yearSuffix}-%`)
         .order('numero', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -306,8 +307,9 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
         const m = lastFact.numero.match(/FACT-\d+-(\d+)$/)
         if (m) nextNum = parseInt(m[1]) + 1
       }
-      const numero = 'FACT-' + yearSuffix + '-' + String(nextNum).padStart(4, '0')
+      const numero = `FACT-${yearSuffix}-${String(nextNum).padStart(4, '0')}`
 
+      // 2b. Créer entête facture
       const { data: nf, error: insErr } = await s
         .from('factures')
         .insert({
@@ -316,7 +318,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
           numero,
           date_emission: new Date().toISOString().split('T')[0],
           statut: 'en_attente',
-          notes: 'Générée automatiquement à la validation du contrat ' + annee,
+          notes: `Générée automatiquement à la validation du contrat ${annee}`,
         })
         .select()
         .single()
@@ -327,13 +329,19 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
         return
       }
 
-      // Récup DDR validée + map tarifs (flag inclus_dans_reduction)
-      const [{ data: ddr }, { data: tarifsList }] = await Promise.all([
+      // 2c. Récup DDR validée + map tarifs + config frais + nouveaux enfants
+      const enfantIds = (contrat.contrat_enfants || []).map((e: any) => e.enfant_id).filter(Boolean)
+      const [{ data: ddr }, { data: tarifsList }, { data: fraisCfg }, { data: pedagos }] = await Promise.all([
         s.from('demandes_reduction').select('tarif_accorde, statut')
           .eq('famille_id', contrat.famille_id).eq('annee_scolaire', annee)
           .eq('statut', 'accepte').maybeSingle(),
         s.from('tarifs_secteur').select('id, inclus_dans_reduction').eq('ecole_id', ecoleId),
+        s.from('frais_inscription_config').select('*').eq('ecole_id', ecoleId).eq('annee_scolaire', annee).maybeSingle(),
+        enfantIds.length
+          ? s.from('inscriptions_pedagogiques').select('enfant_id').eq('annee_scolaire', annee).in('enfant_id', enfantIds)
+          : Promise.resolve({ data: [] as any[] }),
       ])
+      const nouveauxIds = new Set((pedagos || []).map((p: any) => p.enfant_id))
       const tarifMap: Record<string, boolean> = {}
       ;(tarifsList || []).forEach((t: any) => { tarifMap[t.id] = t.inclus_dans_reduction !== false })
 
@@ -341,11 +349,12 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       const enfants = contrat.contrat_enfants || []
 
       if (ddr?.tarif_accorde) {
+        // DDR validée : 1 ligne forfait commission + 1 ligne par enfant pour les options
         const firstEnfantId = enfants[0]?.enfant_id || null
         lignes.push({
           facture_id: nf.id,
           enfant_id: firstEnfantId,
-          description: 'Forfait scolarité ' + annee + ' (tarif accordé par la commission)',
+          description: `Forfait scolarité ${annee} (tarif accordé par la commission)`,
           montant: parseFloat(ddr.tarif_accorde) || 0,
         })
         for (const e of enfants) {
@@ -357,31 +366,85 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
             lignes.push({
               facture_id: nf.id,
               enfant_id: e.enfant_id,
-              description: 'Options ' + annee + ' — ' + (e.enfants?.prenom || '') + ' ' + (e.enfants?.nom || ''),
+              description: `Options ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
               montant: totalOptions,
             })
           }
         }
       } else {
+        // Pas de DDR validée : 1 ligne par enfant avec sous_total complet
         for (const e of enfants) {
           if (e.sous_total != null) {
             lignes.push({
               facture_id: nf.id,
               enfant_id: e.enfant_id,
-              description: 'Scolarité ' + annee + (e.classe_prevue ? ' — ' + e.classe_prevue : '') + (e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''),
+              description: `Scolarité ${annee}${e.classe_prevue ? ' — ' + e.classe_prevue : ''}${e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''}`.trim(),
               montant: parseFloat(e.sous_total) || 0,
             })
           }
         }
       }
 
+      // + assurance scolaire si souscrite
       if (contrat.assurance_ecole && contrat.assurance_montant_total) {
         lignes.push({
           facture_id: nf.id,
           enfant_id: null,
-          description: 'Assurance scolaire ' + annee,
+          description: `Assurance scolaire ${annee}`,
           montant: parseFloat(contrat.assurance_montant_total) || 0,
         })
+      }
+
+      // + frais inscription / réinscription selon config école
+      if (fraisCfg) {
+        const enfantsList = contrat.contrat_enfants || []
+        const nouveauxEnfants = enfantsList.filter((e: any) => nouveauxIds.has(e.enfant_id))
+        const reinscriptionsEnfants = enfantsList.filter((e: any) => !nouveauxIds.has(e.enfant_id))
+
+        // Inscription par enfant (nouveaux)
+        const fraisInscEnfant = parseFloat(fraisCfg.inscription_par_enfant) || 0
+        if (fraisInscEnfant > 0) {
+          for (const e of nouveauxEnfants) {
+            lignes.push({
+              facture_id: nf.id,
+              enfant_id: e.enfant_id,
+              description: `Frais d'inscription ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
+              montant: fraisInscEnfant,
+            })
+          }
+        }
+        // Inscription forfait famille (si au moins 1 nouveau)
+        const fraisInscFamille = parseFloat(fraisCfg.inscription_par_famille) || 0
+        if (fraisInscFamille > 0 && nouveauxEnfants.length > 0) {
+          lignes.push({
+            facture_id: nf.id,
+            enfant_id: null,
+            description: `Frais d'inscription forfait famille ${annee}`,
+            montant: fraisInscFamille,
+          })
+        }
+        // Réinscription par enfant
+        const fraisReinsEnfant = parseFloat(fraisCfg.reinscription_par_enfant) || 0
+        if (fraisReinsEnfant > 0) {
+          for (const e of reinscriptionsEnfants) {
+            lignes.push({
+              facture_id: nf.id,
+              enfant_id: e.enfant_id,
+              description: `Frais de réinscription ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
+              montant: fraisReinsEnfant,
+            })
+          }
+        }
+        // Réinscription forfait famille (si au moins 1 réinscription)
+        const fraisReinsFamille = parseFloat(fraisCfg.reinscription_par_famille) || 0
+        if (fraisReinsFamille > 0 && reinscriptionsEnfants.length > 0) {
+          lignes.push({
+            facture_id: nf.id,
+            enfant_id: null,
+            description: `Frais de réinscription forfait famille ${annee}`,
+            montant: fraisReinsFamille,
+          })
+        }
       }
 
       if (lignes.length) {
