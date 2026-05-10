@@ -101,6 +101,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           { href: '/portail', label: '🏠 Accueil' },
           { href: '/portail/enfants', label: '🎓 Mes enfants' },
           { href: '/portail/factures', label: '💰 Mes factures' },
+          { href: '/portail/messages', label: '💬 Messagerie' },
           { href: '/portail/inscriptions', label: '📝 Année N+1' },
           { href: '/portail/documents', label: '📄 Documents' },
         ].map(item => (
