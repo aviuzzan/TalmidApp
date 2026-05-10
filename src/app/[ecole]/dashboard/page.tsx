@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 function StatCard({ icon, label, value, color, bg, sub }: any) {
@@ -21,6 +22,8 @@ function StatCard({ icon, label, value, color, bg, sub }: any) {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const ecole = useEcole()
+  const slug = ecole?.slug || ''
   const [stats, setStats] = useState({ familles: 0, eleves: 0, incomplets: 0, attente: 0 })
   const [loading, setLoading] = useState(true)
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -69,9 +72,9 @@ export default function DashboardPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Raccourcis rapides</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { label: '👨‍👩‍👧 Ajouter une famille', href: '/familles', color: '#2563EB', bg: '#EFF6FF' },
-              { label: '📅 Gérer les inscriptions N+1', href: '/gestion-n1', color: '#059669', bg: '#ECFDF5' },
-              { label: '⚙️ Configurer les paramètres', href: '/parametres', color: '#64748B', bg: '#F8FAFC' },
+              { label: '👨‍👩‍👧 Ajouter une famille', href: `/${slug}/familles`, color: '#2563EB', bg: '#EFF6FF' },
+              { label: '📅 Gérer les inscriptions N+1', href: `/${slug}/gestion-n1`, color: '#059669', bg: '#ECFDF5' },
+              { label: '⚙️ Configurer les paramètres', href: `/${slug}/parametres`, color: '#64748B', bg: '#F8FAFC' },
             ].map(a => (
               <button key={a.label} onClick={() => router.push(a.href)}
                 style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', borderRadius: 8, border: `1px solid ${a.bg}`, background: a.bg, color: a.color, fontWeight: 500, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
