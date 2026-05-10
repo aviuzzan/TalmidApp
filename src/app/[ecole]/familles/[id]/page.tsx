@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -35,7 +36,7 @@ export default function FamilleDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = '2025-2026'
+  const ANNEE = ANNEE_COURANTE
 
   const emptyEnfant = {
     prenom: '', deuxieme_prenom: '', nom: '', date_naissance: '', genre: '',
