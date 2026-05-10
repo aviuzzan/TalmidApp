@@ -18,6 +18,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
     { href: `/${slug}/finances`, icon: '💰', label: 'Finances' },
     { href: `/${slug}/gestion-n1`, icon: '📅', label: 'Gestion N+1' },
     { href: `/${slug}/comptes-parents`, icon: '👥', label: 'Comptes parents' },
+    { href: `/${slug}/messages`, icon: '💬', label: 'Messagerie' },
     { href: `/${slug}/notifications`, icon: '📧', label: 'Notifications' },
     { href: `/${slug}/inscriptions`, icon: '📝', label: 'Inscriptions N+1' },
     { href: `/${slug}/inscriptions/sepa`, icon: '🏦', label: 'Export SEPA' },
