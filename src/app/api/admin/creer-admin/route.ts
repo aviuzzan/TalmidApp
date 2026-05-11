@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
-    const redirectTo = `${baseUrl}/login?invited=1`
+    const redirectTo = `${baseUrl}/auth/set-password?invited=1`
 
     // Cherche un user existant
     const { data: existingList } = await supabaseAdmin.auth.admin.listUsers()
