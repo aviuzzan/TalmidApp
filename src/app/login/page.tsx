@@ -82,6 +82,8 @@ export default function LoginPage() {
       } else {
         router.push('/hederloubavitch/dashboard')
       }
+    } else if (profile?.role === 'teacher') {
+      router.push('/portail/prof')
     } else {
       router.push('/portail')
     }
