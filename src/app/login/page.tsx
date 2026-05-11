@@ -1,10 +1,20 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
+
+  // Si on arrive ici via invitation (magic link Supabase), rediriger vers set-password
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const hash = window.location.hash
+    if (params.get('invited') === '1' || hash.includes('access_token=')) {
+      const newUrl = '/auth/set-password' + (hash || '')
+      window.location.replace(newUrl)
+    }
+  }, [])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
