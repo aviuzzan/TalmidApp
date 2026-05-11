@@ -45,8 +45,15 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   ]
 
   const navFiltered = (() => {
-    if (!permsLoaded) return NAV.filter(i => i.module === 'dashboard')
-    if (role === 'super_admin' || isAdminPrincipal) return NAV
+    // super_admin et admin (rôle BDD legacy) voient tout — fallback de sécurité
+    // pour ne pas casser l'accès tant que les permissions par module ne sont pas
+    // configurées sur chaque admin école.
+    if (role === 'super_admin' || role === 'admin') return NAV
+    // Pendant le chargement des perms : afficher tout (évite le flash menu vide).
+    if (!permsLoaded) return NAV
+    // Admin principal détecté côté perms : tout aussi.
+    if (isAdminPrincipal) return NAV
+    // Sinon, filtrer par permissions.
     return NAV.filter(i => {
       if (!i.module) return true
       const n = perms[i.module] || 'aucun'
