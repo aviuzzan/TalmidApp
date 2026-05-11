@@ -127,3 +127,91 @@ export const MODULE_HREF: Record<string, string> = {
   documents: 'documents',
   parametres: 'parametres',
 }
+
+/**
+ * Catégories pour le dashboard admin école.
+ * Chaque catégorie regroupe plusieurs modules.
+ */
+export interface Categorie {
+  code: string
+  nom: string
+  description: string
+  icone: string
+  couleur: { bg: string; fg: string; border: string }
+  modules: string[]
+  hrefHub: string // route de la page intermédiaire
+}
+
+export const CATEGORIES: Categorie[] = [
+  {
+    code: 'administration',
+    nom: 'Administration',
+    description: 'Familles, élèves, comptes parents, inscriptions',
+    icone: '👨‍👩‍👧',
+    couleur: { bg: '#E6F1FB', fg: '#0C447C', border: '#378ADD' },
+    modules: ['administratif', 'inscriptions'],
+    hrefHub: 'administration',
+  },
+  {
+    code: 'finances',
+    nom: 'Finances',
+    description: 'Facturation, comptabilité, paye, SEPA',
+    icone: '💰',
+    couleur: { bg: '#E1F5EE', fg: '#085041', border: '#1D9E75' },
+    modules: ['facturation', 'compta', 'paye'],
+    hrefHub: 'finances-hub',
+  },
+  {
+    code: 'pedagogie',
+    nom: 'Pédagogie',
+    description: 'Programmes, professeurs, emplois du temps',
+    icone: '📚',
+    couleur: { bg: '#FAEEDA', fg: '#854F0B', border: '#BA7517' },
+    modules: ['pedagogie', 'professeurs', 'emplois_du_temps'],
+    hrefHub: 'pedagogie',
+  },
+  {
+    code: 'vie_scolaire',
+    nom: 'Vie scolaire',
+    description: 'Transport, cantine, activités',
+    icone: '🚌',
+    couleur: { bg: '#EEEDFE', fg: '#3C3489', border: '#7F77DD' },
+    modules: ['transport', 'cantine'],
+    hrefHub: 'vie-scolaire',
+  },
+  {
+    code: 'communication',
+    nom: 'Communication',
+    description: 'Messagerie, documents, notifications',
+    icone: '💬',
+    couleur: { bg: '#FBEAF0', fg: '#72243E', border: '#D4537E' },
+    modules: ['messagerie', 'documents'],
+    hrefHub: 'communication',
+  },
+  {
+    code: 'configuration',
+    nom: 'Configuration',
+    description: 'Paramètres école, comptes & accès',
+    icone: '⚙️',
+    couleur: { bg: '#F1EFE8', fg: '#444441', border: '#888780' },
+    modules: ['parametres'],
+    hrefHub: 'configuration',
+  },
+]
+
+/**
+ * Retourne true si user a au moins niveau "lecture" sur AU MOINS UN module de la catégorie.
+ * Bypass pour super_admin et admin principal.
+ */
+export function hasCategoryAccess(
+  cat: Categorie,
+  perms: Record<string, Niveau>,
+  role: string,
+  isAdminPrincipal: boolean
+): boolean {
+  if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
+  return cat.modules.some(m => {
+    const n = perms[m] || 'aucun'
+    return n !== 'aucun'
+  })
+}
