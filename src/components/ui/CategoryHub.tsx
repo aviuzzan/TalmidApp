@@ -113,7 +113,7 @@ export default function CategoryHub({ code }: { code: string }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 260px))', gap: 14, justifyContent: 'center' }}>
         {modules.map((m, i) => {
           const { ok, niveau } = moduleAccessible(m)
           const onClick = ok ? () => router.push('/' + ecole.slug + '/' + m.href) : undefined
