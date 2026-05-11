@@ -20,6 +20,11 @@ export default function ComptesAccesPage() {
   const [saving, setSaving] = useState(false)
   const [auditLog, setAuditLog] = useState<any[]>([])
   const [showAudit, setShowAudit] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ prenom: '', nom: '', email: '', template: 'admin_principal' })
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [inviteOk, setInviteOk] = useState('')
 
   useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
 
@@ -89,6 +94,39 @@ export default function ComptesAccesPage() {
     setSaving(false)
   }
 
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault()
+    setInviteLoading(true); setInviteError(''); setInviteOk('')
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    try {
+      const res = await fetch('/api/admin/creer-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          prenom: inviteForm.prenom,
+          nom: inviteForm.nom,
+          email: inviteForm.email,
+          ecoleId: ecole.id,
+          template: inviteForm.template,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur')
+      setInviteOk(data.message || 'Invitation envoyée')
+      setInviteForm({ prenom: '', nom: '', email: '', template: 'admin_principal' })
+      await load()
+      setTimeout(() => { setShowInvite(false); setInviteOk('') }, 2500)
+    } catch (err: any) {
+      setInviteError(err.message || 'Erreur')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
   async function applyTemplate(profileId: string, templateKey: string) {
     if (!confirm(`Appliquer le template "${TEMPLATES[templateKey].label}" ? Toutes les permissions seront remplacées.`)) return
     setSaving(true)
@@ -125,6 +163,9 @@ export default function ComptesAccesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: '#1E293B' }}>🔐 Comptes & accès</h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowInvite(true)} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            + Inviter admin
+          </button>
           <button onClick={() => setShowAudit(!showAudit)} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             {showAudit ? '← Permissions' : '📜 Historique'}
           </button>
@@ -236,6 +277,63 @@ export default function ComptesAccesPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal inviter admin */}
+      {showInvite && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 22, maxWidth: 460, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', margin: 0 }}>+ Inviter un admin</h2>
+              <button onClick={() => { setShowInvite(false); setInviteError(''); setInviteOk('') }} style={{ background: '#F1F5F9', border: 'none', borderRadius: 7, width: 28, height: 28, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>✕</button>
+            </div>
+
+            <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Prénom *</label>
+                  <input required value={inviteForm.prenom} onChange={e => setInviteForm(f => ({ ...f, prenom: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 11px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#1E293B', outline: 'none' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Nom *</label>
+                  <input required value={inviteForm.nom} onChange={e => setInviteForm(f => ({ ...f, nom: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 11px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#1E293B', outline: 'none' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Email *</label>
+                <input required type="email" value={inviteForm.email} onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="prenom.nom@exemple.fr"
+                  style={{ width: '100%', padding: '8px 11px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#1E293B', outline: 'none' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Profil de permissions</label>
+                <select value={inviteForm.template} onChange={e => setInviteForm(f => ({ ...f, template: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 11px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#1E293B', outline: 'none', background: '#fff' }}>
+                  {Object.entries(TEMPLATES).map(([k, t]) => (
+                    <option key={k} value={k}>{t.label} — {t.description}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 7, padding: '9px 11px', fontSize: 11, color: '#1E40AF' }}>
+                💡 Un email sera envoyé à <strong>{inviteForm.email || 'l\'adresse'}</strong> avec un lien pour définir un mot de passe.
+              </div>
+
+              {inviteError && <div style={{ background: '#FEF2F2', color: '#991B1B', padding: 9, borderRadius: 7, fontSize: 12 }}>{inviteError}</div>}
+              {inviteOk && <div style={{ background: '#ECFDF5', color: '#065F46', padding: 9, borderRadius: 7, fontSize: 12 }}>✓ {inviteOk}</div>}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                <button type="button" onClick={() => setShowInvite(false)}
+                  style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuler</button>
+                <button type="submit" disabled={inviteLoading}
+                  style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 12, fontWeight: 600, cursor: inviteLoading ? 'wait' : 'pointer', opacity: inviteLoading ? 0.6 : 1 }}>
+                  {inviteLoading ? 'Envoi…' : '📧 Envoyer l\'invitation'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
