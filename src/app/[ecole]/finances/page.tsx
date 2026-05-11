@@ -34,7 +34,25 @@ export default function FinancesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = '2025-2026'
+  // Détection auto de l'année scolaire courante (sept → août)
+  function detectAnnee(): string {
+    const d = new Date()
+    const m = d.getMonth() + 1
+    const y = d.getFullYear()
+    return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`
+  }
+  const ANNEES_DISPO = ['2024-2025', '2025-2026', '2026-2027', '2027-2028']
+  const [ANNEE, setANNEE] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('finances_annee') || detectAnnee()
+    }
+    return detectAnnee()
+  })
+
+  function changeAnnee(a: string) {
+    setANNEE(a)
+    if (typeof window !== 'undefined') localStorage.setItem('finances_annee', a)
+  }
 
   const emptyTarif = { nom: '', montant: '', annee_scolaire: ANNEE, description: '' }
   const [tarifForm, setTarifForm] = useState(emptyTarif)
@@ -56,7 +74,7 @@ export default function FinancesPage() {
     setFamilles(fam ?? [])
     setReglements(regs ?? [])
     setLoading(false)
-  }, [])
+  }, [ANNEE])
 
   useEffect(() => { load() }, [load])
 
@@ -134,17 +152,21 @@ export default function FinancesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Finances</h1>
           <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & Règlements — {ANNEE}</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={ANNEE} onChange={e => changeAnnee(e.target.value)}
+            style={{ padding: '8px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            {ANNEES_DISPO.map(a => <option key={a} value={a}>📅 {a}</option>)}
+          </select>
           {tab === 'tarifs' && (
-            <button className="btn-primary" onClick={() => setShowTarifForm(true)}>+ Nouveau tarif</button>
+            <button className="btn-primary" onClick={() => { setTarifForm({ ...emptyTarif, annee_scolaire: ANNEE }); setShowTarifForm(true) }}>+ Nouveau tarif</button>
           )}
           {tab === 'factures' && (
-            <button className="btn-primary" onClick={() => setShowFactureForm(true)}>+ Nouvelle facture</button>
+            <button className="btn-primary" onClick={() => { setFactureForm({ ...emptyFacture, annee_scolaire: ANNEE }); setShowFactureForm(true) }}>+ Nouvelle facture</button>
           )}
           {tab === 'paiements' && (
             <button className="btn-primary" onClick={() => setShowPaiementForm(true)}>+ Saisir un paiement</button>
@@ -406,8 +428,7 @@ export default function FinancesPage() {
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Année scolaire</label>
                 <select style={inp} value={tarifForm.annee_scolaire} onChange={e => setTarifForm(p => ({ ...p, annee_scolaire: e.target.value }))}>
-                  <option value="2025-2026">2025-2026</option>
-                  <option value="2026-2027">2026-2027</option>
+                  {ANNEES_DISPO.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div>
@@ -444,8 +465,7 @@ export default function FinancesPage() {
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Année scolaire</label>
                 <select style={inp} value={factureForm.annee_scolaire} onChange={e => setFactureForm(p => ({ ...p, annee_scolaire: e.target.value }))}>
-                  <option value="2025-2026">2025-2026</option>
-                  <option value="2026-2027">2026-2027</option>
+                  {ANNEES_DISPO.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div>
