@@ -45,7 +45,7 @@ export default function DashboardPage() {
       ['messagerie', 'documents'].some(m => (p.perms[m] || 'aucun') !== 'aucun')
 
     const now = new Date().toISOString().split('T')[0]
-    const promises: Promise<any>[] = []
+    const promises: any[] = []
     if (accessAdmin) {
       promises.push(s.from('familles').select('*', { count: 'exact', head: true }))
       promises.push(s.from('enfants').select('*', { count: 'exact', head: true })
