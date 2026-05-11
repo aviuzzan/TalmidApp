@@ -3,9 +3,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
-type Tab = 'tarifs' | 'factures'
+type Tab = 'tarifs' | 'factures' | 'paiements'
+const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
 
 export default function FinancesPage() {
   const router = useRouter()
@@ -13,14 +13,28 @@ export default function FinancesPage() {
   const [tab, setTab] = useState<Tab>('factures')
   const [tarifs, setTarifs] = useState<any[]>([])
   const [factures, setFactures] = useState<any[]>([])
+  const [reglements, setReglements] = useState<any[]>([])
   const [familles, setFamilles] = useState<any[]>([])
+  // Filtres paiements
+  const [filtreFamille, setFiltreFamille] = useState<string>('')
+  const [filtreMode, setFiltreMode] = useState<string>('')
+  const [filtreDateDebut, setFiltreDateDebut] = useState<string>('')
+  const [filtreDateFin, setFiltreDateFin] = useState<string>('')
+  // Modal saisie paiement (depuis cet écran global)
+  const [showPaiementForm, setShowPaiementForm] = useState(false)
+  const emptyPaiement = {
+    famille_id: '', facture_id: '', montant: '',
+    date_reglement: new Date().toISOString().slice(0, 10),
+    mode_paiement: 'Chèque', reference: '', notes: '',
+  }
+  const [paiementForm, setPaiementForm] = useState<any>(emptyPaiement)
   const [loading, setLoading] = useState(true)
   const [showTarifForm, setShowTarifForm] = useState(false)
   const [showFactureForm, setShowFactureForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = ANNEE_COURANTE
+  const ANNEE = '2025-2026'
 
   const emptyTarif = { nom: '', montant: '', annee_scolaire: ANNEE, description: '' }
   const [tarifForm, setTarifForm] = useState(emptyTarif)
@@ -31,14 +45,16 @@ export default function FinancesPage() {
   const supabase = createClient()
 
   const load = useCallback(async () => {
-    const [{ data: t }, { data: f }, { data: fam }] = await Promise.all([
+    const [{ data: t }, { data: f }, { data: fam }, { data: regs }] = await Promise.all([
       supabase.from('tarifs').select('*').eq('annee_scolaire', ANNEE).order('nom'),
       supabase.from('factures_solde').select('*, familles(nom, numero)').eq('annee_scolaire', ANNEE).order('date_emission', { ascending: false }),
       supabase.from('familles').select('id, nom, numero').order('nom'),
+      supabase.from('reglements').select('*, familles(nom, numero), factures(numero)').order('date_reglement', { ascending: false }),
     ])
     setTarifs(t ?? [])
     setFactures(f ?? [])
     setFamilles(fam ?? [])
+    setReglements(regs ?? [])
     setLoading(false)
   }, [])
 
@@ -62,6 +78,31 @@ export default function FinancesPage() {
     load()
   }
 
+  async function savePaiement(e: React.FormEvent) {
+    e.preventDefault(); setSaving(true); setError('')
+    if (!paiementForm.facture_id || !paiementForm.montant || Number(paiementForm.montant) <= 0) {
+      setError('Veuillez sélectionner une facture et un montant valide.')
+      setSaving(false); return
+    }
+    const { error: err } = await supabase.from('reglements').insert({
+      facture_id: paiementForm.facture_id,
+      famille_id: paiementForm.famille_id,
+      montant: Number(paiementForm.montant),
+      date_reglement: paiementForm.date_reglement,
+      mode_paiement: paiementForm.mode_paiement,
+      reference: paiementForm.reference || null,
+      notes: paiementForm.notes || null,
+    })
+    if (err) { setError(err.message); setSaving(false); return }
+    setShowPaiementForm(false); setPaiementForm(emptyPaiement); load(); setSaving(false)
+  }
+
+  async function deletePaiement(id: string) {
+    if (!confirm('Supprimer ce règlement ? Cette action est irréversible et recalculera le statut de la facture.')) return
+    await supabase.from('reglements').delete().eq('id', id)
+    load()
+  }
+
   async function saveFacture(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setError('')
     const { error: err } = await supabase.from('factures').insert({
@@ -71,33 +112,6 @@ export default function FinancesPage() {
     })
     if (err) { setError(err.message); setSaving(false); return }
     setShowFactureForm(false); setFactureForm(emptyFacture); load(); setSaving(false)
-  }
-
-  async function markPaid(f: any) {
-    const reste = Number(f.solde_restant)
-    if (!confirm(`Marquer la facture ${f.numero} comme soldée ?\n\nCela enregistre un règlement manuel de ${reste.toLocaleString('fr-FR')} € (mode : manuel/régularisation).`)) return
-    if (reste > 0) {
-      const { error: regErr } = await supabase.from('reglements').insert({
-        facture_id: f.id, famille_id: f.famille_id,
-        montant: reste,
-        date_reglement: new Date().toISOString().split('T')[0],
-        mode_paiement: 'manuel',
-        notes: 'Régularisation manuelle (Marquer comme soldée)',
-      })
-      if (regErr) { alert('Erreur règlement : ' + regErr.message); return }
-    }
-    const { error: updErr } = await supabase.from('factures').update({ statut: 'solde' }).eq('id', f.id)
-    if (updErr) { alert('Erreur mise à jour statut : ' + updErr.message); return }
-    load()
-  }
-
-  async function cancelFacture(f: any) {
-    const reason = prompt(`Annuler la facture ${f.numero} ?\n\nMotif (sera ajouté aux notes) :`, 'Annulation manuelle')
-    if (reason === null) return
-    const newNotes = (f.notes ? f.notes + ' | ' : '') + `[Annulée le ${new Date().toLocaleDateString('fr-FR')}] ${reason}`
-    const { error } = await supabase.from('factures').update({ statut: 'annule', notes: newNotes }).eq('id', f.id)
-    if (error) { alert('Erreur : ' + error.message); return }
-    load()
   }
 
   function statutBadge(statut: string) {
@@ -132,6 +146,9 @@ export default function FinancesPage() {
           {tab === 'factures' && (
             <button className="btn-primary" onClick={() => setShowFactureForm(true)}>+ Nouvelle facture</button>
           )}
+          {tab === 'paiements' && (
+            <button className="btn-primary" onClick={() => setShowPaiementForm(true)}>+ Saisir un paiement</button>
+          )}
         </div>
       </div>
 
@@ -153,6 +170,7 @@ export default function FinancesPage() {
       <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #E2E8F0' }}>
         {[
           { id: 'factures', label: `📄 Factures (${factures.length})` },
+          { id: 'paiements', label: `💸 Paiements (${reglements.length})` },
           { id: 'tarifs', label: `💰 Tarifs (${tarifs.length})` },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id as Tab)}
@@ -191,26 +209,10 @@ export default function FinancesPage() {
                   </td>
                   <td style={{ padding: '13px 16px' }}>{statutBadge(f.statut)}</td>
                   <td style={{ padding: '13px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {f.statut !== 'solde' && f.statut !== 'annule' && (
-                        <button onClick={() => markPaid(f)}
-                          title="Marquer comme soldée (enregistre un règlement manuel)"
-                          style={{ padding: '5px 10px', fontSize: 12, background: 'rgba(16,185,129,0.1)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                          ✓ Soldée
-                        </button>
-                      )}
-                      {f.statut !== 'annule' && f.statut !== 'solde' && (
-                        <button onClick={() => cancelFacture(f)}
-                          title="Annuler la facture"
-                          style={{ padding: '5px 10px', fontSize: 12, background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                          ✕ Annuler
-                        </button>
-                      )}
-                      <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 12 }}
-                        onClick={() => router.push(`/${ecole.slug}/familles/${f.famille_id}?tab=facturation`)}>
-                        Voir →
-                      </button>
-                    </div>
+                    <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }}
+                      onClick={() => router.push(`/${ecole.slug}/familles/${f.famille_id}?tab=facturation`)}>
+                      Voir →
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -239,6 +241,156 @@ export default function FinancesPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Paiements tab */}
+      {tab === 'paiements' && (() => {
+        const reglementsFiltres = reglements.filter(r => {
+          if (filtreFamille && r.famille_id !== filtreFamille) return false
+          if (filtreMode && r.mode_paiement !== filtreMode) return false
+          if (filtreDateDebut && r.date_reglement < filtreDateDebut) return false
+          if (filtreDateFin && r.date_reglement > filtreDateFin) return false
+          return true
+        })
+        const totalPeriode = reglementsFiltres.reduce((s, r) => s + Number(r.montant || 0), 0)
+        return (
+          <>
+            {/* Filtres */}
+            <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>Famille</label>
+                <select style={inp} value={filtreFamille} onChange={e => setFiltreFamille(e.target.value)}>
+                  <option value="">Toutes</option>
+                  {familles.map(f => <option key={f.id} value={f.id}>{f.nom} ({f.numero})</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>Mode</label>
+                <select style={inp} value={filtreMode} onChange={e => setFiltreMode(e.target.value)}>
+                  <option value="">Tous</option>
+                  {MODES_PAIEMENT.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>Du</label>
+                <input type="date" style={inp} value={filtreDateDebut} onChange={e => setFiltreDateDebut(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>Au</label>
+                <input type="date" style={inp} value={filtreDateFin} onChange={e => setFiltreDateFin(e.target.value)} />
+              </div>
+              <div style={{ background: '#EFF6FF', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Total période</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#2563EB' }}>{totalPeriode.toLocaleString('fr-FR')} €</div>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ background: '#F8FAFC' }}>
+                  <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    {['Date', 'Famille', 'Facture', 'Montant', 'Mode', 'Référence', 'Notes', ''].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
+                  ) : reglementsFiltres.length === 0 ? (
+                    <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucun règlement {reglements.length > 0 ? 'pour ces filtres' : 'enregistré'}</td></tr>
+                  ) : reglementsFiltres.map((r, i) => (
+                    <tr key={r.id} style={{ borderBottom: i < reglementsFiltres.length - 1 ? '1px solid #F1F5F9' : 'none' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <td style={{ padding: '13px 16px', color: '#475569', fontSize: 12 }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
+                      <td style={{ padding: '13px 16px', fontWeight: 600 }}>{r.familles?.nom} <span style={{ color: '#94A3B8', fontSize: 11 }}>({r.familles?.numero})</span></td>
+                      <td style={{ padding: '13px 16px', fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{r.factures?.numero}</td>
+                      <td style={{ padding: '13px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
+                      <td style={{ padding: '13px 16px' }}>
+                        <span style={{ background: '#F1F5F9', color: '#475569', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{r.mode_paiement}</span>
+                      </td>
+                      <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B' }}>{r.reference || '—'}</td>
+                      <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.notes || ''}>{r.notes || '—'}</td>
+                      <td style={{ padding: '13px 16px' }}>
+                        <button onClick={() => deletePaiement(r.id)} className="btn-danger" style={{ padding: '5px 10px', fontSize: 12 }} title="Supprimer">🗑️</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )
+      })()}
+
+      {/* Modal saisie paiement */}
+      {showPaiementForm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700 }}>💸 Saisir un paiement</h2>
+              <button onClick={() => setShowPaiementForm(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#64748B' }}>✕</button>
+            </div>
+            {error && <div style={{ background: '#FEF2F2', color: '#991B1B', padding: 10, borderRadius: 8, marginBottom: 14, fontSize: 13 }}>{error}</div>}
+            <form onSubmit={savePaiement} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Famille *</label>
+                <select required style={inp} value={paiementForm.famille_id}
+                  onChange={e => setPaiementForm((p: any) => ({ ...p, famille_id: e.target.value, facture_id: '' }))}>
+                  <option value="">— Sélectionner une famille —</option>
+                  {familles.map(f => <option key={f.id} value={f.id}>{f.nom} ({f.numero})</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Facture *</label>
+                <select required style={inp} value={paiementForm.facture_id}
+                  onChange={e => setPaiementForm((p: any) => ({ ...p, facture_id: e.target.value }))}
+                  disabled={!paiementForm.famille_id}>
+                  <option value="">— Sélectionner une facture —</option>
+                  {factures.filter(f => f.famille_id === paiementForm.famille_id).map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.numero} — Total {Number(f.total_facture).toLocaleString('fr-FR')} € / Reste {Number(f.solde_restant).toLocaleString('fr-FR')} €
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Montant (€) *</label>
+                  <input required type="number" step="0.01" min="0.01" style={inp} value={paiementForm.montant}
+                    onChange={e => setPaiementForm((p: any) => ({ ...p, montant: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Date *</label>
+                  <input required type="date" style={inp} value={paiementForm.date_reglement}
+                    onChange={e => setPaiementForm((p: any) => ({ ...p, date_reglement: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Mode de paiement *</label>
+                <select required style={inp} value={paiementForm.mode_paiement}
+                  onChange={e => setPaiementForm((p: any) => ({ ...p, mode_paiement: e.target.value }))}>
+                  {MODES_PAIEMENT.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Référence (n° chèque, virement…)</label>
+                <input type="text" style={inp} value={paiementForm.reference}
+                  onChange={e => setPaiementForm((p: any) => ({ ...p, reference: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Notes</label>
+                <textarea style={{ ...inp, resize: 'vertical', minHeight: 60 }} value={paiementForm.notes}
+                  onChange={e => setPaiementForm((p: any) => ({ ...p, notes: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button type="button" onClick={() => setShowPaiementForm(false)} className="btn-secondary">Annuler</button>
+                <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
