@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
+import ExerciceSelector from '@/components/ui/ExerciceSelector'
 
 type Stats = {
   familles: number
@@ -107,9 +108,7 @@ export default function DashboardPage() {
             {ecole.nom} · {today} · {userName}
           </p>
         </div>
-        <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '6px 14px', fontSize: 12, color: '#2563EB', fontWeight: 600 }}>
-          📅 2026 / 2027
-        </div>
+        <ExerciceSelector />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 260px))', gap: 18, justifyContent: 'center' }}>
