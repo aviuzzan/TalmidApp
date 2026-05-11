@@ -3,9 +3,61 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { loadPermissions, Niveau } from '@/lib/permissions'
+import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau } from '@/lib/permissions'
 
-type NavItem = { href: string; icon: string; label: string; module?: string }
+type ModuleEntry = { nom: string; href: string; module: string }
+
+// Mapping catégorie -> modules cliquables (sous-menus quand catégorie active)
+const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
+  administration: [
+    { nom: 'Familles', href: 'familles', module: 'administratif' },
+    { nom: 'Élèves', href: 'enfants', module: 'administratif' },
+    { nom: 'Comptes parents', href: 'comptes-parents', module: 'administratif' },
+    { nom: 'Inscriptions N+1', href: 'inscriptions', module: 'inscriptions' },
+    { nom: 'Gestion N+1', href: 'gestion-n1', module: 'inscriptions' },
+  ],
+  finances: [
+    { nom: 'Factures', href: 'finances', module: 'facturation' },
+    { nom: 'Paye', href: 'paye', module: 'paye' },
+    { nom: 'Export SEPA', href: 'inscriptions/sepa', module: 'compta' },
+  ],
+  pedagogie: [
+    { nom: 'Programmes', href: 'pedagogie', module: 'pedagogie' },
+    { nom: 'Professeurs', href: 'professeurs', module: 'professeurs' },
+    { nom: 'Emplois du temps', href: 'emplois-du-temps', module: 'emplois_du_temps' },
+  ],
+  vie_scolaire: [
+    { nom: 'Transport', href: 'transport', module: 'transport' },
+    { nom: 'Cantine', href: 'cantine', module: 'cantine' },
+  ],
+  communication: [
+    { nom: 'Messagerie', href: 'messages', module: 'messagerie' },
+    { nom: 'Documents école', href: 'documents', module: 'documents' },
+    { nom: 'Notifications', href: 'notifications', module: 'parametres' },
+  ],
+  configuration: [
+    { nom: 'Paramètres école', href: 'parametres', module: 'parametres' },
+    { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
+  ],
+}
+
+function findActiveCategory(pathname: string, slug: string): string | null {
+  if (!pathname) return null
+  for (const cat of CATEGORIES) {
+    if (pathname === '/' + slug + '/' + cat.hrefHub || pathname.startsWith('/' + slug + '/' + cat.hrefHub + '/')) {
+      return cat.code
+    }
+  }
+  for (const catCode of Object.keys(MODULES_BY_CATEGORY)) {
+    for (const m of MODULES_BY_CATEGORY[catCode]) {
+      const fullPath = '/' + slug + '/' + m.href
+      if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
+        return catCode
+      }
+    }
+  }
+  return null
+}
 
 export default function EcoleSidebar({ userEmail, role }: { userEmail: string; role: string }) {
   const router = useRouter()
@@ -29,41 +81,19 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
     })()
   }, [ecole?.id])
 
-  const NAV: NavItem[] = [
-    { href: `/${slug}/dashboard`, icon: '◈', label: 'Tableau de bord', module: 'dashboard' },
-    { href: `/${slug}/familles`, icon: '👨‍👩‍👧', label: 'Familles', module: 'administratif' },
-    { href: `/${slug}/enfants`, icon: '🎓', label: 'Élèves', module: 'administratif' },
-    { href: `/${slug}/finances`, icon: '💰', label: 'Finances', module: 'facturation' },
-    { href: `/${slug}/gestion-n1`, icon: '📅', label: 'Gestion N+1', module: 'inscriptions' },
-    { href: `/${slug}/comptes-parents`, icon: '👥', label: 'Comptes parents', module: 'administratif' },
-    { href: `/${slug}/messages`, icon: '💬', label: 'Messagerie', module: 'messagerie' },
-    { href: `/${slug}/professeurs`, icon: '👨‍🏫', label: 'Professeurs', module: 'professeurs' },
-    { href: `/${slug}/notifications`, icon: '📧', label: 'Notifications', module: 'parametres' },
-    { href: `/${slug}/inscriptions`, icon: '📝', label: 'Inscriptions N+1', module: 'inscriptions' },
-    { href: `/${slug}/inscriptions/sepa`, icon: '🏦', label: 'Export SEPA', module: 'compta' },
-    { href: `/${slug}/parametres`, icon: '⚙️', label: 'Paramètres', module: 'parametres' },
-  ]
+  const activeCategory = findActiveCategory(pathname || '', slug)
+  const isDashboardActive = pathname === '/' + slug + '/dashboard'
 
-  const navFiltered = (() => {
-    // super_admin et admin (rôle BDD legacy) voient tout — fallback de sécurité
-    // pour ne pas casser l'accès tant que les permissions par module ne sont pas
-    // configurées sur chaque admin école.
-    if (role === 'super_admin' || role === 'admin') return NAV
-    // Pendant le chargement des perms : afficher tout (évite le flash menu vide).
-    if (!permsLoaded) return NAV
-    // Admin principal détecté côté perms : tout aussi.
-    if (isAdminPrincipal) return NAV
-    // Sinon, filtrer par permissions.
-    return NAV.filter(i => {
-      if (!i.module) return true
-      const n = perms[i.module] || 'aucun'
-      return n !== 'aucun'
-    })
-  })()
+  function moduleHasAccess(m: ModuleEntry): boolean {
+    if (m.href.includes('comptes-acces')) return isAdminPrincipal || role === 'super_admin'
+    if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
+    if (!permsLoaded) return true
+    return (perms[m.module] || 'aucun') !== 'aucun'
+  }
 
   async function logout() {
     await createClient().auth.signOut()
-    router.push(`/${slug}/login`)
+    router.push('/' + slug + '/login')
   }
 
   function navigate(href: string) {
@@ -137,47 +167,80 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
         </div>
 
         <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
+          {/* Tableau de bord */}
+          <button onClick={() => navigate('/' + slug + '/dashboard')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              marginBottom: 8, fontSize: 14, textAlign: 'left',
+              fontWeight: isDashboardActive ? 600 : 400,
+              background: isDashboardActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+              color: isDashboardActive ? '#fff' : 'rgba(255,255,255,0.65)',
+              borderLeft: isDashboardActive ? '3px solid #60A5FA' : '3px solid transparent',
+              minHeight: 44,
+            }}>
+            <span style={{ fontSize: 16 }}>◈</span>
+            Tableau de bord
+          </button>
+
           <div style={{
             fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.3)',
-            letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 8px 8px',
-          }}>Menu principal</div>
-          {navFiltered.map(item => {
-            const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 8px 6px',
+          }}>Catégories</div>
+
+          {CATEGORIES.map(cat => {
+            const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal)
+            const isCatActive = cat.code === activeCategory
+            const modules = MODULES_BY_CATEGORY[cat.code] || []
+            const visibleModules = modules.filter(moduleHasAccess)
+
             return (
-              <button key={item.href} onClick={() => navigate(item.href)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                  padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  marginBottom: 2, fontSize: 14, textAlign: 'left',
-                  fontWeight: active ? 600 : 400,
-                  background: active ? 'rgba(255,255,255,0.15)' : 'transparent',
-                  color: active ? '#fff' : 'rgba(255,255,255,0.65)',
-                  transition: 'all 0.15s',
-                  borderLeft: active ? '3px solid #60A5FA' : '3px solid transparent',
-                  minHeight: 44,
-                }}
-                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)' }}
-                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
-                <span style={{ fontSize: 16 }}>{item.icon}</span>
-                {item.label}
-              </button>
+              <div key={cat.code}>
+                <button
+                  onClick={() => accessible && navigate('/' + slug + '/' + cat.hrefHub)}
+                  disabled={!accessible}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                    padding: '10px 12px', borderRadius: 8, border: 'none',
+                    cursor: accessible ? 'pointer' : 'not-allowed',
+                    marginBottom: 2, fontSize: 13, textAlign: 'left',
+                    fontWeight: isCatActive ? 600 : 400,
+                    background: isCatActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+                    color: accessible ? (isCatActive ? '#fff' : 'rgba(255,255,255,0.75)') : 'rgba(255,255,255,0.35)',
+                    borderLeft: isCatActive ? `3px solid ${cat.couleur.border}` : '3px solid transparent',
+                    minHeight: 40,
+                  }}>
+                  <span style={{ fontSize: 16 }}>{cat.icone}</span>
+                  <span style={{ flex: 1 }}>{cat.nom}</span>
+                  {!accessible && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>🔒</span>}
+                </button>
+
+                {/* Sous-modules si catégorie active */}
+                {isCatActive && accessible && visibleModules.length > 0 && (
+                  <div style={{ paddingLeft: 22, marginBottom: 6, marginTop: 2 }}>
+                    {visibleModules.map(m => {
+                      const fullPath = '/' + slug + '/' + m.href
+                      const isModActive = pathname === fullPath
+                      return (
+                        <button key={m.href} onClick={() => navigate(fullPath)}
+                          style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '7px 11px', borderRadius: 6,
+                            fontSize: 12, border: 'none', cursor: 'pointer',
+                            marginBottom: 1,
+                            background: isModActive ? 'rgba(96,165,250,0.18)' : 'transparent',
+                            color: isModActive ? '#fff' : 'rgba(255,255,255,0.55)',
+                            borderLeft: isModActive ? '2px solid #60A5FA' : '2px solid transparent',
+                          }}>
+                          {m.nom}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
-          {isAdminPrincipal && (
-            <button onClick={() => navigate(`/${slug}/parametres/comptes-acces`)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                marginTop: 10, fontSize: 13, textAlign: 'left', fontWeight: 500,
-                background: pathname?.includes('comptes-acces') ? 'rgba(96,165,250,0.18)' : 'rgba(255,255,255,0.04)',
-                color: 'rgba(255,255,255,0.75)',
-                borderLeft: pathname?.includes('comptes-acces') ? '3px solid #60A5FA' : '3px solid transparent',
-                minHeight: 40,
-              }}>
-              <span style={{ fontSize: 14 }}>{'🔐'}</span>
-              Comptes &amp; accès
-            </button>
-          )}
         </nav>
 
         <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
