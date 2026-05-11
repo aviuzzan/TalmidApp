@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { loadPermissions, Niveau } from '@/lib/permissions'
+
+type NavItem = { href: string; icon: string; label: string; module?: string }
 
 export default function EcoleSidebar({ userEmail, role }: { userEmail: string; role: string }) {
   const router = useRouter()
@@ -10,51 +13,48 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   const ecole = useEcole()
   const slug = ecole.slug
   const [isOpen, setIsOpen] = useState(false)
-  const [nonLus, setNonLus] = useState(0)
+  const [perms, setPerms] = useState<Record<string, Niveau>>({})
+  const [isAdminPrincipal, setIsAdminPrincipal] = useState(false)
+  const [permsLoaded, setPermsLoaded] = useState(false)
 
-  const NAV = [
-    { href: `/${slug}/dashboard`, icon: '◈', label: 'Tableau de bord' },
-    { href: `/${slug}/familles`, icon: '👨‍👩‍👧', label: 'Familles' },
-    { href: `/${slug}/enfants`, icon: '🎓', label: 'Élèves' },
-    { href: `/${slug}/professeurs`, icon: '👨‍🏫', label: 'Professeurs' },
-    { href: `/${slug}/emplois-du-temps`, icon: '📅', label: 'Emplois du temps' },
-    { href: `/${slug}/finances`, icon: '💰', label: 'Finances' },
-    { href: `/${slug}/gestion-n1`, icon: '📅', label: 'Gestion N+1' },
-    { href: `/${slug}/comptes-parents`, icon: '👥', label: 'Comptes parents' },
-    { href: `/${slug}/messages`, icon: '💬', label: 'Messagerie' },
-    { href: `/${slug}/notifications`, icon: '📧', label: 'Notifications' },
-    { href: `/${slug}/inscriptions`, icon: '📝', label: 'Inscriptions N+1' },
-    { href: `/${slug}/inscriptions/sepa`, icon: '🏦', label: 'Export SEPA' },
-    { href: `/${slug}/parametres`, icon: '⚙️', label: 'Paramètres' },
+  useEffect(() => {
+    (async () => {
+      const s = createClient()
+      const { data: { session } } = await s.auth.getSession()
+      if (!session || !ecole?.id) { setPermsLoaded(true); return }
+      const p = await loadPermissions(s, session.user.id, ecole.id)
+      setPerms(p.perms)
+      setIsAdminPrincipal(p.isAdminPrincipal)
+      setPermsLoaded(true)
+    })()
+  }, [ecole?.id])
+
+  const NAV: NavItem[] = [
+    { href: `/${slug}/dashboard`, icon: '◈', label: 'Tableau de bord', module: 'dashboard' },
+    { href: `/${slug}/familles`, icon: '👨‍👩‍👧', label: 'Familles', module: 'administratif' },
+    { href: `/${slug}/enfants`, icon: '🎓', label: 'Élèves', module: 'administratif' },
+    { href: `/${slug}/finances`, icon: '💰', label: 'Finances', module: 'facturation' },
+    { href: `/${slug}/gestion-n1`, icon: '📅', label: 'Gestion N+1', module: 'inscriptions' },
+    { href: `/${slug}/comptes-parents`, icon: '👥', label: 'Comptes parents', module: 'administratif' },
+    { href: `/${slug}/messages`, icon: '💬', label: 'Messagerie', module: 'messagerie' },
+    { href: `/${slug}/professeurs`, icon: '👨‍🏫', label: 'Professeurs', module: 'professeurs' },
+    { href: `/${slug}/notifications`, icon: '📧', label: 'Notifications', module: 'parametres' },
+    { href: `/${slug}/inscriptions`, icon: '📝', label: 'Inscriptions N+1', module: 'inscriptions' },
+    { href: `/${slug}/inscriptions/sepa`, icon: '🏦', label: 'Export SEPA', module: 'compta' },
+    { href: `/${slug}/parametres`, icon: '⚙️', label: 'Paramètres', module: 'parametres' },
   ]
 
-useEffect(() => {
-    if (!ecole?.id) return
-    let cancelled = false
-    ;(async () => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session || cancelled) return
-      const myId = session.user.id
-      const { data: threads } = await supabase
-        .from('message_threads')
-        .select('id, last_message_at, thread_participants(profile_id, last_read_at), messages(auteur_profile_id, created_at)')
-        .eq('ecole_id', ecole.id)
-      if (cancelled) return
-      let n = 0
-      for (const t of threads || []) {
-        const msgs = (t as any).messages || []
-        const lastMsg = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-        if (!lastMsg || lastMsg.auteur_profile_id === myId) continue
-        const tp = ((t as any).thread_participants || []).find((p: any) => p.profile_id === myId)
-        if (!tp?.last_read_at || new Date((t as any).last_message_at).getTime() > new Date(tp.last_read_at).getTime()) n++
-      }
-      setNonLus(n)
-    })()
-    return () => { cancelled = true }
-  }, [ecole?.id, pathname])
+  const navFiltered = (() => {
+    if (!permsLoaded) return NAV.filter(i => i.module === 'dashboard')
+    if (role === 'super_admin' || isAdminPrincipal) return NAV
+    return NAV.filter(i => {
+      if (!i.module) return true
+      const n = perms[i.module] || 'aucun'
+      return n !== 'aucun'
+    })
+  })()
 
-    async function logout() {
+  async function logout() {
     await createClient().auth.signOut()
     router.push(`/${slug}/login`)
   }
@@ -68,7 +68,6 @@ useEffect(() => {
 
   return (
     <>
-      {/* Mobile hamburger button */}
       <button
         aria-label="Ouvrir le menu"
         className="ecole-hamburger"
@@ -81,29 +80,22 @@ useEffect(() => {
           alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
         }}>
-        ☰
+        {'☰'}
       </button>
 
-      {/* Mobile backdrop */}
       <div
         onClick={() => setIsOpen(false)}
         className={'ecole-backdrop' + (isOpen ? ' is-visible' : '')}
-        style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-          zIndex: 90,
-        }}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 90 }}
       />
 
-      {/* Sidebar */}
       <div
         className={'ecole-sidebar' + (isOpen ? ' is-open' : '')}
         style={{
           width: 230, background: 'var(--sidebar-bg)',
           display: 'flex', flexDirection: 'column', flexShrink: 0,
-          position: 'sticky', top: 0, height: '100vh',
-          zIndex: 100,
+          position: 'sticky', top: 0, height: '100vh', zIndex: 100,
         }}>
-        {/* Mobile close button */}
         <button
           aria-label="Fermer le menu"
           className="ecole-sidebar-close"
@@ -115,10 +107,9 @@ useEffect(() => {
             border: 'none', cursor: 'pointer', fontSize: 20,
             alignItems: 'center', justifyContent: 'center',
           }}>
-          ×
+          {'×'}
         </button>
 
-        {/* Logo école */}
         <div style={{ padding: '20px 18px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -138,13 +129,12 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
           <div style={{
             fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.3)',
             letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 8px 8px',
           }}>Menu principal</div>
-          {NAV.map(item => {
+          {navFiltered.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
               <button key={item.href} onClick={() => navigate(item.href)}
@@ -163,15 +153,26 @@ useEffect(() => {
                 onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
                 <span style={{ fontSize: 16 }}>{item.icon}</span>
                 {item.label}
-                {item.href.endsWith('/messages') && nonLus > 0 && (
-                  <span style={{ marginLeft: 'auto', background: '#F97316', color: '#fff', fontSize: 10, padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>{nonLus}</span>
-                )}
               </button>
             )
           })}
+          {isAdminPrincipal && (
+            <button onClick={() => navigate(`/${slug}/parametres/comptes-acces`)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                marginTop: 10, fontSize: 13, textAlign: 'left', fontWeight: 500,
+                background: pathname?.includes('comptes-acces') ? 'rgba(96,165,250,0.18)' : 'rgba(255,255,255,0.04)',
+                color: 'rgba(255,255,255,0.75)',
+                borderLeft: pathname?.includes('comptes-acces') ? '3px solid #60A5FA' : '3px solid transparent',
+                minHeight: 40,
+              }}>
+              <span style={{ fontSize: 14 }}>{'🔐'}</span>
+              Comptes &amp; accès
+            </button>
+          )}
         </nav>
 
-        {/* Footer utilisateur */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           {role === 'super_admin' && (
             <div style={{
@@ -180,7 +181,7 @@ useEffect(() => {
               fontSize: 10, color: '#FCD34D', fontWeight: 600,
               textAlign: 'center', letterSpacing: '0.05em',
             }}>
-              ⭐ SUPER ADMIN
+              SUPER ADMIN
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -193,7 +194,7 @@ useEffect(() => {
             <div style={{ overflow: 'hidden' }}>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-                {role === 'super_admin' ? 'Super administrateur' : 'Administrateur'}
+                {role === 'super_admin' ? 'Super administrateur' : (isAdminPrincipal ? 'Admin principal' : 'Administrateur')}
               </div>
             </div>
           </div>
