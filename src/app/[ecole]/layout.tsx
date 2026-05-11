@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { EcoleProvider, type Ecole } from '@/lib/ecole-context'
+import { ExerciceProvider } from '@/lib/exercice-context'
 
 export default function EcoleLayout({ children }: { children: React.ReactNode }) {
   const params = useParams()
@@ -56,5 +57,9 @@ export default function EcoleLayout({ children }: { children: React.ReactNode })
     </div>
   )
 
-  return <EcoleProvider ecole={ecole!}>{children}</EcoleProvider>
+  return (
+    <EcoleProvider ecole={ecole!}>
+      <ExerciceProvider>{children}</ExerciceProvider>
+    </EcoleProvider>
+  )
 }
