@@ -112,7 +112,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 260px))', gap: 18, justifyContent: 'center' }}>
         {CATEGORIES.map(cat => {
           const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal)
           const badge = accessible ? categoryBadge(cat) : null
