@@ -1,384 +1,813 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+
+
 :root {
+
   --bg: #F0F4FA;
+
   --bg-card: #FFFFFF;
+
   --bg-hover: #F5F8FF;
+
   --sidebar-bg: #1A3A6B;
+
   --sidebar-hover: #1E4580;
+
   --sidebar-active: #2563EB;
+
   --border: #E2E8F0;
+
   --accent: #2563EB;
+
   --accent-soft: #EFF6FF;
+
   --accent-mid: #BFDBFE;
+
   --green: #059669;
+
   --green-soft: #ECFDF5;
+
   --amber: #D97706;
+
   --amber-soft: #FFFBEB;
+
   --red: #DC2626;
+
   --red-soft: #FEF2F2;
+
   --text: #1E293B;
+
   --text-muted: #64748B;
+
   --text-dim: #94A3B8;
+
   --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+
   --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+
 }
 
+
+
 body {
+
   background: var(--bg);
+
   color: var(--text);
+
   font-family: 'Inter', sans-serif;
+
   font-size: 14px;
+
   line-height: 1.5;
+
 }
+
+
 
 input, select, textarea, button { font-family: 'Inter', sans-serif; }
 
+
+
 ::-webkit-scrollbar { width: 5px; }
+
 ::-webkit-scrollbar-track { background: transparent; }
+
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+
+
 .card {
+
   background: var(--bg-card);
+
   border: 1px solid var(--border);
+
   border-radius: 12px;
+
   padding: 20px 24px;
+
   box-shadow: var(--shadow);
+
 }
+
+
 
 .btn-primary {
+
   background: var(--accent);
+
   color: #fff;
+
   border: none;
+
   border-radius: 8px;
+
   padding: 9px 18px;
+
   font-weight: 600;
+
   font-size: 13px;
+
   cursor: pointer;
+
   transition: background 0.15s;
+
 }
+
 .btn-primary:hover { background: #1D4ED8; }
+
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
+
+
 .btn-secondary {
+
   background: var(--accent-soft);
+
   color: var(--accent);
+
   border: 1px solid var(--accent-mid);
+
   border-radius: 8px;
+
   padding: 9px 18px;
+
   font-weight: 600;
+
   font-size: 13px;
+
   cursor: pointer;
+
 }
+
+
 
 .btn-danger {
+
   background: var(--red-soft);
+
   color: var(--red);
+
   border: 1px solid #FECACA;
+
   border-radius: 8px;
+
   padding: 9px 18px;
+
   font-weight: 600;
+
   font-size: 13px;
+
   cursor: pointer;
+
 }
+
+
 
 .input {
+
   width: 100%;
+
   padding: 9px 12px;
+
   background: #fff;
+
   border: 1px solid var(--border);
+
   border-radius: 8px;
+
   color: var(--text);
+
   font-size: 13px;
+
   outline: none;
+
   transition: border-color 0.15s, box-shadow 0.15s;
-}
-.input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+
 }
 
-.label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 5px;
+.input:focus {
+
+  border-color: var(--accent);
+
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+
 }
+
+
+
+.label {
+
+  display: block;
+
+  font-size: 12px;
+
+  font-weight: 500;
+
+  color: var(--text-muted);
+
+  margin-bottom: 5px;
+
+}
+
+
 
 .required::after { content: ' *'; color: var(--red); }
 
+
+
 .badge {
+
   display: inline-flex;
+
   align-items: center;
+
   border-radius: 20px;
+
   padding: 3px 10px;
+
   font-size: 11px;
+
   font-weight: 600;
+
   white-space: nowrap;
+
 }
 
+
+
 /* ==================================================
+
    MOBILE RESPONSIVENESS  (iPhone / Samsung)
+
    ================================================== */
 
+
+
 .mobile-only { display: none !important; }
+
 .desktop-only { display: initial; }
 
+
+
 @media (max-width: 768px) {
+
   .mobile-only { display: flex !important; }
+
   .desktop-only { display: none !important; }
+
+
 
   .card { padding: 14px 16px; border-radius: 10px; }
 
+
+
   .btn-primary,
+
   .btn-secondary,
+
   .btn-danger {
+
     padding: 12px 18px;
+
     font-size: 14px;
+
     min-height: 44px;
+
   }
+
+
 
   /* 16px font prevents iOS auto-zoom on focus */
+
   .input,
+
   input[type="text"],
+
   input[type="email"],
+
   input[type="password"],
+
   input[type="number"],
+
   input[type="tel"],
+
   input[type="search"],
+
   input[type="url"],
+
   input[type="date"],
+
   input[type="datetime-local"],
+
   input[type="month"],
+
   input[type="time"],
+
   input[type="week"],
+
   select,
+
   textarea {
+
     font-size: 16px !important;
+
     padding: 12px 14px;
+
     min-height: 44px;
+
   }
+
+
 
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
   table { font-size: 13px; }
+
 }
 
+
+
 /* ==================================================
+
    ADMIN ECOLE — Sidebar drawer (mobile)
+
    ================================================== */
+
 .ecole-main { padding: 28px 32px; }
+
 .ecole-hamburger { display: none; }
+
 .ecole-backdrop { display: none; }
+
 .ecole-sidebar-close { display: none; }
 
+
+
 @media (max-width: 768px) {
+
   .ecole-main { padding: 64px 14px 16px; }
+
   .ecole-hamburger { display: flex !important; }
+
   .ecole-sidebar-close { display: flex !important; }
 
+
+
   .ecole-sidebar {
+
     position: fixed !important;
+
     top: 0 !important;
+
     left: 0 !important;
+
     height: 100vh !important;
+
     transform: translateX(-100%);
+
     transition: transform 0.25s ease-out;
+
     box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+
   }
+
   .ecole-sidebar.is-open { transform: translateX(0); }
+
   .ecole-backdrop.is-visible { display: block !important; }
+
 }
 
+
+
 /* ==================================================
+
    PORTAIL FAMILLE — header & nav responsive
+
    ================================================== */
+
 @media (max-width: 768px) {
+
   .portail-header {
+
     padding: 0 14px !important;
+
     height: 56px !important;
+
   }
+
   .portail-header-info { display: none !important; }
+
   .portail-nav {
+
     padding: 0 8px !important;
+
     overflow-x: auto;
+
     -webkit-overflow-scrolling: touch;
+
     scrollbar-width: none;
+
   }
+
   .portail-nav::-webkit-scrollbar { display: none; }
+
   .portail-nav a { padding: 12px 12px !important; flex-shrink: 0; }
+
   .portail-main {
+
     padding: 16px 14px !important;
+
   }
+
 }
 
 
+
+
+
 /* ==================================================
+
    PORTAIL FAMILLE — Pages mobile (auto-stack grids, padding, tables)
+
    ================================================== */
+
 @media (max-width: 768px) {
+
   /* All grids inside portail stack to single column */
+
   .portail-main [style*="grid-template-columns"] {
+
     grid-template-columns: 1fr !important;
+
   }
+
+
 
   /* Tighten paddings on inline-styled containers */
+
   .portail-main [style*="padding: 32px 24px"] {
+
     padding: 24px 14px !important;
+
   }
+
   .portail-main [style*="padding: 40px 24px"] {
+
     padding: 32px 14px !important;
+
   }
+
   .portail-main [style*="padding: '32px 24px'"] {
+
     padding: 24px 14px !important;
+
   }
+
+
 
   /* Tables: scroll horizontally rather than break layout */
+
   .portail-main table {
+
     display: block;
+
     overflow-x: auto;
+
     -webkit-overflow-scrolling: touch;
+
     max-width: 100%;
+
   }
+
+
 
   /* Touch-friendly buttons in portail (44pt min) */
+
   .portail-main button,
+
   .portail-main a[role="button"] {
+
     min-height: 44px;
+
   }
+
+
 
   /* Stronger override for input padding/min-height on mobile */
+
   .portail-main input,
+
   .portail-main select,
+
   .portail-main textarea {
+
     padding: 12px 14px !important;
+
     min-height: 44px !important;
+
   }
+
+
 
   /* Hide scrollbars on the nav scroller */
+
   .portail-nav::-webkit-scrollbar { height: 0 !important; }
+
 }
 
 
+
+
+
 /* ==================================================
+
    ADMIN ECOLE — Pages mobile (auto-stack grids, tables, modals)
+
    ================================================== */
+
 @media (max-width: 768px) {
+
   .ecole-main [style*="grid-template-columns"] {
+
     grid-template-columns: 1fr !important;
+
   }
+
+
 
   .ecole-main table {
+
     display: block;
+
     overflow-x: auto;
+
     -webkit-overflow-scrolling: touch;
+
     max-width: 100%;
+
   }
+
+
 
   /* Modal padding tightens on mobile */
+
   .ecole-main [style*="padding: 28"] {
+
     padding: 18px !important;
+
   }
+
   .ecole-main [style*="padding: 32px"] {
+
     padding: 20px 16px !important;
+
   }
+
+
 
   /* Touch-friendly buttons */
+
   .ecole-main button {
+
     min-height: 40px;
+
   }
+
+
 
   .ecole-main input,
+
   .ecole-main select,
+
   .ecole-main textarea {
+
     padding: 12px 14px !important;
+
     min-height: 44px !important;
+
   }
+
 }
 
+
+
 /* ==================================================
+
    SUPER-ADMIN — Sidebar drawer + main responsive (mobile)
+
    ================================================== */
+
 .admin-main { padding: 32px 36px; overflow-y: auto; color: #E2E8F0; flex: 1; }
+
 .admin-hamburger { display: none; }
+
 .admin-backdrop { display: none; }
+
 .admin-sidebar-close { display: none; }
 
+
+
 @media (max-width: 768px) {
+
   .admin-main { padding: 64px 14px 16px !important; }
+
   .admin-hamburger { display: flex !important; }
+
   .admin-sidebar-close { display: flex !important; }
 
+
+
   .admin-sidebar {
+
     position: fixed !important;
+
     top: 0 !important;
+
     left: 0 !important;
+
     height: 100vh !important;
+
     transform: translateX(-100%);
+
     transition: transform 0.25s ease-out;
+
     box-shadow: 4px 0 20px rgba(0,0,0,0.55);
+
     z-index: 100;
+
   }
+
   .admin-sidebar.is-open { transform: translateX(0); }
+
   .admin-backdrop.is-visible { display: block !important; }
 
+
+
   /* Auto-stack grids in admin-main */
+
   .admin-main [style*="grid-template-columns"] {
+
     grid-template-columns: 1fr !important;
+
   }
+
+
 
   /* Tables scrollable */
+
   .admin-main table {
+
     display: block;
+
     overflow-x: auto;
+
     -webkit-overflow-scrolling: touch;
+
     max-width: 100%;
+
   }
+
+
 
   /* Touch buttons */
+
   .admin-main button { min-height: 40px; }
 
+
+
   .admin-main input,
+
   .admin-main select,
+
   .admin-main textarea {
+
     padding: 12px 14px !important;
+
     min-height: 44px !important;
+
   }
+
 }
 
 
+
+
+
 /* ==================================================
+
    ADMIN ECOLE — Tab containers (mobile horizontal scroll)
+
    ================================================== */
+
 @media (max-width: 768px) {
+
   .ecole-tabs {
+
     overflow-x: auto !important;
+
     -webkit-overflow-scrolling: touch;
+
     scrollbar-width: none;
+
     flex-wrap: nowrap !important;
+
   }
+
   .ecole-tabs::-webkit-scrollbar { height: 0 !important; display: none; }
+
   .ecole-tabs > button {
+
     flex: 0 0 auto !important;
+
     min-height: 44px !important;
+
     padding: 11px 14px !important;
+
     font-size: 13px !important;
+
     white-space: nowrap;
+
   }
+
+}
+
+
+
+
+
+/* ==================================================
+
+   PAGE LOGIN ÉCOLE — mobile (header padding, role buttons stack)
+
+   ================================================== */
+
+@media (max-width: 768px) {
+
+  .ecole-login-header {
+
+    padding: 14px 16px !important;
+
+  }
+
+  .ecole-login-roles {
+
+    flex-direction: column !important;
+
+    gap: 10px !important;
+
+  }
+
 }
 
 
 /* ==================================================
-   PAGE LOGIN ÉCOLE — mobile (header padding, role buttons stack)
+   ADMIN ECOLE — Dashboard hub & pages catégorie (mobile)
    ================================================== */
 @media (max-width: 768px) {
-  .ecole-login-header {
-    padding: 14px 16px !important;
+  /* Header dashboard : stack vertical sur mobile */
+  .ecole-main h1 {
+    font-size: 19px !important;
   }
-  .ecole-login-roles {
-    flex-direction: column !important;
-    gap: 10px !important;
+  .ecole-main h2 {
+    font-size: 15px !important;
+  }
+
+  /* Grandes cards dashboard : padding réduit, taille minimale plus petite */
+  .ecole-main [style*="minHeight: 165"] {
+    min-height: 130px !important;
+    padding: 16px !important;
+  }
+  .ecole-main [style*="minHeight: 130"] {
+    min-height: 110px !important;
+    padding: 14px !important;
+  }
+
+  /* Hover effects désactivés sur tactile */
+  .ecole-main [style*="transform: translateY"] {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Très petit écran : padding ultra réduit */
+  .ecole-main {
+    padding: 60px 10px 12px !important;
+  }
+  .ecole-main h1 {
+    font-size: 18px !important;
+  }
+  /* Cards icône plus petite */
+  .ecole-main [style*="width: 48"][style*="height: 48"][style*="borderRadius: 12"] {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 20px !important;
   }
 }
