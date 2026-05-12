@@ -236,8 +236,8 @@ export default function EnfantDetailPage() {
             { label: 'Nom de famille', value: famille?.nom },
             { label: 'Email', value: famille?.parent1_email },
             { label: 'Téléphone', value: famille?.parent1_telephone },
-            { label: 'Adresse', value: famille?.adresse_parent1 },
-            { label: 'Situation', value: famille?.situation_familiale },
+            { label: 'Adresse', value: [famille?.parent1_adresse, famille?.parent1_code_postal, famille?.parent1_ville].filter(Boolean).join(' ') },
+            { label: 'Situation', value: famille?.situation_maritale },
           ].map(f => (
             <div key={f.label}>
               <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.label}</div>

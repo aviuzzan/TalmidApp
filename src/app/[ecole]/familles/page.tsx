@@ -36,9 +36,9 @@ export default function FamillesPage() {
   const empty = {
     nom: '', statut_dossier: 'incomplet', situation_maritale: '',
     parent1_prenom: '', parent1_nom: '', parent1_email: '', parent1_telephone: '', parent1_emploi: '',
-    parent1_numero_rue: '', parent1_code_postal: '', parent1_ville: '',
+    parent1_adresse: '', parent1_code_postal: '', parent1_ville: '',
     parent2_prenom: '', parent2_nom: '', parent2_email: '', parent2_telephone: '', parent2_emploi: '',
-    parent2_numero_rue: '', parent2_code_postal: '', parent2_ville: '',
+    parent2_adresse: '', parent2_code_postal: '', parent2_ville: '',
     mode_paiement: '', part_pere: 100, part_mere: 0,
   }
   const [form, setForm] = useState(empty)
@@ -76,11 +76,11 @@ export default function FamillesPage() {
       situation_maritale: f.situation_maritale ?? '',
       parent1_prenom: f.parent1_prenom ?? '', parent1_nom: f.parent1_nom ?? '',
       parent1_email: f.parent1_email ?? '', parent1_telephone: f.parent1_telephone ?? '',
-      parent1_emploi: f.parent1_emploi ?? '', parent1_numero_rue: f.parent1_numero_rue ?? '',
+      parent1_emploi: f.parent1_emploi ?? '', parent1_adresse: f.parent1_adresse ?? '',
       parent1_code_postal: f.parent1_code_postal ?? '', parent1_ville: f.parent1_ville ?? '',
       parent2_prenom: f.parent2_prenom ?? '', parent2_nom: f.parent2_nom ?? '',
       parent2_email: f.parent2_email ?? '', parent2_telephone: f.parent2_telephone ?? '',
-      parent2_emploi: f.parent2_emploi ?? '', parent2_numero_rue: f.parent2_numero_rue ?? '',
+      parent2_emploi: f.parent2_emploi ?? '', parent2_adresse: f.parent2_adresse ?? '',
       parent2_code_postal: f.parent2_code_postal ?? '', parent2_ville: f.parent2_ville ?? '',
       mode_paiement: f.mode_paiement ?? '', part_pere: f.part_pere ?? 100, part_mere: f.part_mere ?? 0,
     })
@@ -95,12 +95,12 @@ export default function FamillesPage() {
       situation_maritale: form.situation_maritale || null,
       parent1_prenom: form.parent1_prenom, parent1_nom: form.parent1_nom,
       parent1_email: form.parent1_email, parent1_telephone: form.parent1_telephone,
-      parent1_emploi: form.parent1_emploi, parent1_numero_rue: form.parent1_numero_rue,
+      parent1_emploi: form.parent1_emploi, parent1_adresse: form.parent1_adresse,
       parent1_code_postal: form.parent1_code_postal, parent1_ville: form.parent1_ville,
       parent2_prenom: form.parent2_prenom || null, parent2_nom: form.parent2_nom || null,
       parent2_email: form.parent2_email || null, parent2_telephone: form.parent2_telephone || null,
       parent2_emploi: form.parent2_emploi || null,
-      parent2_numero_rue: form.parent2_numero_rue || null,
+      parent2_adresse: form.parent2_adresse || null,
       parent2_code_postal: form.parent2_code_postal || null, parent2_ville: form.parent2_ville || null,
       mode_paiement: form.mode_paiement || null, part_pere: form.part_pere, part_mere: form.part_mere,
     }
@@ -222,7 +222,7 @@ export default function FamillesPage() {
                 <div><label className="label required">Email</label><input style={inp} type="email" value={form.parent1_email} onChange={e => set('parent1_email', e.target.value)} required /></div>
                 <div><label className="label required">Téléphone</label><input style={inp} value={form.parent1_telephone} onChange={e => set('parent1_telephone', e.target.value)} required /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label className="label required">Emploi / Profession</label><input style={inp} value={form.parent1_emploi} onChange={e => set('parent1_emploi', e.target.value)} required /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label className="label required">Numéro et rue</label><input style={inp} value={form.parent1_numero_rue} onChange={e => set('parent1_numero_rue', e.target.value)} required /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label className="label required">Numéro et rue</label><input style={inp} value={form.parent1_adresse} onChange={e => set('parent1_adresse', e.target.value)} required /></div>
                 <div><label className="label required">Code postal</label><input style={inp} value={form.parent1_code_postal} onChange={e => set('parent1_code_postal', e.target.value)} required /></div>
                 <div><label className="label required">Ville</label><input style={inp} value={form.parent1_ville} onChange={e => set('parent1_ville', e.target.value)} required /></div>
               </div>
@@ -237,7 +237,7 @@ export default function FamillesPage() {
                 <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: '#F0F9FF', borderRadius: 8, fontSize: 12, color: '#0369A1' }}>
                   ℹ️ Adresse uniquement si différente du parent 1 (parents séparés/divorcés)
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}><label className="label">Numéro et rue</label><input style={inp} value={form.parent2_numero_rue} onChange={e => set('parent2_numero_rue', e.target.value)} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label className="label">Numéro et rue</label><input style={inp} value={form.parent2_adresse} onChange={e => set('parent2_adresse', e.target.value)} /></div>
                 <div><label className="label">Code postal</label><input style={inp} value={form.parent2_code_postal} onChange={e => set('parent2_code_postal', e.target.value)} /></div>
                 <div><label className="label">Ville</label><input style={inp} value={form.parent2_ville} onChange={e => set('parent2_ville', e.target.value)} /></div>
               </div>

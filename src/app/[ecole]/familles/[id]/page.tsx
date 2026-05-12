@@ -274,8 +274,8 @@ export default function FamilleDetailPage() {
       {tab === 'infos' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {[
-            { title: '👤 Parent 1', data: [['Prénom Nom', `${famille.parent1_prenom ?? ''} ${famille.parent1_nom ?? ''}`], ['Email', famille.parent1_email], ['Téléphone', famille.parent1_telephone], ['Emploi', famille.parent1_emploi], ['Adresse', [famille.parent1_numero_rue, famille.parent1_code_postal, famille.parent1_ville].filter(Boolean).join(' ') || '—']] },
-            { title: '👤 Parent 2', data: [['Prénom Nom', `${famille.parent2_prenom ?? ''} ${famille.parent2_nom ?? ''}`], ['Email', famille.parent2_email], ['Téléphone', famille.parent2_telephone], ['Emploi', famille.parent2_emploi], ['Adresse', famille.parent2_ville ? [famille.parent2_numero_rue, famille.parent2_code_postal, famille.parent2_ville].filter(Boolean).join(' ') : 'Identique au parent 1']] },
+            { title: '👤 Parent 1', data: [['Prénom Nom', `${famille.parent1_prenom ?? ''} ${famille.parent1_nom ?? ''}`], ['Email', famille.parent1_email], ['Téléphone', famille.parent1_telephone], ['Emploi', famille.parent1_emploi], ['Adresse', [famille.parent1_adresse, famille.parent1_code_postal, famille.parent1_ville].filter(Boolean).join(' ') || '—']] },
+            { title: '👤 Parent 2', data: [['Prénom Nom', `${famille.parent2_prenom ?? ''} ${famille.parent2_nom ?? ''}`], ['Email', famille.parent2_email], ['Téléphone', famille.parent2_telephone], ['Emploi', famille.parent2_emploi], ['Adresse', famille.parent2_ville ? [famille.parent2_adresse, famille.parent2_code_postal, famille.parent2_ville].filter(Boolean).join(' ') : 'Identique au parent 1']] },
           ].map(({ title, data }) => (
             <div key={title} className="card">
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>{title}</h3>
