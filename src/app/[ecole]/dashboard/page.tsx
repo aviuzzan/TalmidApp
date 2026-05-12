@@ -12,6 +12,10 @@ type Stats = {
   incomplets: number
   attente: number
   msgNonLus: number
+  factures_impayees: number
+  montant_impayes: number
+  professeurs: number
+  classes: number
 }
 
 export default function DashboardPage() {
@@ -21,7 +25,7 @@ export default function DashboardPage() {
   const [role, setRole] = useState<string>('')
   const [perms, setPerms] = useState<Record<string, Niveau>>({})
   const [isAdminPrincipal, setIsAdminPrincipal] = useState(false)
-  const [stats, setStats] = useState<Stats>({ familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0 })
+  const [stats, setStats] = useState<Stats>({ familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_impayees: 0, montant_impayes: 0, professeurs: 0, classes: 0 })
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
@@ -46,46 +50,69 @@ export default function DashboardPage() {
       ['messagerie', 'documents'].some(m => (p.perms[m] || 'aucun') !== 'aucun')
 
     const now = new Date().toISOString().split('T')[0]
-    const promises: any[] = []
+    const newStats: Stats = { familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_impayees: 0, montant_impayes: 0, professeurs: 0, classes: 0 }
+
     if (accessAdmin) {
-      promises.push(s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id))
-      promises.push(s.from('enfants').select('*', { count: 'exact', head: true })
-        .eq('ecole_id', ecole.id)
-        .or(`date_entree.is.null,date_entree.lte.${now}`)
-        .or(`date_sortie.is.null,date_sortie.gte.${now}`))
-      promises.push(s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet'))
-      promises.push(s.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_inscription', 'en_attente'))
+      const [famR, enfR, incR, attR, factR, profR, clsR] = await Promise.all([
+        s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
+        s.from('enfants').select('*', { count: 'exact', head: true })
+          .eq('ecole_id', ecole.id)
+          .or(`date_entree.is.null,date_entree.lte.${now}`)
+          .or(`date_sortie.is.null,date_sortie.gte.${now}`),
+        s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet'),
+        s.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_inscription', 'en_attente'),
+        // Factures impayées (solde > 0, non annulées) via vue + jointure famille
+        s.from('factures_solde').select('id, solde_restant, familles!inner(ecole_id)')
+          .gt('solde_restant', 0).neq('statut', 'annule')
+          .eq('familles.ecole_id', ecole.id),
+        s.from('professeurs').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
+        s.from('classes').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
+      ])
+      newStats.familles = famR?.count ?? 0
+      newStats.eleves = enfR?.count ?? 0
+      newStats.incomplets = incR?.count ?? 0
+      newStats.attente = attR?.count ?? 0
+      newStats.factures_impayees = (factR.data || []).length
+      newStats.montant_impayes = (factR.data || []).reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
+      newStats.professeurs = profR?.count ?? 0
+      newStats.classes = clsR?.count ?? 0
     }
-    // Note : compteur messages non lus à brancher proprement (cf. logique portail/layout.tsx avec thread_participants.last_read_at)
-    // Pour l'instant, on n'envoie pas de promise → newStats.msgNonLus reste à 0.
-    const results = await Promise.all(promises)
-    let idx = 0
-    const newStats: Stats = { familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0 }
-    if (accessAdmin) {
-      newStats.familles = results[idx++]?.count ?? 0
-      newStats.eleves = results[idx++]?.count ?? 0
-      newStats.incomplets = results[idx++]?.count ?? 0
-      newStats.attente = results[idx++]?.count ?? 0
-    }
-    // msgNonLus reste à 0 — TODO Phase 5 : brancher logique thread_participants
     setStats(newStats)
     setLoading(false)
   }
 
   function categoryBadge(cat: Categorie): { text: string; tone: 'normal' | 'warn' | 'alert' } | null {
     if (cat.code === 'administration') {
-      if (stats.incomplets > 0) return { text: `${stats.incomplets} dossier${stats.incomplets > 1 ? 's' : ''} incomplet${stats.incomplets > 1 ? 's' : ''}`, tone: 'warn' }
-      if (stats.attente > 0) return { text: `${stats.attente} inscription${stats.attente > 1 ? 's' : ''} en attente`, tone: 'warn' }
-      if (stats.familles > 0) return { text: `${stats.familles} famille${stats.familles > 1 ? 's' : ''}`, tone: 'normal' }
+      // Priorité : alertes > stats
+      if (stats.incomplets > 0) return { text: `⚠ ${stats.incomplets} dossier${stats.incomplets > 1 ? 's' : ''} incomplet${stats.incomplets > 1 ? 's' : ''}`, tone: 'warn' }
+      if (stats.attente > 0) return { text: `⏳ ${stats.attente} inscription${stats.attente > 1 ? 's' : ''} en attente`, tone: 'warn' }
+      const parts = []
+      if (stats.familles > 0) parts.push(`${stats.familles} famille${stats.familles > 1 ? 's' : ''}`)
+      if (stats.eleves > 0) parts.push(`${stats.eleves} élève${stats.eleves > 1 ? 's' : ''}`)
+      if (parts.length > 0) return { text: parts.join(' · '), tone: 'normal' }
+      return { text: 'Aucune famille', tone: 'normal' }
+    }
+    if (cat.code === 'finances') {
+      if (stats.montant_impayes > 0) {
+        const montant = Math.round(stats.montant_impayes).toLocaleString('fr-FR')
+        return { text: `💰 ${stats.factures_impayees} impayée${stats.factures_impayees > 1 ? 's' : ''} · ${montant} €`, tone: 'alert' }
+      }
+      return { text: '✓ Tous les comptes à jour', tone: 'normal' }
+    }
+    if (cat.code === 'pedagogie') {
+      const parts = []
+      if (stats.professeurs > 0) parts.push(`${stats.professeurs} prof${stats.professeurs > 1 ? 's' : ''}`)
+      if (stats.classes > 0) parts.push(`${stats.classes} classe${stats.classes > 1 ? 's' : ''}`)
+      if (parts.length > 0) return { text: parts.join(' · '), tone: 'normal' }
+      return { text: 'Programmes & emplois du temps', tone: 'normal' }
     }
     if (cat.code === 'communication') {
       if (stats.msgNonLus > 0) return { text: `${stats.msgNonLus} message${stats.msgNonLus > 1 ? 's' : ''} non lu${stats.msgNonLus > 1 ? 's' : ''}`, tone: 'alert' }
+      return { text: 'Messagerie & documents', tone: 'normal' }
     }
-    if (cat.code === 'pedagogie') return { text: 'Programmes & emplois du temps', tone: 'normal' }
-    if (cat.code === 'finances') return { text: 'Factures & règlements', tone: 'normal' }
-    if (cat.code === 'vie_scolaire') return { text: 'Bientôt disponible', tone: 'normal' }
+    if (cat.code === 'vie_scolaire') return { text: 'Présences · transport · cantine', tone: 'normal' }
     if (cat.code === 'configuration') {
-      if (isAdminPrincipal) return { text: 'Admin principal', tone: 'normal' }
+      if (isAdminPrincipal) return { text: '👑 Admin principal', tone: 'normal' }
       return { text: 'Paramètres école', tone: 'normal' }
     }
     return null
