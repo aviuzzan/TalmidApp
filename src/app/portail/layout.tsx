@@ -5,11 +5,12 @@ import { createClient } from '@/lib/supabase'
 
 export default function PortailLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [email, setEmail] = useState('')
   const [famille, setFamille] = useState<any>(null)
+  const [profileId, setProfileId] = useState<string>('')
   const [ready, setReady] = useState(false)
   const [nonLus, setNonLus] = useState(0)
-  const pathname = usePathname()
 
   useEffect(() => {
     async function check() {
@@ -34,26 +35,25 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         return
       }
       if (!profile?.famille_id) {
-        // Compte parent pas encore lié à une famille
         setEmail(session.user.email ?? '')
+        setProfileId(session.user.id)
         setReady(true)
         return
       }
 
       setEmail(session.user.email ?? '')
       setFamille((profile as any).familles)
+      setProfileId(session.user.id)
       setReady(true)
     }
     check()
   }, [router])
+
   useEffect(() => {
-    if (!ready) return
+    if (!profileId) return
     let cancelled = false
     ;(async () => {
       const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session || cancelled) return
-      const myId = session.user.id
       const { data: threads } = await supabase
         .from('message_threads')
         .select('id, last_message_at, thread_participants(profile_id, last_read_at), messages(auteur_profile_id, created_at)')
@@ -62,15 +62,14 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       for (const t of threads || []) {
         const msgs = (t as any).messages || []
         const lastMsg = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-        if (!lastMsg || lastMsg.auteur_profile_id === myId) continue
-        const tp = ((t as any).thread_participants || []).find((p: any) => p.profile_id === myId)
+        if (!lastMsg || lastMsg.auteur_profile_id === profileId) continue
+        const tp = ((t as any).thread_participants || []).find((p: any) => p.profile_id === profileId)
         if (!tp?.last_read_at || new Date((t as any).last_message_at).getTime() > new Date(tp.last_read_at).getTime()) n++
       }
       setNonLus(n)
     })()
     return () => { cancelled = true }
-  }, [ready, pathname])
-
+  }, [profileId, pathname])
 
   async function logout() {
     await createClient().auth.signOut()
@@ -85,7 +84,6 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
 
   return (
     <div style={{ minHeight: '100vh', background: '#F0F4FA', fontFamily: 'Inter, sans-serif' }}>
-      {/* Header */}
       <header className="portail-header" style={{
         background: '#fff', borderBottom: '1px solid #E2E8F0',
         padding: '0 32px', height: 64,
@@ -122,11 +120,11 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
 
-      {/* Nav */}
       <nav className="portail-nav" style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', display: 'flex', gap: 4, overflowX: 'auto' }}>
         {[
           { href: '/portail', label: '🏠 Accueil' },
           { href: '/portail/enfants', label: '🎓 Mes enfants' },
+          { href: '/portail/sante', label: '🏥 Santé' },
           { href: '/portail/factures', label: '💰 Mes factures' },
           { href: '/portail/messages', label: '💬 Messagerie' },
           { href: '/portail/inscriptions', label: '📝 Année N+1' },
@@ -144,7 +142,6 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         ))}
       </nav>
 
-      {/* Content */}
       <main className="portail-main" style={{ maxWidth: 900, margin: '0 auto', padding: '28px 24px' }}>
         {children}
       </main>
