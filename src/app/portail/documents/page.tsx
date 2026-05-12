@@ -51,7 +51,7 @@ export default function PortailDocumentsPage() {
   }
 
   function fmtSize(b: number | null) {
-    if (!b) return '-'
+    if (!b) return '—'
     if (b < 1024) return b + ' o'
     if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' Ko'
     return (b / (1024 * 1024)).toFixed(1) + ' Mo'
@@ -72,13 +72,13 @@ export default function PortailDocumentsPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Mes documents</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>
-          Documents partages par l'ecole - {docs.length} document{docs.length > 1 ? 's' : ''}
+          Documents partagés par l&apos;école — {docs.length} document{docs.length > 1 ? 's' : ''}
         </p>
       </div>
 
       {docs.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          Aucun document partage pour le moment. L'ecole pourra y ajouter vos justificatifs, factures, attestations...
+          Aucun document partagé pour le moment. L&apos;école pourra y ajouter vos justificatifs, factures, attestations...
         </div>
       ) : (
         <>
@@ -115,14 +115,14 @@ export default function PortailDocumentsPage() {
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B', marginBottom: 3 }}>{d.nom}</div>
                   <div style={{ fontSize: 11, color: '#64748B' }}>
-                    {TYPE_LABEL[d.type] || d.type} - {fmtSize(d.taille)} - ajoute le {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                    {TYPE_LABEL[d.type] || d.type} · {fmtSize(d.taille)} · ajouté le {new Date(d.created_at).toLocaleDateString('fr-FR')}
                   </div>
                 </div>
                 <button onClick={() => download(d)}
                   style={{
                     background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7,
                     padding: '8px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  }}>Telecharger</button>
+                  }}>Télécharger</button>
               </div>
             ))}
           </div>
@@ -130,7 +130,7 @@ export default function PortailDocumentsPage() {
       )}
 
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 14, fontSize: 12, color: '#475569' }}>
-        Pour ajouter un document a votre dossier (justificatif, attestation, RIB...), contactez directement le secretariat de l'ecole.
+        Pour ajouter un document à votre dossier (justificatif, attestation, RIB...), contactez directement le secrétariat de l&apos;école.
       </div>
     </div>
   )

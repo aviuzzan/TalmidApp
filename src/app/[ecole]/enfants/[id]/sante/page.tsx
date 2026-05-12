@@ -96,7 +96,7 @@ export default function FicheSantePage() {
       updated_by: session?.user.id,
     }, { onConflict: 'enfant_id' })
     if (error) setMsg('Erreur : ' + error.message)
-    else setMsg('Fiche enregistree')
+    else setMsg('Fiche enregistrée')
     setSaving(false)
     setTimeout(() => setMsg(''), 3000)
   }
@@ -114,8 +114,8 @@ export default function FicheSantePage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: 12, cursor: 'pointer', marginBottom: 6 }}>Retour</button>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Fiche sante</h1>
+        <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: 12, cursor: 'pointer', marginBottom: 6 }}>← Retour</button>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Fiche santé</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>{enfantNom}</p>
       </div>
 
@@ -129,21 +129,21 @@ export default function FicheSantePage() {
 
       <div style={section}>
         <div style={sectionTitle}>Allergies</div>
-        {med.allergies.length === 0 && <div style={{ color: '#94A3B8', fontSize: 12, marginBottom: 10 }}>Aucune allergie declaree</div>}
+        {med.allergies.length === 0 && <div style={{ color: '#94A3B8', fontSize: 12, marginBottom: 10 }}>Aucune allergie déclarée</div>}
         {med.allergies.map((a, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr auto', gap: 8, marginBottom: 8 }}>
-            <input style={inp} placeholder="Allergene (ex: arachide)" value={a.nom}
+            <input style={inp} placeholder="Allergène (ex: arachide)" value={a.nom}
               onChange={e => setMed({ ...med, allergies: med.allergies.map((x, j) => j === i ? { ...x, nom: e.target.value } : x) })} />
             <select style={inp} value={a.severite}
               onChange={e => setMed({ ...med, allergies: med.allergies.map((x, j) => j === i ? { ...x, severite: e.target.value as any } : x) })}>
-              <option value="legere">Legere</option>
+              <option value="legere">Légère</option>
               <option value="moyenne">Moyenne</option>
-              <option value="severe">Severe</option>
+              <option value="severe">Sévère</option>
             </select>
             <input style={inp} placeholder="Traitement / EpiPen..." value={a.traitement || ''}
               onChange={e => setMed({ ...med, allergies: med.allergies.map((x, j) => j === i ? { ...x, traitement: e.target.value } : x) })} />
             <button onClick={() => setMed({ ...med, allergies: med.allergies.filter((_, j) => j !== i) })}
-              style={{ background: '#FEE2E2', color: '#991B1B', border: 'none', borderRadius: 7, padding: '0 10px', cursor: 'pointer', fontSize: 12 }}>x</button>
+              style={{ background: '#FEE2E2', color: '#991B1B', border: 'none', borderRadius: 7, padding: '0 10px', cursor: 'pointer', fontSize: 12 }}>×</button>
           </div>
         ))}
         <button onClick={() => setMed({ ...med, allergies: [...med.allergies, { nom: '', severite: 'legere', traitement: '' }] })}
@@ -151,18 +151,18 @@ export default function FicheSantePage() {
       </div>
 
       <div style={section}>
-        <div style={sectionTitle}>PAI (Projet d'Accueil Individualise)</div>
+        <div style={sectionTitle}>PAI (Projet d&apos;Accueil Individualisé)</div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
           <input type="checkbox" checked={med.pai_actif} onChange={e => setMed({ ...med, pai_actif: e.target.checked })} />
           <span>PAI actif pour cet enfant</span>
         </label>
         {med.pai_actif && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div><label style={label}>Motif</label><input style={inp} value={med.pai_motif} onChange={e => setMed({ ...med, pai_motif: e.target.value })} placeholder="Ex: asthme severe" /></div>
+            <div><label style={label}>Motif</label><input style={inp} value={med.pai_motif} onChange={e => setMed({ ...med, pai_motif: e.target.value })} placeholder="Ex: asthme sévère" /></div>
             <div><label style={label}>Date signature</label><input type="date" style={inp} value={med.pai_date_signature} onChange={e => setMed({ ...med, pai_date_signature: e.target.value })} /></div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={label}>Protocole / consignes</label>
-              <textarea style={{ ...inp, minHeight: 80 }} value={med.pai_protocole} onChange={e => setMed({ ...med, pai_protocole: e.target.value })} placeholder="Procedure d'urgence, medicaments a administrer..." />
+              <textarea style={{ ...inp, minHeight: 80 }} value={med.pai_protocole} onChange={e => setMed({ ...med, pai_protocole: e.target.value })} placeholder="Procédure d&apos;urgence, médicaments à administrer..." />
             </div>
           </div>
         )}
@@ -173,11 +173,11 @@ export default function FicheSantePage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
             <input type="checkbox" checked={med.vaccinations.dtp_a_jour || false} onChange={e => setMed({ ...med, vaccinations: { ...med.vaccinations, dtp_a_jour: e.target.checked } })} />
-            <span>DTP a jour</span>
+            <span>DTP à jour</span>
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
             <input type="checkbox" checked={med.vaccinations.ror || false} onChange={e => setMed({ ...med, vaccinations: { ...med.vaccinations, ror: e.target.checked } })} />
-            <span>ROR a jour</span>
+            <span>ROR à jour</span>
           </label>
           <div>
             <label style={label}>Date dernier rappel</label>
@@ -186,7 +186,7 @@ export default function FicheSantePage() {
           <div>
             <label style={label}>Groupe sanguin</label>
             <select style={inp} value={med.groupe_sanguin} onChange={e => setMed({ ...med, groupe_sanguin: e.target.value })}>
-              <option value="">Non renseigne</option>
+              <option value="">Non renseigné</option>
               {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
@@ -196,16 +196,16 @@ export default function FicheSantePage() {
       </div>
 
       <div style={section}>
-        <div style={sectionTitle}>Medecin traitant</div>
+        <div style={sectionTitle}>Médecin traitant</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div><label style={label}>Nom</label><input style={inp} value={med.medecin_nom} onChange={e => setMed({ ...med, medecin_nom: e.target.value })} /></div>
-          <div><label style={label}>Telephone</label><input style={inp} value={med.medecin_telephone} onChange={e => setMed({ ...med, medecin_telephone: e.target.value })} /></div>
+          <div><label style={label}>Téléphone</label><input style={inp} value={med.medecin_telephone} onChange={e => setMed({ ...med, medecin_telephone: e.target.value })} /></div>
           <div style={{ gridColumn: '1 / -1' }}><label style={label}>Adresse cabinet</label><input style={inp} value={med.medecin_adresse} onChange={e => setMed({ ...med, medecin_adresse: e.target.value })} /></div>
         </div>
-        <div style={sectionTitle}>Medecin referent ecole (optionnel)</div>
+        <div style={sectionTitle}>Médecin référent école (optionnel)</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div><label style={label}>Nom</label><input style={inp} value={med.medecin_ecole_nom} onChange={e => setMed({ ...med, medecin_ecole_nom: e.target.value })} /></div>
-          <div><label style={label}>Telephone</label><input style={inp} value={med.medecin_ecole_telephone} onChange={e => setMed({ ...med, medecin_ecole_telephone: e.target.value })} /></div>
+          <div><label style={label}>Téléphone</label><input style={inp} value={med.medecin_ecole_telephone} onChange={e => setMed({ ...med, medecin_ecole_telephone: e.target.value })} /></div>
         </div>
       </div>
 
@@ -213,9 +213,9 @@ export default function FicheSantePage() {
         <div style={sectionTitle}>Autorisations parentales</div>
         {[
           { key: 'autorisation_urgence', label: "Autorise l'administration des soins d'urgence" },
-          { key: 'autorisation_hospitalisation', label: "Autorise l'hospitalisation si necessaire" },
+          { key: 'autorisation_hospitalisation', label: "Autorise l'hospitalisation si nécessaire" },
           { key: 'autorisation_transport_samu', label: 'Autorise le transport SAMU / pompiers' },
-          { key: 'autorisation_anesthesie', label: 'Autorise une anesthesie (intervention urgente)' },
+          { key: 'autorisation_anesthesie', label: 'Autorise une anesthésie (intervention urgente)' },
         ].map(a => (
           <label key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 8 }}>
             <input type="checkbox" checked={(med as any)[a.key]} onChange={e => setMed({ ...med, [a.key]: e.target.checked } as any)} />
@@ -225,13 +225,13 @@ export default function FicheSantePage() {
       </div>
 
       <div style={section}>
-        <div style={sectionTitle}>Notes medicales libres</div>
-        <textarea style={{ ...inp, minHeight: 100 }} value={med.notes_medicales} onChange={e => setMed({ ...med, notes_medicales: e.target.value })} placeholder="Antecedents, traitements en cours, observations..." />
+        <div style={sectionTitle}>Notes médicales libres</div>
+        <textarea style={{ ...inp, minHeight: 100 }} value={med.notes_medicales} onChange={e => setMed({ ...med, notes_medicales: e.target.value })} placeholder="Antécédents, traitements en cours, observations..." />
       </div>
 
       <button onClick={save} disabled={saving}
         style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '12px 20px', fontSize: 14, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}>
-        {saving ? 'Enregistrement...' : 'Enregistrer la fiche sante'}
+        {saving ? 'Enregistrement...' : 'Enregistrer la fiche santé'}
       </button>
     </div>
   )

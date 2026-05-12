@@ -109,26 +109,26 @@ function AttestationFiscaleInner() {
             {ecoleInfo?.siret && <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>SIRET : {ecoleInfo.siret}</div>}
           </div>
           <div style={{ textAlign: 'right', fontSize: 11, color: '#64748B' }}>
-            <div>Edite le {new Date().toLocaleDateString('fr-FR')}</div>
+            <div>Édité le {new Date().toLocaleDateString('fr-FR')}</div>
           </div>
         </div>
 
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', textAlign: 'center', marginBottom: 24, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Attestation de paiement - Annee {annee}
+          Attestation de paiement — Année {annee}
         </h2>
 
         <p style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.7, marginBottom: 12 }}>
-          Je soussigne(e), representant(e) de <strong>{ecoleInfo?.nom}</strong>, atteste que :
+          Je soussigné(e), représentant(e) de <strong>{ecoleInfo?.nom}</strong>, atteste que :
         </p>
 
         <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16, marginBottom: 18, fontSize: 13, lineHeight: 1.7 }}>
           {parentNoms && <div><strong>Famille :</strong> {parentNoms}</div>}
           <div><strong>Nom de famille :</strong> {familleNom}</div>
-          {enfantsListe && <div><strong>Enfant(s) scolarise(s) :</strong> {enfantsListe}</div>}
+          {enfantsListe && <div><strong>Enfant(s) scolarisé(s) :</strong> {enfantsListe}</div>}
         </div>
 
         <p style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.7, marginBottom: 12 }}>
-          a verse au cours de l'annee civile <strong>{annee}</strong> a notre etablissement la somme totale de :
+          a versé au cours de l&apos;année civile <strong>{annee}</strong> à notre établissement la somme totale de :
         </p>
 
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: 18, textAlign: 'center', marginBottom: 20 }}>
@@ -136,11 +136,11 @@ function AttestationFiscaleInner() {
           <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>(en lettres : {montantEnLettres(total)})</div>
         </div>
 
-        <p style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.7, marginBottom: 18 }}>au titre des frais de scolarite et services annexes.</p>
+        <p style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.7, marginBottom: 18 }}>au titre des frais de scolarité et services annexes.</p>
 
         {reglements.length > 0 && (
           <>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginBottom: 8 }}>Detail des paiements :</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginBottom: 8 }}>Détail des paiements :</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 18 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #1E293B' }}>
@@ -169,12 +169,12 @@ function AttestationFiscaleInner() {
         )}
 
         <p style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 30 }}>
-          La presente attestation est delivree pour servir et faire valoir ce que de droit, notamment dans le cadre de la declaration fiscale du foyer.
+          La présente attestation est délivrée pour servir et faire valoir ce que de droit, notamment dans le cadre de la déclaration fiscale du foyer.
         </p>
 
         <div style={{ marginTop: 40, display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, color: '#1E293B' }}>Fait a {ecoleInfo?.ville || ''}, le {new Date().toLocaleDateString('fr-FR')}</div>
+            <div style={{ fontSize: 12, color: '#1E293B' }}>Fait à {ecoleInfo?.ville || ''}, le {new Date().toLocaleDateString('fr-FR')}</div>
             <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>Cachet et signature</div>
             <div style={{ width: 200, height: 70, marginTop: 8 }}></div>
           </div>

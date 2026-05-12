@@ -32,7 +32,7 @@ export default function PortailSantePage() {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
-  if (enfants.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Aucun enfant rattache a votre compte.</div>
+  if (enfants.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Aucun enfant rattaché à votre compte.</div>
 
   const box: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 18, marginBottom: 14 }
   const title: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: '#1E293B', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid #F1F5F9' }
@@ -42,8 +42,8 @@ export default function PortailSantePage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Fiche sante</h1>
-        <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Informations medicales de vos enfants</p>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Fiche santé</h1>
+        <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Informations médicales de vos enfants</p>
       </div>
 
       {enfants.length > 1 && (
@@ -64,11 +64,11 @@ export default function PortailSantePage() {
       <div style={box}>
         <div style={title}>Allergies</div>
         {!med?.allergies || med.allergies.length === 0 ? (
-          <div style={{ color: '#94A3B8', fontSize: 13 }}>Aucune allergie declaree. Contactez l'ecole pour les renseigner.</div>
+          <div style={{ color: '#94A3B8', fontSize: 13 }}>Aucune allergie déclarée. Contactez l&apos;école pour les renseigner.</div>
         ) : (
           med.allergies.map((a: any, i: number) => (
             <div key={i} style={{ padding: '10px 12px', background: '#FEF3C7', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
-              <strong>{a.nom}</strong> - severite : <em>{a.severite}</em>
+              <strong>{a.nom}</strong> — sévérité : <em>{a.severite}</em>
               {a.traitement && <div style={{ fontSize: 12, color: '#92400E', marginTop: 3 }}>Traitement : {a.traitement}</div>}
             </div>
           ))
@@ -76,7 +76,7 @@ export default function PortailSantePage() {
       </div>
 
       <div style={box}>
-        <div style={title}>PAI (Projet d'Accueil Individualise)</div>
+        <div style={title}>PAI (Projet d&apos;Accueil Individualisé)</div>
         {med?.pai_actif ? (
           <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: 12, borderRadius: 8 }}>
             <div style={{ fontSize: 13, color: '#1E40AF', fontWeight: 600, marginBottom: 4 }}>PAI actif</div>
@@ -89,30 +89,30 @@ export default function PortailSantePage() {
       </div>
 
       <div style={box}>
-        <div style={title}>Medecin traitant</div>
+        <div style={title}>Médecin traitant</div>
         {med?.medecin_nom ? (
           <>
             <div style={label}>Nom</div><div style={value}>{med.medecin_nom}</div>
-            {med.medecin_telephone && <><div style={label}>Telephone</div><div style={value}>{med.medecin_telephone}</div></>}
+            {med.medecin_telephone && <><div style={label}>Téléphone</div><div style={value}>{med.medecin_telephone}</div></>}
             {med.medecin_adresse && <><div style={label}>Adresse</div><div style={value}>{med.medecin_adresse}</div></>}
           </>
         ) : (
-          <div style={{ color: '#94A3B8', fontSize: 13 }}>Non renseigne</div>
+          <div style={{ color: '#94A3B8', fontSize: 13 }}>Non renseigné</div>
         )}
       </div>
 
       <div style={box}>
         <div style={title}>Vaccinations et infos</div>
-        <div style={label}>Groupe sanguin</div><div style={value}>{med?.groupe_sanguin || '-'}</div>
-        <div style={label}>DTP a jour</div><div style={value}>{med?.vaccinations?.dtp_a_jour ? 'Oui' : 'Non renseigne'}</div>
-        <div style={label}>ROR a jour</div><div style={value}>{med?.vaccinations?.ror ? 'Oui' : 'Non renseigne'}</div>
+        <div style={label}>Groupe sanguin</div><div style={value}>{med?.groupe_sanguin || '—'}</div>
+        <div style={label}>DTP à jour</div><div style={value}>{med?.vaccinations?.dtp_a_jour ? 'Oui' : 'Non renseigné'}</div>
+        <div style={label}>ROR à jour</div><div style={value}>{med?.vaccinations?.ror ? 'Oui' : 'Non renseigné'}</div>
         {med?.vaccinations?.dernier_rappel && (<><div style={label}>Dernier rappel</div><div style={value}>{new Date(med.vaccinations.dernier_rappel).toLocaleDateString('fr-FR')}</div></>)}
       </div>
 
       <div style={{ ...box, background: '#FFFBEB', border: '1px solid #FDE68A' }}>
         <div style={{ ...title, color: '#92400E', borderBottomColor: '#FDE68A' }}>Comment modifier ces informations ?</div>
         <p style={{ fontSize: 13, color: '#78350F', lineHeight: 1.5, margin: 0 }}>
-          Les informations medicales sont saisies et modifiees par l'ecole. Pour toute mise a jour (allergies, PAI, vaccinations, medecin traitant), contactez directement le secretariat.
+          Les informations médicales sont saisies et modifiées par l&apos;école. Pour toute mise à jour (allergies, PAI, vaccinations, médecin traitant), contactez directement le secrétariat.
         </p>
       </div>
     </div>
