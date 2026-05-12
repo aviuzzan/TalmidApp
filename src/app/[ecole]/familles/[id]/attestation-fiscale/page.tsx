@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
@@ -13,7 +13,9 @@ type Reglement = {
   numero_facture?: string
 }
 
-export default function AttestationFiscalePage() {
+const PRINT_CSS = `@media print { .no-print { display: none !important; } body { margin: 0; padding: 0; background: #fff !important; } .print-page { padding: 30mm 20mm !important; max-width: none !important; border: none !important; } }`
+
+function AttestationFiscaleInner() {
   const params = useParams()
   const searchParams = useSearchParams()
   const ecole = useEcole()
@@ -60,11 +62,7 @@ export default function AttestationFiscalePage() {
       .lte('date_reglement', fin)
       .order('date_reglement', { ascending: true })
 
-    setReglements((regs || []).map((r: any) => ({
-      ...r,
-      numero_facture: r.factures?.numero,
-    })))
-
+    setReglements((regs || []).map((r: any) => ({ ...r, numero_facture: r.factures?.numero })))
     setLoading(false)
   }
 
@@ -79,13 +77,7 @@ export default function AttestationFiscalePage() {
 
   return (
     <div>
-      <style jsx global>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { margin: 0; padding: 0; background: #fff !important; }
-          .print-page { padding: 30mm 20mm !important; max-width: none !important; }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
 
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <div>
@@ -141,14 +133,10 @@ export default function AttestationFiscalePage() {
 
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: 18, textAlign: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: '#1E40AF' }}>{total.toFixed(2)} EUR</div>
-          <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
-            (en lettres : {montantEnLettres(total)})
-          </div>
+          <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>(en lettres : {montantEnLettres(total)})</div>
         </div>
 
-        <p style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.7, marginBottom: 18 }}>
-          au titre des frais de scolarite et services annexes.
-        </p>
+        <p style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.7, marginBottom: 18 }}>au titre des frais de scolarite et services annexes.</p>
 
         {reglements.length > 0 && (
           <>
@@ -181,8 +169,7 @@ export default function AttestationFiscalePage() {
         )}
 
         <p style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 30 }}>
-          La presente attestation est delivree pour servir et faire valoir ce que de droit, notamment dans le cadre de la
-          declaration fiscale du foyer.
+          La presente attestation est delivree pour servir et faire valoir ce que de droit, notamment dans le cadre de la declaration fiscale du foyer.
         </p>
 
         <div style={{ marginTop: 40, display: 'flex', justifyContent: 'flex-end' }}>
@@ -194,6 +181,14 @@ export default function AttestationFiscalePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AttestationFiscalePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement...</div>}>
+      <AttestationFiscaleInner />
+    </Suspense>
   )
 }
 
@@ -235,4 +230,3 @@ function numEnLettres(n: number): string {
   }
   return String(n)
 }
-page.tsx
