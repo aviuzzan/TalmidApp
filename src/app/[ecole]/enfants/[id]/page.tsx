@@ -115,6 +115,11 @@ export default function EnfantDetailPage() {
           </div>
         </div>
         <button
+          onClick={() => router.push(`/${ecole.slug}/enfants/${enfantId}/sante`)}
+          style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
+          🏥 Fiche santé
+        </button>
+        <button
           onClick={() => editMode ? sauvegarder() : setEditMode(true)}
           disabled={saving}
           style={{ background: editMode ? '#2563EB' : '#F1F5F9', border: `1px solid ${editMode ? '#2563EB' : '#E2E8F0'}`, borderRadius: 9, padding: '9px 18px', fontSize: 13, color: editMode ? '#fff' : '#475569', cursor: 'pointer', fontWeight: editMode ? 600 : 400 }}>
