@@ -56,22 +56,14 @@ export default function RelancesPage() {
       parent_email: f.familles?.parent1_email || '',
     }))
 
-    // En retard : échéance < today, ou +30j après émission si pas d'échéance
-    const today = new Date()
-    const enRetard = factsList.filter(f => {
-      const echeance = f.date_echeance ? new Date(f.date_echeance) : null
-      if (echeance) return echeance < today
-      const emission = new Date(f.date_emission)
-      const limite = new Date(emission)
-      limite.setDate(limite.getDate() + 30)
-      return limite < today
-    })
-    setFactures(enRetard)
+    // Affiche TOUTES les factures avec solde > 0 non annulées.
+    // Le retard est calculé et affiché en colonne (peut être négatif si pas encore due).
+    setFactures(factsList)
 
-    if (enRetard.length > 0) {
+    if (factsList.length > 0) {
       const { data: lgs } = await s.from('relances_log')
         .select('facture_id, niveau, envoyee_le, envoye_at')
-        .in('facture_id', enRetard.map(f => f.id))
+        .in('facture_id', factsList.map(f => f.id))
       const map: Record<string, RelanceLog[]> = {}
       for (const l of (lgs || [])) {
         const niveau = typeof (l as any).niveau === 'number' ? (l as any).niveau : parseInt((l as any).niveau) || 1
@@ -87,9 +79,9 @@ export default function RelancesPage() {
   useEffect(() => { load() }, [load])
 
   function joursRetard(f: Facture): number {
-    const ref = f.date_echeance ? new Date(f.date_echeance)
-      : (() => { const d = new Date(f.date_emission); d.setDate(d.getDate() + 30); return d })()
-    return Math.max(0, Math.floor((new Date().getTime() - ref.getTime()) / (1000 * 60 * 60 * 24)))
+    // Si date_echeance définie → diff. Sinon, diff avec date_emission (négatif si récent).
+    const ref = f.date_echeance ? new Date(f.date_echeance) : new Date(f.date_emission)
+    return Math.floor((new Date().getTime() - ref.getTime()) / (1000 * 60 * 60 * 24))
   }
   const nomNiveau = (n: number) => ['—', 'Rappel amical', 'Relance', 'Mise en demeure'][n] || '—'
 
@@ -121,13 +113,13 @@ export default function RelancesPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>📩 Relances impayés</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>
-          Factures avec solde &gt; 0 et échéance dépassée (ou +30j après émission si pas d&apos;échéance).
+          Toutes les factures avec solde non réglé. Le retard est calculé à partir de la date d&apos;échéance (ou d&apos;émission si aucune échéance définie).
         </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 11, color: '#991B1B', fontWeight: 600, textTransform: 'uppercase' }}>Factures en retard</div>
+          <div style={{ fontSize: 11, color: '#991B1B', fontWeight: 600, textTransform: 'uppercase' }}>Factures impayées</div>
           <div style={{ fontSize: 26, fontWeight: 700, color: '#DC2626', marginTop: 4 }}>{factures.length}</div>
         </div>
         <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14 }}>
@@ -175,7 +167,13 @@ export default function RelancesPage() {
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>{f.solde_restant.toFixed(2)} €</td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <span style={{ background: jours >= 60 ? '#FEE2E2' : jours >= 30 ? '#FED7AA' : '#FEF3C7', color: jours >= 60 ? '#991B1B' : jours >= 30 ? '#9A3412' : '#92400E', padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{jours} j</span>
+                        {jours < 0 ? (
+                          <span style={{ background: '#EFF6FF', color: '#1E40AF', padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>Dans {Math.abs(jours)} j</span>
+                        ) : (
+                          <span style={{ background: jours >= 60 ? '#FEE2E2' : jours >= 30 ? '#FED7AA' : jours >= 7 ? '#FEF3C7' : '#F1F5F9', color: jours >= 60 ? '#991B1B' : jours >= 30 ? '#9A3412' : jours >= 7 ? '#92400E' : '#475569', padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
+                            {jours === 0 ? "Aujourd'hui" : `+${jours} j`}
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center', color: '#475569', fontSize: 12 }}>
                         {sentLogs.length === 0 ? '—' : sentLogs.map(l => `N${l.niveau}`).join(', ')}
