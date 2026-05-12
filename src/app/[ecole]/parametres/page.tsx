@@ -6,41 +6,76 @@ import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
 type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'services' | 'comptes_acces'
+type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
+
+const CATEGORIES: { id: Cat; label: string; icon: string; couleur: string; bg: string }[] = [
+  { id: 'ecole',         label: 'École',          icon: '🏫', couleur: '#2563EB', bg: '#EFF6FF' },
+  { id: 'inscriptions',  label: 'Inscriptions',   icon: '📝', couleur: '#7C3AED', bg: '#F5F3FF' },
+  { id: 'finances',      label: 'Finances',       icon: '💳', couleur: '#059669', bg: '#ECFDF5' },
+  { id: 'communication', label: 'Communication',  icon: '📨', couleur: '#D97706', bg: '#FFFBEB' },
+]
+
+const TABS: { id: Tab; label: string; icon: string; cat: Cat }[] = [
+  // ── École ──
+  { id: 'classes',           label: 'Classes',              icon: '🏫', cat: 'ecole' },
+  { id: 'secteurs',          label: 'Secteurs',             icon: '🗂️', cat: 'ecole' },
+  { id: 'exercices',         label: 'Exercices',            icon: '📅', cat: 'ecole' },
+  { id: 'comptes_acces',     label: 'Comptes & accès',      icon: '🔐', cat: 'ecole' },
+  // ── Inscriptions ──
+  { id: 'tarifs',            label: 'Tarifs',               icon: '💶', cat: 'inscriptions' },
+  { id: 'frais_inscription', label: 'Frais inscription',    icon: '🧾', cat: 'inscriptions' },
+  { id: 'reductions_fn',     label: 'Réd. famille',         icon: '👨‍👩‍👧', cat: 'inscriptions' },
+  { id: 'config_reduction',  label: 'Dossier réduction',    icon: '📋', cat: 'inscriptions' },
+  { id: 'commission',        label: 'Commission',           icon: '⚖️', cat: 'inscriptions' },
+  { id: 'documents_ecole',   label: 'Documents N+1',        icon: '📂', cat: 'inscriptions' },
+  // ── Finances ──
+  { id: 'modes_reglement',   label: 'Modes de règlement',   icon: '💳', cat: 'finances' },
+  { id: 'config_paiement',   label: 'Config paiement',      icon: '⏰', cat: 'finances' },
+  { id: 'sepa',              label: 'SEPA / Banque',        icon: '🏦', cat: 'finances' },
+  // ── Communication ──
+  { id: 'notifications',     label: 'Notifications',        icon: '🔔', cat: 'communication' },
+  { id: 'services',          label: 'Services / Messagerie',icon: '💬', cat: 'communication' },
+]
+
+function catOfTab(t: Tab): Cat {
+  return TABS.find(x => x.id === t)?.cat ?? 'ecole'
+}
 
 export default function ParametresPage() {
   const ecole = useEcole()
   const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const initTab = tabParam === 'inscriptions' ? 'secteurs'
+  const initTab: Tab = tabParam === 'inscriptions' ? 'tarifs'
     : tabParam === 'sepa' ? 'sepa'
     : tabParam === 'notifications' ? 'notifications'
     : 'classes'
-  const [tab, setTab] = useState<Tab>(initTab as Tab)
+  const [tab, setTab] = useState<Tab>(initTab)
+  const [cat, setCat] = useState<Cat>(catOfTab(initTab))
   const [annee, setAnnee] = useState(ANNEE_COURANTE)
-
-  const TABS: { id: Tab; label: string; icon: string; group?: string }[] = [
-    { id: 'classes', label: 'Classes', icon: '🏫', group: 'École' },
-    { id: 'secteurs', label: 'Secteurs', icon: '🗂️', group: 'École' },
-    { id: 'exercices', label: 'Exercices', icon: '📅', group: 'École' },
-    { id: 'tarifs', label: 'Tarifs', icon: '💶', group: 'Inscriptions' },
-    { id: 'reductions_fn', label: 'Réd. famille', icon: '👨‍👩‍👧', group: 'Inscriptions' },
-    { id: 'modes_reglement', label: 'Règlement', icon: '💳', group: 'Inscriptions' },
-    { id: 'config_reduction', label: 'Dossier réduction', icon: '📋', group: 'Inscriptions' },
-    { id: 'config_paiement', label: 'Config paiement', icon: '📅', group: 'Inscriptions' },
-    { id: 'commission', label: 'Commission', icon: '⚖️', group: 'Inscriptions' },
-    { id: 'sepa', label: 'SEPA / Banque', icon: '🏦', group: 'Inscriptions' },
-    { id: 'frais_inscription', label: 'Frais inscription', icon: '🧾', group: 'Inscriptions' },
-    { id: 'documents_ecole', label: 'Documents N+1', icon: '📂', group: 'Inscriptions' },
-    { id: 'notifications', label: 'Notifications', icon: '🔔', group: 'École' },
-    { id: 'services', label: 'Services / Messagerie', icon: '💬', group: 'École' },
-    { id: 'comptes_acces', label: 'Comptes & accès', icon: '🔐', group: 'École' },
-  ]
 
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
 
+  const sousOnglets = TABS.filter(t => t.cat === cat)
+  const catActive = CATEGORIES.find(c => c.id === cat)!
+
+  function chooseCat(newCat: Cat) {
+    setCat(newCat)
+    const first = TABS.find(t => t.cat === newCat)
+    if (first) {
+      if (first.id === 'exercices') { router.push(`/${ecole.slug}/parametres/exercices`); return }
+      setTab(first.id)
+    }
+  }
+
+  function chooseTab(t: Tab) {
+    if (t === 'exercices') { router.push(`/${ecole.slug}/parametres/exercices`); return }
+    setTab(t)
+    setCat(catOfTab(t))
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Paramètres</h1>
@@ -55,23 +90,62 @@ export default function ParametresPage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => {
-            if (t.id === 'exercices') { router.push(`/${ecole.slug}/parametres/exercices`); return }
-            setTab(t.id)
-          }}
-            style={{
-              padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: tab === t.id ? '#fff' : 'transparent',
-              color: tab === t.id ? '#1E293B' : '#64748B',
-              fontSize: 12, fontWeight: tab === t.id ? 600 : 400,
-              boxShadow: tab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
-            }}>
-            {t.icon} {t.label}
-          </button>
-        ))}
+      {/* ── Niveau 1 : grandes catégories ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+        {CATEGORIES.map(c => {
+          const actif = c.id === cat
+          return (
+            <button key={c.id} onClick={() => chooseCat(c.id)}
+              style={{
+                background: actif ? c.bg : '#fff',
+                border: `1px solid ${actif ? c.couleur : '#E2E8F0'}`,
+                borderRadius: 12,
+                padding: '14px 16px',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 10,
+                transition: 'all 0.15s',
+                boxShadow: actif ? `0 2px 8px ${c.couleur}1A` : 'none',
+              }}>
+              <span style={{ fontSize: 22 }}>{c.icon}</span>
+              <span style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: actif ? c.couleur : '#1E293B',
+              }}>{c.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Niveau 2 : sous-onglets de la catégorie active ── */}
+      <div style={{
+        display: 'flex', gap: 2,
+        borderBottom: `2px solid ${catActive.bg}`,
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+      }}>
+        {sousOnglets.map(t => {
+          const actif = tab === t.id
+          return (
+            <button key={t.id} onClick={() => chooseTab(t.id)}
+              style={{
+                padding: '10px 16px',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: actif ? 600 : 500,
+                color: actif ? catActive.couleur : '#64748B',
+                borderBottom: actif ? `2px solid ${catActive.couleur}` : '2px solid transparent',
+                marginBottom: -2,
+                whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 6,
+                transition: 'all 0.15s',
+              }}>
+              <span style={{ fontSize: 15 }}>{t.icon}</span> {t.label}
+            </button>
+          )
+        })}
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 24, minHeight: 300 }}>
