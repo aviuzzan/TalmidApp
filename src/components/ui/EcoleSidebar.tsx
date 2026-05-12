@@ -7,7 +7,6 @@ import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau } from '@/lib/pe
 
 type ModuleEntry = { nom: string; href: string; module: string }
 
-// Mapping catégorie -> modules cliquables (sous-menus quand catégorie active)
 const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   administration: [
     { nom: 'Familles', href: 'familles', module: 'administratif' },
@@ -18,6 +17,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   ],
   finances: [
     { nom: 'Factures', href: 'finances', module: 'facturation' },
+    { nom: 'Relances impayés', href: 'finances/relances', module: 'facturation' },
     { nom: 'Paye', href: 'paye', module: 'paye' },
     { nom: 'Export SEPA', href: 'inscriptions/sepa', module: 'compta' },
   ],
@@ -167,7 +167,6 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
         </div>
 
         <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
-          {/* Tableau de bord */}
           <button onClick={() => navigate('/' + slug + '/dashboard')}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
@@ -215,7 +214,6 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                   {!accessible && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>🔒</span>}
                 </button>
 
-                {/* Sous-modules si catégorie active */}
                 {isCatActive && accessible && visibleModules.length > 0 && (
                   <div style={{ paddingLeft: 22, marginBottom: 6, marginTop: 2 }}>
                     {visibleModules.map(m => {
