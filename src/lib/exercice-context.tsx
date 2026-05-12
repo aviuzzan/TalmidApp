@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import {
@@ -10,12 +10,12 @@ import {
 } from '@/lib/exercice'
 
 type Ctx = {
-  exercice: Exercice | null         // exercice courant (officiel école)
-  exerciceSelectionne: Exercice | null  // exercice affiché (peut différer en mode "vue")
-  exercices: Exercice[]             // tous les exercices de l'école
+  exercice: Exercice | null
+  exerciceSelectionne: Exercice | null
+  exercices: Exercice[]
   loading: boolean
-  selectExercice: (exId: string) => Promise<void>     // change l'exercice de VUE (localStorage)
-  changeExerciceCourant: (exId: string) => Promise<void>  // change l'exercice OFFICIEL (BDD)
+  selectExercice: (exId: string) => Promise<void>
+  changeExerciceCourant: (exId: string) => Promise<void>
   reload: () => Promise<void>
 }
 
@@ -31,7 +31,11 @@ const ExerciceContext = createContext<Ctx>({
 
 export function ExerciceProvider({ children }: { children: ReactNode }) {
   const ecole = useEcole()
-  const supabase = createClient()
+  // useMemo pour stabiliser la reference du client Supabase entre les renders.
+  // Sinon le useCallback ci-dessous voit supabase changer a chaque render,
+  // re-execute le useEffect, et setLoading(true) -> setLoading(false) en boucle
+  // ce qui fait clignoter le bouton "exercice" dans le header.
+  const supabase = useMemo(() => createClient(), [])
   const [exercice, setExercice] = useState<Exercice | null>(null)
   const [exerciceSelectionne, setExerciceSelectionne] = useState<Exercice | null>(null)
   const [exercices, setExercices] = useState<Exercice[]>([])
@@ -47,7 +51,6 @@ export function ExerciceProvider({ children }: { children: ReactNode }) {
     setExercice(courant)
     setExercices(list)
 
-    // Lecture du choix de l'utilisateur (localStorage)
     if (typeof window !== 'undefined') {
       const storedId = localStorage.getItem(`talmid_exercice_${ecole.id}`)
       if (storedId) {
@@ -61,7 +64,8 @@ export function ExerciceProvider({ children }: { children: ReactNode }) {
     }
     setExerciceSelectionne(courant)
     setLoading(false)
-  }, [ecole?.id, supabase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecole?.id])
 
   useEffect(() => { reload() }, [reload])
 
@@ -69,7 +73,7 @@ export function ExerciceProvider({ children }: { children: ReactNode }) {
     const ex = exercices.find(e => e.id === exId)
     if (!ex) return
     setExerciceSelectionne(ex)
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && ecole?.id) {
       localStorage.setItem(`talmid_exercice_${ecole.id}`, exId)
     }
   }
@@ -102,19 +106,11 @@ export function useExercice() {
   return useContext(ExerciceContext)
 }
 
-/**
- * Helper qui retourne le code de l'exercice sélectionné (ex '2025-2026').
- * À utiliser dans les pages qui filtrent encore par annee_scolaire (legacy).
- */
 export function useAnneeScolaireCode(): string | null {
   const { exerciceSelectionne } = useExercice()
   return exerciceSelectionne?.code ?? null
 }
 
-/**
- * Helper qui retourne l'ID de l'exercice sélectionné.
- * À utiliser pour les nouvelles requêtes (filtrage par exercice_id).
- */
 export function useExerciceId(): string | null {
   const { exerciceSelectionne } = useExercice()
   return exerciceSelectionne?.id ?? null
