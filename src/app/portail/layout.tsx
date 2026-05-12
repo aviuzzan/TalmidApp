@@ -92,14 +92,9 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'linear-gradient(135deg, #2563EB, #60A5FA)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 800, color: '#fff',
-          }}>T</div>
+          <img src="/logo-icon.png" alt="TalmidApp" style={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#1E293B' }}>TalmidApp</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#1E293B', letterSpacing: '-0.01em' }}>TalmidApp</div>
             <div style={{ fontSize: 11, color: '#94A3B8' }}>Espace Famille</div>
           </div>
         </div>

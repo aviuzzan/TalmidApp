@@ -123,13 +123,8 @@ export default function LandingPage() {
         transition: 'all 0.3s',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, fontWeight: 800, color: '#fff',
-          }}>T</div>
-          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em' }}>TalmidApp</span>
+          <img src="/logo-icon.png" alt="TalmidApp" style={{ width: 42, height: 42, objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(59,130,246,0.35))' }} />
+          <span style={{ fontWeight: 800, fontSize: 19, letterSpacing: '-0.02em' }}>TalmidApp</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
@@ -183,6 +178,15 @@ export default function LandingPage() {
         }} />
 
         <div style={{ position: 'relative', zIndex: 1, maxWidth: 800 }}>
+          {/* Big logo hero */}
+          <img src="/logo-icon.png" alt="TalmidApp"
+            className="fade-up float"
+            style={{
+              width: 'clamp(110px, 14vw, 160px)', height: 'auto',
+              marginBottom: 24,
+              filter: 'drop-shadow(0 12px 40px rgba(59,130,246,0.55)) drop-shadow(0 4px 16px rgba(139,92,246,0.3))',
+            }} />
+
           {/* Badge */}
           <div className="fade-up-1" style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -454,7 +458,7 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer style={{ padding: '40px 5%', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff' }}>T</div>
+          <img src="/logo-icon.png" alt="TalmidApp" style={{ width: 32, height: 32, objectFit: 'contain' }} />
           <span style={{ fontWeight: 700, fontSize: 14 }}>TalmidApp</span>
           <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>© 2025</span>
         </div>
