@@ -26,9 +26,11 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Programmes', href: 'pedagogie', module: 'pedagogie' },
     { nom: 'Professeurs', href: 'professeurs', module: 'professeurs' },
     { nom: 'Emplois du temps', href: 'emplois-du-temps', module: 'emplois_du_temps' },
+    { nom: 'Notes & évaluations', href: 'notes', module: 'pedagogie' },
   ],
   vie_scolaire: [
     { nom: 'Présences / absences', href: 'presences', module: 'pedagogie' },
+    { nom: 'Sanctions / discipline', href: 'sanctions', module: 'pedagogie' },
     { nom: 'Transport', href: 'transport', module: 'transport' },
     { nom: 'Cantine', href: 'cantine', module: 'cantine' },
   ],

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { downloadCSV, formatDateCSV, formatMontantCSV } from '@/lib/csv-export'
 
-type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques'
+type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
 
 export default function ExportsPage() {
   const router = useRouter()
@@ -114,6 +114,38 @@ export default function ExportsPage() {
     setLoading('')
   }
 
+  async function exportFEC() {
+    setLoading('fec'); setMsg('')
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    // Périodes FEC : début + fin de l'exercice (par défaut 1er sept → 31 août année suivante)
+    const [yDeb, yFin] = annee.split('-')
+    const debut = `${yDeb}-09-01`
+    const fin = `${yFin}-08-31`
+    try {
+      const res = await fetch(`/api/compta/fec?ecole_id=${ecole.id}&debut=${debut}&fin=${fin}`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erreur' }))
+        throw new Error(err.error || 'Erreur génération FEC')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `FEC-${ecole.slug}-${annee}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setMsg(`✓ FEC exporté (${annee})`)
+    } catch (e: any) {
+      setMsg('❌ ' + e.message)
+    }
+    setLoading('')
+  }
+
   async function exportCheques() {
     setLoading('cheques'); setMsg('')
     const s = createClient()
@@ -151,6 +183,7 @@ export default function ExportsPage() {
     { id: 'factures', titre: 'Factures', desc: 'Liste des factures avec montants, soldes, statuts.', icon: '💰', fn: exportFactures, depend_annee: true },
     { id: 'reglements', titre: 'Règlements', desc: 'Tous les paiements encaissés (chèques, virements, CB…).', icon: '💸', fn: exportReglements, depend_annee: true },
     { id: 'cheques', titre: 'Chèques (caution et autres)', desc: 'Suivi de tous les chèques (prévus, encaissés, restitués).', icon: '💳', fn: exportCheques, depend_annee: false },
+    { id: 'fec', titre: 'FEC — Fichier Échanges Comptables', desc: 'Export réglementaire France (BOFIP) pour votre comptable / contrôle fiscal. Format TXT normé.', icon: '📑', fn: exportFEC, depend_annee: true },
   ]
 
   return (
