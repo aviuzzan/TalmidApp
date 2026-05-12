@@ -246,28 +246,13 @@ export default function FamilleDetailPage() {
             {famille.situation_maritale && <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{SITUATIONS[famille.situation_maritale]}</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/documents`)}
-            style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#1E40AF', fontWeight: 600 }}>
-            📁 Documents
-          </button>
-          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/cheques`)}
-            style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#92400E', fontWeight: 600 }}>
-            💳 Chèques
-          </button>
-          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/avoirs`)}
-            style={{ background: '#F3E8FF', border: '1px solid #D8B4FE', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#6B21A8', fontWeight: 600 }}>
-            🎁 Avoirs
-          </button>
-          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/plan-paiement`)}
-            style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#9A3412', fontWeight: 600 }}>
-            📅 Plan paiement
-          </button>
-          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/attestation-fiscale`)}
-            style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#065F46', fontWeight: 600 }}>
-            📄 Attestation fiscale
-          </button>
-        </div>
+        <ActionsMenu items={[
+          { label: '📁 Documents',         href: `/${ecole.slug}/familles/${id}/documents` },
+          { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
+          { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
+          { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
+          { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
+        ]} onNav={(h) => router.push(h)} />
       </div>
 
       <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #E2E8F0' }}>
@@ -494,6 +479,47 @@ export default function FamilleDetailPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Menu Actions compact (dropdown) ──
+function ActionsMenu({ items, onNav }: { items: { label: string; href: string }[]; onNav: (href: string) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={{
+          background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8,
+          padding: '8px 14px', cursor: 'pointer',
+          fontSize: 13, fontWeight: 600, color: '#1E293B',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+        Actions <span style={{ fontSize: 10, color: '#64748B' }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 50,
+          background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10,
+          boxShadow: '0 4px 12px rgba(15,23,42,0.08)',
+          minWidth: 200, overflow: 'hidden',
+        }}>
+          {items.map(it => (
+            <button key={it.href} onClick={() => { onNav(it.href); setOpen(false) }}
+              style={{
+                display: 'block', width: '100%',
+                background: 'transparent', border: 'none',
+                padding: '10px 14px',
+                fontSize: 13, color: '#1E293B', textAlign: 'left',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              {it.label}
+            </button>
+          ))}
         </div>
       )}
     </div>

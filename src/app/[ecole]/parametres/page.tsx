@@ -311,6 +311,7 @@ function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string
 
 // ── CONFIG PAIEMENT ──
 function ConfigPaiementTab({ ecoleId }: { ecoleId: string }) {
+  const toast = useToast()
   const [config, setConfig] = useState<any>(null)
   const [dates, setDates] = useState<any[]>([])
   const [newJour, setNewJour] = useState('')
@@ -338,7 +339,7 @@ function ConfigPaiementTab({ ecoleId }: { ecoleId: string }) {
 
   async function ajouterDate() {
     const jour = parseInt(newJour)
-    if (!jour || jour < 1 || jour > 28) { alert('Jour entre 1 et 28'); return }
+    if (!jour || jour < 1 || jour > 28) { toast.error('Jour entre 1 et 28'); return }
     await createClient().from('dates_encaissement').insert({ ecole_id: ecoleId, jour_du_mois: jour, label: newLabel || `${jour === 1 ? '1er' : jour + 'e'} du mois`, ordre: dates.length })
     setNewJour(''); setNewLabel(''); await load()
   }
@@ -636,6 +637,8 @@ function ClassesTab({ ecoleId }: { ecoleId: string }) {
 
 // ── COMMISSION ──
 function CommissionTab({ ecoleId }: { ecoleId: string }) {
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [membres, setMembres] = useState<any[]>([])
   const [newM, setNewM] = useState({ prenom: '', nom: '', role_label: '', email: '' })
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
@@ -658,8 +661,11 @@ function CommissionTab({ ecoleId }: { ecoleId: string }) {
   }
 
   async function supprimer(id: string) {
-    if (!confirm('Supprimer ce membre ?')) return
-    await createClient().from('commission_membres').delete().eq('id', id); await load()
+    const ok = await confirmDialog({ title: 'Supprimer ce membre ?', danger: true })
+    if (!ok) return
+    const { error } = await createClient().from('commission_membres').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Membre supprimé'); await load()
   }
 
   return (
@@ -808,6 +814,7 @@ function SEPATab({ ecoleId }: { ecoleId: string }) {
 
 // ── NOTIFICATIONS ──
 function NotificationsTab({ ecoleId }: { ecoleId: string }) {
+  const toast = useToast()
   const [emails, setEmails] = useState<string[]>([])
   const [newEmail, setNewEmail] = useState('')
   const [ddrActif, setDdrActif] = useState(true)
@@ -837,8 +844,8 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
 
   function addEmail() {
     const e = newEmail.trim().toLowerCase()
-    if (!isValidEmail(e)) { alert('Email invalide'); return }
-    if (emails.includes(e)) { alert('Cet email est déjà dans la liste'); return }
+    if (!isValidEmail(e)) { toast.error('Email invalide'); return }
+    if (emails.includes(e)) { toast.error('Cet email est déjà dans la liste'); return }
     setEmails([...emails, e])
     setNewEmail('')
   }
@@ -868,7 +875,7 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
   }
 
   async function testNotif(type: 'ddr' | 'contrat') {
-    if (!emails.length) { alert('Ajoutez au moins un email avant de tester.'); return }
+    if (!emails.length) { toast.error('Ajoutez au moins un email avant de tester.'); return }
     setTesting(type); setTestMsg(null)
     try {
       const s = createClient()
@@ -1117,6 +1124,8 @@ function FraisInscriptionTab({ ecoleId, annee }: { ecoleId: string; annee: strin
 
 // ── DOCUMENTS ÉCOLE PUBLICS (circulaire, liste affaires, etc.) ──
 function DocumentsEcoleTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [docs, setDocs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -1166,8 +1175,11 @@ function DocumentsEcoleTab({ ecoleId, annee }: { ecoleId: string; annee: string 
     await createClient().from('documents_ecole_publics').update({ actif: !actif }).eq('id', id); load()
   }
   async function supprimer(id: string) {
-    if (!confirm('Supprimer ce document ?')) return
-    await createClient().from('documents_ecole_publics').delete().eq('id', id); load()
+    const ok = await confirmDialog({ title: 'Supprimer ce document ?', danger: true })
+    if (!ok) return
+    const { error } = await createClient().from('documents_ecole_publics').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Document supprimé'); load()
   }
 
   const inp = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 14px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const, fontFamily: 'inherit' }
