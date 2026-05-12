@@ -20,7 +20,7 @@ import { sendEmail, isEmailConfigured } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { ecole_id, famille_id, type, statut, tarif_accorde } = body
+    const { ecole_id, famille_id, type, statut, tarif_accorde, motif } = body
 
     if (!ecole_id || !famille_id || !type) {
       return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
@@ -99,6 +99,19 @@ export async function POST(req: NextRequest) {
       const messageCorps = `<p style="margin:0 0 14px;">Votre contrat de scolarisation a été validé par l'établissement. La facture annuelle correspondante est désormais disponible dans votre espace famille.</p>
         <p style="margin:0 0 18px;">Vous pouvez consulter le détail et le solde restant à régler en cliquant ci-dessous.</p>`
       html = emailTemplate(ecole.nom, titre, couleur, '✓', greeting, messageCorps, lienFactures, 'Consulter ma facture →')
+    } else if (type === 'contrat_annule') {
+      const couleur = '#EF4444'
+      const titre = 'Contrat de scolarisation annulé'
+      subject = `[${ecole.nom}] ✕ ${titre}`
+      const motifTxt = motif && motif.trim() ? motif.trim() : 'Non précisé'
+      const messageCorps = `<p style="margin:0 0 14px;">Nous vous informons que votre contrat de scolarisation a été annulé par l'établissement.</p>
+        <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:14px 18px;margin:0 0 18px;">
+          <div style="font-size:12px;color:#991B1B;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Motif de l'annulation</div>
+          <div style="font-size:14px;color:#7F1D1D;line-height:1.5;">${motifTxt.replace(/</g, '&lt;').replace(/\n/g, '<br>')}</div>
+        </div>
+        <p style="margin:0 0 14px;">La facture liée à ce contrat a été marquée comme annulée. Si vous avez déjà effectué des paiements, ils seront étudiés par le secrétariat${ecole.email_contact ? ` (${ecole.email_contact})` : ''} pour remboursement ou réaffectation.</p>
+        <p style="margin:0 0 18px;">Pour toute question ou pour signer un nouveau contrat, contactez directement l'école.</p>`
+      html = emailTemplate(ecole.nom, titre, couleur, '✕', greeting, messageCorps, lienPortail, 'Voir mon espace famille →')
     } else {
       return NextResponse.json({ error: 'Type invalide' }, { status: 400 })
     }

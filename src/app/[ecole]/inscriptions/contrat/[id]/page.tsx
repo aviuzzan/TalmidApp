@@ -14,6 +14,7 @@ export default function ContratAdminDetailPage() {
   const [contrat, setContrat] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [validating, setValidating] = useState(false)
+  const [annulating, setAnnulating] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -54,6 +55,66 @@ export default function ContratAdminDetailPage() {
     alert('Contrat validé. La facture sera générée depuis la liste des contrats si pas déjà créée.')
   }
 
+  async function annuler() {
+    if (!contrat) return
+    const motif = window.prompt('Motif de l\'annulation (sera enregistré et envoyé à la famille) :')
+    if (!motif || !motif.trim()) return
+    if (!window.confirm(`Confirmer l'annulation du contrat ${contrat.numero || contrat.id.substring(0, 8)} ?\n\n— Le contrat passera en statut "annulé"\n— La facture liée sera marquée "annulée"\n— Les enfants reviendront en "en_attente" pour pouvoir signer un nouveau contrat`)) return
+    setAnnulating(true)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+
+    // 1. Annuler le contrat
+    const { error: errC } = await s
+      .from('contrats_scolarisation')
+      .update({
+        statut: 'annule',
+        annule_le: new Date().toISOString(),
+        annule_par: session?.user.id,
+        motif_annulation: motif.trim(),
+      })
+      .eq('id', contratId)
+    if (errC) { alert('Erreur annulation contrat : ' + errC.message); setAnnulating(false); return }
+
+    // 2. Annuler la facture liée si elle existe
+    try {
+      const annee = contrat.annee_scolaire
+      const { data: factures } = await s
+        .from('factures')
+        .select('id, statut')
+        .eq('famille_id', contrat.famille_id)
+        .eq('annee_scolaire', annee)
+      for (const f of factures || []) {
+        if (f.statut !== 'annule' && f.statut !== 'paye') {
+          await s.from('factures').update({ statut: 'annule', annule_le: new Date().toISOString() }).eq('id', f.id)
+        }
+      }
+    } catch (e) { console.warn('Annulation facture échouée :', e) }
+
+    // 3. Repasser les enfants en en_attente
+    try {
+      const enfantIds = (contrat.contrat_enfants || []).map((ce: any) => ce.enfant_id).filter(Boolean)
+      if (enfantIds.length > 0) {
+        await s.from('enfants')
+          .update({ statut_inscription: 'en_attente' })
+          .in('id', enfantIds)
+      }
+    } catch (e) { console.warn('Reset statut enfants échoué :', e) }
+
+    // 4. Notifier la famille
+    try {
+      await fetch('/api/notify-famille', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ecole_id: ecole.id, famille_id: contrat.famille_id, type: 'contrat_annule', motif: motif.trim() }),
+      })
+    } catch {}
+
+    setContrat({ ...contrat, statut: 'annule', motif_annulation: motif.trim() })
+    setAnnulating(false)
+    alert('Contrat annulé. La famille a été notifiée par email.')
+  }
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
   if (!contrat) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Contrat introuvable</div>
 
@@ -81,7 +142,23 @@ export default function ContratAdminDetailPage() {
             {validating ? 'Validation…' : '✓ Valider le contrat'}
           </button>
         )}
+        {(contrat.statut === 'soumis' || contrat.statut === 'valide') && (
+          <button onClick={annuler} disabled={annulating}
+            style={{ background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 8, padding: '9px 14px', fontWeight: 600, cursor: annulating ? 'not-allowed' : 'pointer', opacity: annulating ? 0.6 : 1, fontSize: 13 }}>
+            {annulating ? 'Annulation…' : '✕ Annuler le contrat'}
+          </button>
+        )}
       </div>
+
+      {contrat.statut === 'annule' && contrat.motif_annulation && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', marginBottom: 4 }}>CONTRAT ANNULÉ</div>
+          <div style={{ fontSize: 13, color: '#7F1D1D' }}>
+            <strong>Motif :</strong> {contrat.motif_annulation}
+            {contrat.annule_le && <span style={{ marginLeft: 12, color: '#94A3B8', fontSize: 11 }}>le {new Date(contrat.annule_le).toLocaleDateString('fr-FR')}</span>}
+          </div>
+        </div>
+      )}
 
       {/* Famille */}
       <div style={card}>
