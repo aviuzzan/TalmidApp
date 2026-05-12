@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
@@ -9,6 +9,7 @@ type Tab = 'classes' | 'secteurs' | 'tarifs' | 'reductions_fn' | 'modes_reglemen
 
 export default function ParametresPage() {
   const ecole = useEcole()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const initTab = tabParam === 'inscriptions' ? 'secteurs'
@@ -21,6 +22,7 @@ export default function ParametresPage() {
   const TABS: { id: Tab; label: string; icon: string; group?: string }[] = [
     { id: 'classes', label: 'Classes', icon: '🏫', group: 'École' },
     { id: 'secteurs', label: 'Secteurs', icon: '🗂️', group: 'École' },
+    { id: 'exercices' as Tab, label: 'Exercices', icon: '📅', group: 'École' },
     { id: 'tarifs', label: 'Tarifs', icon: '💶', group: 'Inscriptions' },
     { id: 'reductions_fn', label: 'Réd. famille', icon: '👨‍👩‍👧', group: 'Inscriptions' },
     { id: 'modes_reglement', label: 'Règlement', icon: '💳', group: 'Inscriptions' },
@@ -55,7 +57,10 @@ export default function ParametresPage() {
 
       <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => {
+            if (t.id === 'exercices') { router.push(`/${ecole.slug}/parametres/exercices`); return }
+            setTab(t.id)
+          }}
             style={{
               padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
               background: tab === t.id ? '#fff' : 'transparent',
