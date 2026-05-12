@@ -115,3 +115,19 @@ export function useExerciceId(): string | null {
   const { exerciceSelectionne } = useExercice()
   return exerciceSelectionne?.id ?? null
 }
+
+/**
+ * Année scolaire active = exercice selectionné via le dropdown global,
+ * sinon fallback sur le calcul date (sept-août).
+ * À utiliser dans les pages où le sélecteur d'exercice doit piloter le filtrage.
+ */
+export function useAnneeScolaireActive(): string {
+  const { exerciceSelectionne } = useExercice()
+  if (exerciceSelectionne?.code) return exerciceSelectionne.code
+  // Fallback synchrone : calcul date
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = d.getMonth()
+  const debutAnnee = m >= 8 ? y : y - 1
+  return `${debutAnnee}-${debutAnnee + 1}`
+}

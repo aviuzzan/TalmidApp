@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { getAnneeCouranteSync } from '@/lib/annee-courante'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 
 type Kpi = {
   ca_facture: number
@@ -23,7 +23,8 @@ type Kpi = {
 export default function FinancesDashboardPage() {
   const router = useRouter()
   const ecole = useEcole()
-  const [annee, setAnnee] = useState(getAnneeCouranteSync())
+  const annee = useAnneeScolaireActive()
+  const { exercices, exerciceSelectionne, selectExercice } = useExercice()
   const [loading, setLoading] = useState(true)
   const [kpi, setKpi] = useState<Kpi | null>(null)
 
@@ -144,10 +145,11 @@ export default function FinancesDashboardPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Tableau de bord financier</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Vue d&apos;ensemble — exercice {annee}</p>
         </div>
-        <select value={annee} onChange={e => setAnnee(e.target.value)}
+        <select value={exerciceSelectionne?.id || ''} onChange={e => selectExercice(e.target.value)}
           style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 14px', fontSize: 13, fontWeight: 600, color: '#1E293B', cursor: 'pointer' }}>
-          <option value="2025-2026">2025-2026</option>
-          <option value="2026-2027">2026-2027</option>
+          {exercices.map(ex => (
+            <option key={ex.id} value={ex.id}>{ex.code}</option>
+          ))}
         </select>
       </div>
 
