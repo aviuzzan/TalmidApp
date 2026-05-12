@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import AppProviders from '@/components/ui/AppProviders'
 
 export const metadata: Metadata = {
   title: 'TalmidApp — Système de gestion scolaire',
@@ -53,7 +54,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body><AppProviders>{children}</AppProviders></body>
     </html>
   )
 }

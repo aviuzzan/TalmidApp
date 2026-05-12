@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { loadPermissions, hasAtLeast, Niveau } from '@/lib/permissions'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -17,6 +19,8 @@ export default function FamilleDetailPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const id = params.id as string
+  const toast = useToast()
+  const confirm = useConfirm()
 
   const [famille, setFamille] = useState<any>(null)
   const [enfants, setEnfants] = useState<any[]>([])
@@ -147,8 +151,11 @@ export default function FamilleDetailPage() {
   }
 
   async function deleteEnfant(enfantId: string) {
-    if (!confirm('Supprimer cet élève ?')) return
-    await supabase.from('enfants').delete().eq('id', enfantId)
+    const ok = await confirm({ title: 'Supprimer cet élève ?', message: 'Cette action est irréversible.', danger: true })
+    if (!ok) return
+    const { error } = await supabase.from('enfants').delete().eq('id', enfantId)
+    if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    toast.success('Élève supprimé')
     load()
   }
 
@@ -189,8 +196,11 @@ export default function FamilleDetailPage() {
   }
 
   async function deleteLigne(ligneId: string) {
-    if (!confirm('Supprimer cette ligne ?')) return
-    await supabase.from('facture_lignes').delete().eq('id', ligneId)
+    const ok = await confirm({ title: 'Supprimer cette ligne ?', danger: true })
+    if (!ok) return
+    const { error } = await supabase.from('facture_lignes').delete().eq('id', ligneId)
+    if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    toast.success('Ligne supprimée')
     load()
   }
 
@@ -212,8 +222,11 @@ export default function FamilleDetailPage() {
   }
 
   async function deleteReglement(reglId: string) {
-    if (!confirm('Supprimer ce règlement ?')) return
-    await supabase.from('reglements').delete().eq('id', reglId)
+    const ok = await confirm({ title: 'Supprimer ce règlement ?', message: 'Le solde de la facture sera recalculé.', danger: true })
+    if (!ok) return
+    const { error } = await supabase.from('reglements').delete().eq('id', reglId)
+    if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    toast.success('Règlement supprimé')
     load()
   }
 

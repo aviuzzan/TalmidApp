@@ -13,7 +13,6 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Élèves', href: 'enfants', module: 'administratif' },
     { nom: 'Comptes parents', href: 'comptes-parents', module: 'administratif' },
     { nom: 'Inscriptions N+1', href: 'inscriptions', module: 'inscriptions' },
-    { nom: 'Gestion N+1', href: 'gestion-n1', module: 'inscriptions' },
   ],
   finances: [
     { nom: 'Tableau de bord', href: 'finances/dashboard', module: 'facturation' },

@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type Tab = 'tarifs' | 'factures' | 'paiements'
 const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
@@ -10,6 +12,8 @@ const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre'
 export default function FinancesPage() {
   const router = useRouter()
   const ecole = useEcole()
+  const toast = useToast()
+  const confirm = useConfirm()
   const [tab, setTab] = useState<Tab>('factures')
   const [tarifs, setTarifs] = useState<any[]>([])
   const [factures, setFactures] = useState<any[]>([])
@@ -91,8 +95,11 @@ export default function FinancesPage() {
   }
 
   async function deleteTarif(id: string) {
-    if (!confirm('Supprimer ce tarif ?')) return
-    await supabase.from('tarifs').delete().eq('id', id)
+    const ok = await confirm({ title: 'Supprimer ce tarif ?', danger: true })
+    if (!ok) return
+    const { error } = await supabase.from('tarifs').delete().eq('id', id)
+    if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    toast.success('Tarif supprimé')
     load()
   }
 
@@ -116,8 +123,15 @@ export default function FinancesPage() {
   }
 
   async function deletePaiement(id: string) {
-    if (!confirm('Supprimer ce règlement ? Cette action est irréversible et recalculera le statut de la facture.')) return
-    await supabase.from('reglements').delete().eq('id', id)
+    const ok = await confirm({
+      title: 'Supprimer ce règlement ?',
+      message: 'Action irréversible — le statut de la facture sera recalculé.',
+      danger: true,
+    })
+    if (!ok) return
+    const { error } = await supabase.from('reglements').delete().eq('id', id)
+    if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    toast.success('Règlement supprimé')
     load()
   }
 

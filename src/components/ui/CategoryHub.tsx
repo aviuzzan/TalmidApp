@@ -20,7 +20,6 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'administratif', nom: 'Élèves', description: 'Liste, fiches, classes', icone: '🎓', href: 'enfants' },
     { code: 'administratif', nom: 'Comptes parents', description: 'Création et gestion des accès parents', icone: '👥', href: 'comptes-parents' },
     { code: 'inscriptions', nom: 'Inscriptions N+1', description: 'Dossiers DDR, contrats, validations', icone: '📝', href: 'inscriptions' },
-    { code: 'inscriptions', nom: 'Gestion N+1', description: 'Vue d ensemble de la campagne', icone: '📅', href: 'gestion-n1' },
   ],
   finances: [
     { code: 'facturation', nom: 'Factures', description: 'Création, suivi, paiements', icone: '🧾', href: 'finances' },

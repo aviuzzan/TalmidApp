@@ -4,6 +4,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'services' | 'comptes_acces'
 type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
@@ -417,6 +419,8 @@ function ConfigPaiementTab({ ecoleId }: { ecoleId: string }) {
 
 // ── SECTEURS (inchangé, copié depuis v1) ──
 function SecteursTab({ ecoleId }: { ecoleId: string }) {
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [secteurs, setSecteurs] = useState<any[]>([])
   const [newNom, setNewNom] = useState('')
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', flex: 1, boxSizing: 'border-box' as const }
@@ -430,7 +434,13 @@ function SecteursTab({ ecoleId }: { ecoleId: string }) {
     await createClient().from('secteurs').insert({ ecole_id: ecoleId, nom: newNom.trim(), ordre: secteurs.length })
     setNewNom(''); await load()
   }
-  async function supprimer(id: string) { if (!confirm('Supprimer ?')) return; await createClient().from('secteurs').delete().eq('id', id); await load() }
+  async function supprimer(id: string) {
+    const ok = await confirmDialog({ title: 'Supprimer ce secteur ?', danger: true })
+    if (!ok) return
+    const { error } = await createClient().from('secteurs').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Secteur supprimé'); await load()
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', gap: 10 }}>
