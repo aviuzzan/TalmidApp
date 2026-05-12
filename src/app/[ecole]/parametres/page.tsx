@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
 
-type Tab = 'classes' | 'secteurs' | 'tarifs' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'services' | 'comptes_acces'
+type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'services' | 'comptes_acces'
 
 export default function ParametresPage() {
   const ecole = useEcole()
@@ -22,7 +22,7 @@ export default function ParametresPage() {
   const TABS: { id: Tab; label: string; icon: string; group?: string }[] = [
     { id: 'classes', label: 'Classes', icon: '🏫', group: 'École' },
     { id: 'secteurs', label: 'Secteurs', icon: '🗂️', group: 'École' },
-    { id: 'exercices' as Tab, label: 'Exercices', icon: '📅', group: 'École' },
+    { id: 'exercices', label: 'Exercices', icon: '📅', group: 'École' },
     { id: 'tarifs', label: 'Tarifs', icon: '💶', group: 'Inscriptions' },
     { id: 'reductions_fn', label: 'Réd. famille', icon: '👨‍👩‍👧', group: 'Inscriptions' },
     { id: 'modes_reglement', label: 'Règlement', icon: '💳', group: 'Inscriptions' },
