@@ -235,6 +235,18 @@ export default function FamilleDetailPage() {
             style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#1E40AF', fontWeight: 600 }}>
             📁 Documents
           </button>
+          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/cheques`)}
+            style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#92400E', fontWeight: 600 }}>
+            💳 Chèques
+          </button>
+          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/avoirs`)}
+            style={{ background: '#F3E8FF', border: '1px solid #D8B4FE', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#6B21A8', fontWeight: 600 }}>
+            🎁 Avoirs
+          </button>
+          <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/plan-paiement`)}
+            style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#9A3412', fontWeight: 600 }}>
+            📅 Plan paiement
+          </button>
           <button onClick={() => router.push(`/${ecole.slug}/familles/${id}/attestation-fiscale`)}
             style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: '#065F46', fontWeight: 600 }}>
             📄 Attestation fiscale

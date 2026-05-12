@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import EcoleSidebar from '@/components/ui/EcoleSidebar'
+import GlobalSearch from '@/components/ui/GlobalSearch'
 import { useEcole } from '@/lib/ecole-context'
 
 export default function EcoleAppLayout({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
       <main className="ecole-main" style={{ flex: 1, overflowY: 'auto', maxWidth: '100%' }}>
         {children}
       </main>
+      <GlobalSearch />
     </div>
   )
 }

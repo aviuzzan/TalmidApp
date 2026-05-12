@@ -16,9 +16,10 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Gestion N+1', href: 'gestion-n1', module: 'inscriptions' },
   ],
   finances: [
+    { nom: 'Tableau de bord', href: 'finances/dashboard', module: 'facturation' },
     { nom: 'Factures', href: 'finances', module: 'facturation' },
     { nom: 'Relances impayés', href: 'finances/relances', module: 'facturation' },
-    { nom: 'Paye', href: 'paye', module: 'paye' },
+    { nom: 'Bordereau chèques', href: 'finances/bordereau', module: 'facturation' },
     { nom: 'Export SEPA', href: 'inscriptions/sepa', module: 'compta' },
   ],
   pedagogie: [
@@ -27,6 +28,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Emplois du temps', href: 'emplois-du-temps', module: 'emplois_du_temps' },
   ],
   vie_scolaire: [
+    { nom: 'Présences / absences', href: 'presences', module: 'pedagogie' },
     { nom: 'Transport', href: 'transport', module: 'transport' },
     { nom: 'Cantine', href: 'cantine', module: 'cantine' },
   ],
@@ -38,6 +40,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   configuration: [
     { nom: 'Paramètres école', href: 'parametres', module: 'parametres' },
     { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
+    { nom: 'Exports CSV', href: 'exports', module: 'parametres' },
   ],
 }
 
