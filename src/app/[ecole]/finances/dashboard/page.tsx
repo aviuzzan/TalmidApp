@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { getAnneeCouranteSync } from '@/lib/annee-courante'
 
 type Kpi = {
   ca_facture: number
@@ -22,7 +23,7 @@ type Kpi = {
 export default function FinancesDashboardPage() {
   const router = useRouter()
   const ecole = useEcole()
-  const [annee, setAnnee] = useState('2025-2026')
+  const [annee, setAnnee] = useState(getAnneeCouranteSync())
   const [loading, setLoading] = useState(true)
   const [kpi, setKpi] = useState<Kpi | null>(null)
 

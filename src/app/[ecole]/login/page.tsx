@@ -45,7 +45,7 @@ export default function EcoleLoginPage() {
       if (role === 'admin' || role === 'super_admin') router.push(`/${ecole.slug}/dashboard`)
       else { setError('Ce compte n\'a pas les droits administrateur.'); setLoading(false) }
     } else if (mode === 'professeur') {
-      if (role === 'teacher') router.push(`/${ecole.slug}/classes`)
+      if (role === 'teacher') router.push('/portail/prof')
       else { setError('Ce compte n\'a pas les droits professeur.'); setLoading(false) }
     } else if (mode === 'parent') {
       if (role === 'parent') router.push('/portail')

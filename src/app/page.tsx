@@ -394,8 +394,7 @@ export default function Home() {
           router.push('/portail')
         }
       } else if (profile?.role === 'teacher') {
-        if (slug) router.push(`/${slug}/classes`)
-        else router.push('/portail')
+        router.push('/portail/prof')
       } else {
         router.push('/portail')
       }

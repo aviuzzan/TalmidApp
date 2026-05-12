@@ -58,7 +58,7 @@ export default function FacturePrintPage() {
   const date = (d: string) => new Date(d).toLocaleDateString('fr-FR')
   const lastRegl = reglements[reglements.length - 1]
 
-  const titre = facture.statut === 'solde' ? 'FACTURE ACQUITTÉE' : facture.statut === 'partiel' ? 'RELEVÉ DE COMPTE' : facture.statut === 'annule' ? 'FACTURE ANNULÉE' : 'FACTURE'
+  const titre = facture.statut === 'paye' ? 'FACTURE ACQUITTÉE' : facture.statut === 'partiel' ? 'RELEVÉ DE COMPTE' : facture.statut === 'annule' ? 'FACTURE ANNULÉE' : 'FACTURE'
 
   const ecoleAdr = [ecole?.adresse, ecole?.ville, ecole?.pays].filter(Boolean).join(' — ') || ''
   const familleAdr = [famille?.parent1_numero_rue, famille?.parent1_code_postal, famille?.parent1_ville].filter(Boolean).join(' ')
@@ -109,7 +109,7 @@ export default function FacturePrintPage() {
         </div>
 
         {/* Bandeau statut */}
-        {facture.statut === 'solde' && (
+        {facture.statut === 'paye' && (
           <div style={{ background: '#ECFDF5', border: '2px solid #10B981', borderRadius: 8, padding: '14px 18px', marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontWeight: 700, color: '#059669', fontSize: 14 }}>✓ FACTURE TOTALEMENT RÉGLÉE</div>
@@ -214,7 +214,7 @@ export default function FacturePrintPage() {
         {/* Footer / mentions */}
         <div style={{ marginTop: 30, paddingTop: 14, borderTop: '1px solid #E2E8F0', fontSize: 10, color: '#94A3B8', lineHeight: 1.5 }}>
           <div>Document généré le {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} via TalmidApp.</div>
-          {facture.statut === 'solde' && <div style={{ marginTop: 4 }}>Cette facture acquittée vaut justificatif. À conserver.</div>}
+          {facture.statut === 'paye' && <div style={{ marginTop: 4 }}>Cette facture acquittée vaut justificatif. À conserver.</div>}
           <div style={{ marginTop: 4 }}>En cas de question relative à cette facture, contactez l&apos;école {ecole?.email_contact ? `à ${ecole.email_contact}` : ''}.</div>
         </div>
       </div>

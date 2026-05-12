@@ -13,15 +13,17 @@ export default function EnfantsPage() {
   const [filtreClasse, setFiltreClasse] = useState('')
   const [classes, setClasses] = useState<any[]>([])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
 
   async function load() {
+    if (!ecole?.id) return
     const s = createClient()
     const [{ data: enf }, { data: cls }] = await Promise.all([
       s.from('enfants')
         .select('*, familles(id, nom, parent1_email, parent1_telephone), classes(nom)')
+        .eq('ecole_id', ecole.id)
         .order('nom'),
-      s.from('classes').select('id, nom').order('nom'),
+      s.from('classes').select('id, nom').eq('ecole_id', ecole.id).order('nom'),
     ])
     setEnfants(enf ?? [])
     setClasses(cls ?? [])

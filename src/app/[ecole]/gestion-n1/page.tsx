@@ -3,20 +3,31 @@ import { useEffect, useState } from 'react'
 import { useEcole } from '@/lib/ecole-context'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { calcAnneeDepuisDate } from '@/lib/annee-courante'
+
+// L'année N+1 est toujours l'année scolaire suivante de l'année courante.
+function getAnneeNplus1(): string {
+  const courante = calcAnneeDepuisDate()
+  const debutSuivant = parseInt(courante.code.split('-')[0]) + 1
+  return `${debutSuivant}-${debutSuivant + 1}`
+}
 
 export default function GestionN1Page() {
   const router = useRouter()
   const ecole = useEcole()
   const [enfants, setEnfants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const ANNEE_N1 = getAnneeNplus1()
 
   useEffect(() => {
+    if (!ecole?.id) return
     createClient().from('enfants')
       .select('*, familles(nom, numero)')
-      .eq('annee_scolaire', '2026-2027')
+      .eq('ecole_id', ecole.id)
+      .eq('annee_scolaire', ANNEE_N1)
       .order('nom')
       .then(({ data }) => { setEnfants(data ?? []); setLoading(false) })
-  }, [])
+  }, [ecole?.id, ANNEE_N1])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

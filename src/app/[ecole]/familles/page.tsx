@@ -44,13 +44,14 @@ export default function FamillesPage() {
   const [form, setForm] = useState(empty)
 
   const load = useCallback(async () => {
+    if (!ecole?.id) return
     const supabase = createClient()
     const [{ data: fam }, { data: mds }] = await Promise.all([
-      supabase.from('familles').select('*').order('date_creation', { ascending: false }),
-      supabase.from('modes_paiement').select('*').order('libelle'),
+      supabase.from('familles').select('*').eq('ecole_id', ecole.id).order('date_creation', { ascending: false }),
+      supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
     ])
     setFamilles(fam ?? []); setModes(mds ?? []); setLoading(false)
-  }, [])
+  }, [ecole?.id])
 
   useEffect(() => { load() }, [load])
 
@@ -88,7 +89,8 @@ export default function FamillesPage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setError('')
-    const payload = {
+    const payload: any = {
+      ecole_id: ecole.id,
       nom: form.nom, statut_dossier: form.statut_dossier,
       situation_maritale: form.situation_maritale || null,
       parent1_prenom: form.parent1_prenom, parent1_nom: form.parent1_nom,

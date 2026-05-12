@@ -111,7 +111,7 @@ export default function CompteFamillePage() {
   mouvements.sort((a, b) => a.date.localeCompare(b.date))
 
   const statutColor = (s: string) => {
-    if (s === 'solde') return { bg: '#ECFDF5', fg: '#065F46' }
+    if (s === 'paye') return { bg: '#ECFDF5', fg: '#065F46' }
     if (s === 'partiel') return { bg: '#FEF3C7', fg: '#92400E' }
     if (s === 'annule') return { bg: '#F1F5F9', fg: '#64748B' }
     if (s === 'brouillon') return { bg: '#EFF6FF', fg: '#1E40AF' }

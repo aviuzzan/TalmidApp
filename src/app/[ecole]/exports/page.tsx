@@ -4,13 +4,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { downloadCSV, formatDateCSV, formatMontantCSV } from '@/lib/csv-export'
+import { getAnneeCouranteSync } from '@/lib/annee-courante'
 
 type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
 
 export default function ExportsPage() {
   const router = useRouter()
   const ecole = useEcole()
-  const [annee, setAnnee] = useState('2025-2026')
+  const [annee, setAnnee] = useState(getAnneeCouranteSync())
   const [loading, setLoading] = useState<ExportType | ''>('')
   const [msg, setMsg] = useState('')
 

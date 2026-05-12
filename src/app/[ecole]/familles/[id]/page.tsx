@@ -4,6 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { loadPermissions, hasAtLeast, Niveau } from '@/lib/permissions'
+import { getAnneeCouranteSync } from '@/lib/annee-courante'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -48,7 +49,8 @@ export default function FamilleDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const ANNEE = '2025-2026'
+  // Année courante calculée dynamiquement (sept-août)
+  const ANNEE = getAnneeCouranteSync()
 
   const emptyEnfant = {
     prenom: '', deuxieme_prenom: '', nom: '', date_naissance: '', genre: '',
@@ -65,13 +67,14 @@ export default function FamilleDetailPage() {
   const supabase = createClient()
 
   const load = useCallback(async () => {
+    if (!ecole?.id) return
     const [{ data: fam }, { data: enf }, { data: cls }, { data: trp }, { data: modes }, { data: tar }] = await Promise.all([
       supabase.from('familles').select('*').eq('id', id).single(),
       supabase.from('enfants').select('*').eq('famille_id', id).order('nom'),
-      supabase.from('classes').select('*').order('ordre'),
-      supabase.from('transports').select('*').order('nom'),
-      supabase.from('modes_paiement').select('*').order('libelle'),
-      supabase.from('tarifs').select('*').eq('annee_scolaire', ANNEE).order('nom'),
+      supabase.from('classes').select('*').eq('ecole_id', ecole.id).order('ordre'),
+      supabase.from('transports').select('*').eq('ecole_id', ecole.id).order('nom'),
+      supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
+      supabase.from('tarifs').select('*').eq('ecole_id', ecole.id).eq('annee_scolaire', ANNEE).order('nom'),
     ])
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? [])
     setTransports(trp ?? []); setModesPaiement(modes ?? []); setTarifs(tar ?? [])
@@ -203,7 +206,7 @@ export default function FamilleDetailPage() {
     })
     if (err) { setError(err.message); setSaving(false); return }
     const newTotal = reglements.reduce((s, r) => s + Number(r.montant), 0) + parseFloat(reglementForm.montant)
-    const statut = newTotal >= Number(facture.total_facture) ? 'solde' : newTotal > 0 ? 'partiel' : 'en_attente'
+    const statut = newTotal >= Number(facture.total_facture) ? 'paye' : newTotal > 0 ? 'partiel' : 'en_attente'
     await supabase.from('factures').update({ statut }).eq('id', facture.id)
     setShowReglementForm(false); setReglementForm(emptyReglement); load(); setSaving(false)
   }

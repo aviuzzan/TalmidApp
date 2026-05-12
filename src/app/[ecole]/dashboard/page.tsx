@@ -48,16 +48,16 @@ export default function DashboardPage() {
     const now = new Date().toISOString().split('T')[0]
     const promises: any[] = []
     if (accessAdmin) {
-      promises.push(s.from('familles').select('*', { count: 'exact', head: true }))
+      promises.push(s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id))
       promises.push(s.from('enfants').select('*', { count: 'exact', head: true })
+        .eq('ecole_id', ecole.id)
         .or(`date_entree.is.null,date_entree.lte.${now}`)
         .or(`date_sortie.is.null,date_sortie.gte.${now}`))
-      promises.push(s.from('familles').select('*', { count: 'exact', head: true }).eq('statut_dossier', 'incomplet'))
-      promises.push(s.from('enfants').select('*', { count: 'exact', head: true }).eq('statut_inscription', 'en_attente'))
+      promises.push(s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet'))
+      promises.push(s.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_inscription', 'en_attente'))
     }
-    if (accessMsg) {
-      promises.push(s.from('messages').select('*', { count: 'exact', head: true }).eq('lu', false).eq('destinataire_type', 'agent'))
-    }
+    // Note : compteur messages non lus à brancher proprement (cf. logique portail/layout.tsx avec thread_participants.last_read_at)
+    // Pour l'instant, on n'envoie pas de promise → newStats.msgNonLus reste à 0.
     const results = await Promise.all(promises)
     let idx = 0
     const newStats: Stats = { familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0 }
@@ -67,9 +67,7 @@ export default function DashboardPage() {
       newStats.incomplets = results[idx++]?.count ?? 0
       newStats.attente = results[idx++]?.count ?? 0
     }
-    if (accessMsg) {
-      newStats.msgNonLus = results[idx++]?.count ?? 0
-    }
+    // msgNonLus reste à 0 — TODO Phase 5 : brancher logique thread_participants
     setStats(newStats)
     setLoading(false)
   }

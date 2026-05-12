@@ -65,7 +65,9 @@ export function useModesReglement(ecoleId: string) {
   return modes
 }
 
-export const ANNEE_COURANTE = '2026-2027'
+// Année courante calculée dynamiquement (sept-août). Plus de hardcode.
+import { getAnneeCouranteSync } from '@/lib/annee-courante'
+export const ANNEE_COURANTE = getAnneeCouranteSync()
 
 export function formatStatut(statut: string) {
   const map: Record<string, { label: string; color: string; bg: string }> = {
