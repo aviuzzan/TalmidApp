@@ -47,6 +47,8 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'pedagogie', nom: 'Sanctions / discipline', description: 'Avertissements, conseils de discipline', icone: '⚠️', href: 'sanctions' },
     { code: 'transport', nom: 'Transport', description: 'Bus, navettes, abonnements', icone: '🚌', href: 'transport' },
     { code: 'cantine', nom: 'Cantine', description: 'Repas, paniers, allergies', icone: '🍽️', href: 'cantine' },
+    { code: 'administratif', nom: 'Casiers', description: 'Attribution et suivi des casiers élèves', icone: '🔐', href: 'casiers' },
+    { code: 'administratif', nom: 'Prêts de matériel', description: 'Manuels, livres, instruments, tablettes', icone: '📚', href: 'prets' },
   ],
   communication: [
     { code: 'messagerie', nom: 'Messagerie', description: 'Conversations avec les familles', icone: '💬', href: 'messages' },

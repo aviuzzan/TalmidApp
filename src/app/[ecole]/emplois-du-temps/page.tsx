@@ -178,7 +178,9 @@ export default function EmploisDuTempsPage() {
           Selectionnez une {vue === 'classe' ? 'classe' : 'professeur'} pour afficher l emploi du temps.
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10 }}>
+        <>
+        {/* Vue desktop : tableau hebdo */}
+        <div className="edt-desktop-only" style={{ overflowX: 'auto', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
@@ -234,6 +236,45 @@ export default function EmploisDuTempsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Vue mobile : liste verticale par jour */}
+        <div className="edt-mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {JOURS.map((j, jour) => {
+            const creneauxJour = filtered.filter(c => c.jour_semaine === jour).sort((a, b) => a.heure_debut.localeCompare(b.heure_debut))
+            if (creneauxJour.length === 0) return null
+            return (
+              <div key={jour} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ background: '#F8FAFC', padding: '10px 14px', borderBottom: '1px solid #E2E8F0', fontWeight: 700, fontSize: 13, color: '#1E293B' }}>{j}</div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {creneauxJour.map(c => {
+                    const p = profById(c.professeur_id)
+                    const cl = classeById(c.classe_id)
+                    return (
+                      <button key={c.id} onClick={() => openEdit(c)}
+                        style={{ background: '#fff', border: 'none', borderBottom: '1px solid #F1F5F9', padding: '12px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ minWidth: 75, fontWeight: 700, color: '#1E40AF', fontSize: 13 }}>
+                          {c.heure_debut.slice(0,5)}<br/><span style={{ color: '#94A3B8', fontWeight: 400 }}>{c.heure_fin.slice(0,5)}</span>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          {c.matiere && <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 14 }}>{c.matiere}</div>}
+                          <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                            {vue === 'classe' ? (p ? `${p.prenom} ${p.nom}` : '—') : (cl ? cl.nom : '—')}
+                            {c.salle && <span style={{ marginLeft: 6, color: '#94A3B8' }}> · salle {c.salle}</span>}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+          <button onClick={() => openNew(1, 9)} disabled={!selectedId}
+            style={{ background: '#fff', border: '1px dashed #CBD5E1', borderRadius: 10, padding: '14px', color: '#64748B', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            + Ajouter un créneau
+          </button>
+        </div>
+        </>
       )}
 
       {showModal && (

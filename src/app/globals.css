@@ -811,3 +811,14 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
     font-size: 20px !important;
   }
 }
+
+/* ============================================================
+   EDT — vue desktop vs mobile
+   ============================================================ */
+.edt-desktop-only { display: block; }
+.edt-mobile-only  { display: none; }
+
+@media (max-width: 768px) {
+  .edt-desktop-only { display: none !important; }
+  .edt-mobile-only  { display: flex !important; }
+}

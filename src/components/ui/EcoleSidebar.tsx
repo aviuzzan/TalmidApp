@@ -39,6 +39,8 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Sanctions / discipline', href: 'sanctions', module: 'pedagogie' },
     { nom: 'Transport', href: 'transport', module: 'transport' },
     { nom: 'Cantine', href: 'cantine', module: 'cantine' },
+    { nom: 'Casiers', href: 'casiers', module: 'administratif' },
+    { nom: 'Prêts de matériel', href: 'prets', module: 'administratif' },
   ],
   communication: [
     { nom: 'Messagerie', href: 'messages', module: 'messagerie' },
