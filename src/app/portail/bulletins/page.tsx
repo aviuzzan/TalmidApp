@@ -11,8 +11,8 @@ type Bulletin = {
   trimestre: number
   moyenne_generale: number | null
   created_at: string
-  enfants?: { prenom: string; nom: string }
-  exercices?: { code: string }
+  enfants?: any
+  exercices?: any
 }
 
 export default function PortailBulletinsPage() {
@@ -41,7 +41,7 @@ export default function PortailBulletinsPage() {
       .eq('visible_famille', true)
       .order('created_at', { ascending: false })
 
-    setBulletins((bul ?? []) as Bulletin[])
+    setBulletins((bul ?? []) as unknown as Bulletin[])
     setLoading(false)
   }
 
