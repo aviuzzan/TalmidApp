@@ -13,7 +13,8 @@ type ModuleInfo = {
   href: string
 }
 
-// Détail des modules accessibles dans chaque catégorie (avec leurs métadonnées)
+// Détail des modules accessibles dans chaque catégorie (avec leurs métadonnées).
+// IMPORTANT : doit matcher exactement MODULES_BY_CATEGORY dans EcoleSidebar.tsx
 const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
   administration: [
     { code: 'administratif', nom: 'Familles', description: 'Liste, fiche détaillée, contacts', icone: '👨‍👩‍👧', href: 'familles' },
@@ -22,28 +23,39 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'inscriptions', nom: 'Inscriptions N+1', description: 'Dossiers DDR, contrats, validations', icone: '📝', href: 'inscriptions' },
   ],
   finances: [
-    { code: 'facturation', nom: 'Factures', description: 'Création, suivi, paiements', icone: '🧾', href: 'finances' },
-    { code: 'compta', nom: 'Comptabilité', description: 'Relevés, écritures, exports', icone: '💰', href: 'finances' },
-    { code: 'paye', nom: 'Paye', description: 'Bulletins de paie professeurs', icone: '💵', href: 'paye' },
-    { code: 'compta', nom: 'Export SEPA', description: 'Génération des prélèvements', icone: '🏦', href: 'inscriptions/sepa' },
+    { code: 'facturation', nom: 'Tableau de bord', description: 'Vue d\'ensemble : KPI, encaissements, impayés', icone: '📊', href: 'finances/dashboard' },
+    { code: 'facturation', nom: 'Factures', description: 'Liste, création et suivi des factures', icone: '📄', href: 'finances' },
+    { code: 'facturation', nom: 'Relances impayés', description: 'Rappels, relances et mises en demeure', icone: '🔔', href: 'finances/relances' },
+    { code: 'facturation', nom: 'Bordereau chèques', description: 'Préparer une remise de chèques à la banque', icone: '🧾', href: 'finances/bordereau' },
+    { code: 'compta', nom: 'Compta analytique', description: 'Ventilation par centre de coût', icone: '📈', href: 'finances/analytique' },
+    { code: 'compta', nom: 'Export SEPA', description: 'Générer un fichier de prélèvement bancaire', icone: '🏦', href: 'inscriptions/sepa' },
   ],
   pedagogie: [
     { code: 'pedagogie', nom: 'Programmes', description: 'Matières, cursus, objectifs', icone: '📚', href: 'pedagogie' },
     { code: 'professeurs', nom: 'Professeurs', description: 'Liste, fiches, assignations', icone: '👨‍🏫', href: 'professeurs' },
     { code: 'emplois_du_temps', nom: 'Emplois du temps', description: 'Grille hebdomadaire, conflits', icone: '📅', href: 'emplois-du-temps' },
+    { code: 'pedagogie', nom: 'Devoirs', description: 'Cahier de textes : créer et publier les devoirs', icone: '✏️', href: 'devoirs' },
+    { code: 'pedagogie', nom: 'Bulletins', description: 'Génération auto trimestrielle + impression PDF', icone: '📋', href: 'bulletins' },
+    { code: 'pedagogie', nom: 'Notes & évaluations', description: 'Saisie des notes, contrôles, évaluations', icone: '📝', href: 'notes' },
   ],
   vie_scolaire: [
+    { code: 'pedagogie', nom: 'Présences / absences', description: 'Suivi quotidien, justificatifs', icone: '✅', href: 'presences' },
+    { code: 'pedagogie', nom: 'Sanctions / discipline', description: 'Avertissements, conseils de discipline', icone: '⚠️', href: 'sanctions' },
     { code: 'transport', nom: 'Transport', description: 'Bus, navettes, abonnements', icone: '🚌', href: 'transport' },
     { code: 'cantine', nom: 'Cantine', description: 'Repas, paniers, allergies', icone: '🍽️', href: 'cantine' },
   ],
   communication: [
     { code: 'messagerie', nom: 'Messagerie', description: 'Conversations avec les familles', icone: '💬', href: 'messages' },
     { code: 'documents', nom: 'Documents école', description: 'Bibliothèque partagée', icone: '📂', href: 'documents' },
+    { code: 'messagerie', nom: 'SMS', description: 'Envoi de SMS unitaires ou en masse', icone: '📱', href: 'sms' },
+    { code: 'messagerie', nom: 'Notifications push', description: 'Alertes instantanées sur les appareils', icone: '🔔', href: 'notifications-push' },
     { code: 'parametres', nom: 'Notifications', description: 'Envoi de mails groupés', icone: '📧', href: 'notifications' },
   ],
   configuration: [
     { code: 'parametres', nom: 'Paramètres école', description: 'Classes, tarifs, SEPA, etc.', icone: '⚙️', href: 'parametres' },
+    { code: 'parametres', nom: 'Intégrations', description: 'Stripe, GoCardless, Brevo SMS', icone: '🔌', href: 'parametres/integrations' },
     { code: 'parametres', nom: 'Comptes & accès', description: 'Permissions des admins (admin principal)', icone: '🔐', href: 'parametres/comptes-acces' },
+    { code: 'parametres', nom: 'Exports CSV', description: 'Exporter familles, élèves, factures', icone: '📤', href: 'exports' },
   ],
 }
 
