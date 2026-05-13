@@ -19,6 +19,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Factures', href: 'finances', module: 'facturation' },
     { nom: 'Relances impayés', href: 'finances/relances', module: 'facturation' },
     { nom: 'Bordereau chèques', href: 'finances/bordereau', module: 'facturation' },
+    { nom: 'Compta analytique', href: 'finances/analytique', module: 'compta' },
     { nom: 'Export SEPA', href: 'inscriptions/sepa', module: 'compta' },
   ],
   pedagogie: [
