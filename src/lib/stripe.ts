@@ -10,12 +10,6 @@
 
 const STRIPE_API = 'https://api.stripe.com/v1'
 
-function getSecretKey(): string {
-  const k = process.env.STRIPE_SECRET_KEY
-  if (!k) throw new Error('STRIPE_SECRET_KEY manquant')
-  return k
-}
-
 function encodeForm(obj: Record<string, any>, prefix = ''): string {
   const params: string[] = []
   for (const [key, val] of Object.entries(obj)) {
@@ -35,11 +29,11 @@ function encodeForm(obj: Record<string, any>, prefix = ''): string {
   return params.join('&')
 }
 
-async function stripeFetch(path: string, init: RequestInit = {}): Promise<any> {
+async function stripeFetch(secretKey: string, path: string, init: RequestInit = {}): Promise<any> {
   const res = await fetch(`${STRIPE_API}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${getSecretKey()}`,
+      Authorization: `Bearer ${secretKey}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       ...(init.headers || {}),
     },
@@ -52,6 +46,7 @@ async function stripeFetch(path: string, init: RequestInit = {}): Promise<any> {
 }
 
 export interface CheckoutSessionParams {
+  secretKey: string
   factureId: string
   ecoleNom: string
   factureNumero: string
@@ -86,12 +81,12 @@ export async function createCheckoutSession(p: CheckoutSessionParams): Promise<{
     },
   })
 
-  const session = await stripeFetch('/checkout/sessions', { method: 'POST', body })
+  const session = await stripeFetch(p.secretKey, '/checkout/sessions', { method: 'POST', body })
   return { id: session.id, url: session.url }
 }
 
-export async function retrieveCheckoutSession(sessionId: string): Promise<any> {
-  return stripeFetch(`/checkout/sessions/${sessionId}`)
+export async function retrieveCheckoutSession(secretKey: string, sessionId: string): Promise<any> {
+  return stripeFetch(secretKey, `/checkout/sessions/${sessionId}`)
 }
 
 /**

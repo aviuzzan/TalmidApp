@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendSms, fillTemplate, normalizePhoneFR } from '@/lib/brevo'
+import { getIntegration } from '@/lib/integrations'
 
 /**
  * POST /api/admin/envoyer-sms
@@ -43,14 +44,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
-    // Vérifie SMS actif sur l'école
-    const { data: param } = await supabaseAdmin
-      .from('parametres_sms').select('actif, expediteur, signature').eq('ecole_id', ecoleId).maybeSingle()
-    if (!param?.actif) {
+    // Charge l'intégration Brevo SMS (apiKey chiffrée + config publique)
+    const integration = await getIntegration(ecoleId, 'brevo_sms')
+    if (!integration) {
       return NextResponse.json({ error: 'Envoi SMS désactivé pour cette école' }, { status: 400 })
     }
-
-    const senderFinal = sender || param.expediteur || 'TalmidApp'
+    const apiKey = integration.secrets.api_key
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Clé API Brevo manquante. L\'école doit la configurer dans Paramètres → Intégrations.' }, { status: 400 })
+    }
+    const expediteurDefaut = integration.public.expediteur || 'TalmidApp'
+    const signature = integration.public.signature || null
+    const senderFinal = sender || expediteurDefaut
 
     // Construit la liste des destinataires
     interface Destinataire { telephone: string; profile_id?: string; prenom?: string; nom?: string }
@@ -112,9 +117,9 @@ export async function POST(req: NextRequest) {
       const msgFinal = fillTemplate(message, {
         prenom: dest.prenom || '',
         nom: dest.nom || '',
-      }) + (param.signature ? `\n${param.signature}` : '')
+      }) + (signature ? `\n${signature}` : '')
 
-      const res = await sendSms({ to: tel, message: msgFinal, sender: senderFinal, tag: tag || 'talmidapp' })
+      const res = await sendSms({ apiKey, to: tel, message: msgFinal, sender: senderFinal, tag: tag || 'talmidapp' })
 
       await supabaseAdmin.from('sms_envoyes').insert({
         ecole_id: ecoleId,

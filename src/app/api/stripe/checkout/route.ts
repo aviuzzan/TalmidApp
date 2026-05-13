@@ -1,14 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createCheckoutSession } from '@/lib/stripe'
+import { getIntegration } from '@/lib/integrations'
 
 /**
  * POST /api/stripe/checkout
  * Body: { factureId: string, montantCentimes?: number }
- * - Famille connectée uniquement
- * - Si montantCentimes absent : utilise solde restant facture
- * - Crée session Stripe + ligne paiements_en_ligne
- * - Retourne url checkout
+ *
+ * Lit les clés Stripe propres à l'école de la facture (BDD chiffrée),
+ * puis crée une session checkout sur le COMPTE STRIPE de l'école (pas TalmidApp).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Famille introuvable' }, { status: 403 })
     }
 
-    // Récupère la facture + solde
+    // Facture + solde
     const { data: facture } = await supabaseAdmin
       .from('factures_solde')
       .select('id, numero, famille_id, ecole_id, total_facture, total_regle, solde_restant, statut')
@@ -61,19 +61,16 @@ export async function POST(req: NextRequest) {
       ? Math.min(Math.round(montantCentimes), Math.round(solde * 100))
       : Math.round(solde * 100)
 
-    if (montant < 50) {
-      return NextResponse.json({ error: 'Montant minimum 0,50 €' }, { status: 400 })
+    if (montant < 50) return NextResponse.json({ error: 'Montant minimum 0,50 €' }, { status: 400 })
+
+    // Récupère la config Stripe de l'école (BDD chiffrée → déchiffrée par getIntegration)
+    const integration = await getIntegration(facture.ecole_id, 'stripe')
+    if (!integration) {
+      return NextResponse.json({ error: 'Le paiement en ligne Stripe n\'est pas activé pour cette école' }, { status: 400 })
     }
-
-    // Vérifie Stripe actif pour cette école
-    const { data: parametre } = await supabaseAdmin
-      .from('parametres_stripe')
-      .select('actif')
-      .eq('ecole_id', facture.ecole_id)
-      .maybeSingle()
-
-    if (!parametre?.actif) {
-      return NextResponse.json({ error: 'Le paiement en ligne n\'est pas activé pour cette école' }, { status: 400 })
+    const secretKey = integration.secrets.secret_key
+    if (!secretKey) {
+      return NextResponse.json({ error: 'Clé secrète Stripe manquante. L\'école doit la configurer dans Paramètres → Intégrations.' }, { status: 400 })
     }
 
     const { data: ecole } = await supabaseAdmin
@@ -87,6 +84,7 @@ export async function POST(req: NextRequest) {
     const cancelUrl = `${baseUrl}/portail/factures/paiement-cancel`
 
     const session = await createCheckoutSession({
+      secretKey,
       factureId: facture.id,
       ecoleNom: ecole?.nom || 'École',
       factureNumero: facture.numero,
@@ -96,12 +94,12 @@ export async function POST(req: NextRequest) {
       cancelUrl,
       metadata: {
         ecole_id: facture.ecole_id,
+        ecole_slug: ecole?.slug || '',
         famille_id: profile.famille_id,
         profile_id: profile.id,
       },
     })
 
-    // Trace côté BDD
     await supabaseAdmin.from('paiements_en_ligne').insert({
       ecole_id: facture.ecole_id,
       facture_id: facture.id,

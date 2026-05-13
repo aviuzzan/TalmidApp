@@ -1,28 +1,41 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyWebhookSignature } from '@/lib/stripe'
+import { getIntegration, findEcoleBySlug } from '@/lib/integrations'
 
 export const runtime = 'nodejs'
 
 /**
- * POST /api/stripe/webhook
- * Réception des events Stripe.
- * - checkout.session.completed → marque paiement succeeded + crée règlement + recalcule statut facture
- * - checkout.session.expired   → marque expired
- * - payment_intent.payment_failed → marque failed
- *
- * Le body brut est nécessaire pour valider la signature, on lit le raw text.
+ * POST /api/stripe/webhook?ecole=<slug>
+ * URL à configurer par chaque école dans son Stripe Dashboard.
+ * Le slug permet de retrouver le webhook_secret propre à cette école.
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET
-  if (!secret) {
-    return NextResponse.json({ error: 'STRIPE_WEBHOOK_SECRET manquant' }, { status: 500 })
+  // 1. Slug école depuis la query
+  const url = new URL(req.url)
+  const slug = url.searchParams.get('ecole')
+  if (!slug) {
+    return NextResponse.json({ error: 'Paramètre ?ecole=<slug> requis' }, { status: 400 })
+  }
+  const ecole = await findEcoleBySlug(slug)
+  if (!ecole) {
+    return NextResponse.json({ error: `École introuvable pour slug ${slug}` }, { status: 404 })
   }
 
+  // 2. Récupère webhook_secret depuis BDD chiffrée
+  const integration = await getIntegration(ecole.id, 'stripe')
+  if (!integration) {
+    return NextResponse.json({ error: 'Stripe non configuré pour cette école' }, { status: 400 })
+  }
+  const webhookSecret = integration.secrets.webhook_secret
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'webhook_secret Stripe manquant pour cette école' }, { status: 400 })
+  }
+
+  // 3. Vérification signature
   const sig = req.headers.get('stripe-signature')
   const payload = await req.text()
-
-  const verified = verifyWebhookSignature(payload, sig, secret)
+  const verified = verifyWebhookSignature(payload, sig, webhookSecret)
   if (!verified.ok) {
     return NextResponse.json({ error: verified.error || 'Signature invalide' }, { status: 400 })
   }
@@ -43,26 +56,19 @@ export async function POST(req: NextRequest) {
         const amountTotal = Number(session.amount_total) || 0
         const meta = session.metadata || {}
 
-        // Récupère la ligne paiements_en_ligne
         const { data: pe } = await supabaseAdmin
           .from('paiements_en_ligne')
           .select('id, facture_id, ecole_id, famille_id, montant_centimes, reglement_id, statut')
           .eq('stripe_session_id', sessionId)
           .maybeSingle()
 
-        if (!pe) {
-          // tente reconstitution depuis metadata
-          if (!meta.facture_id) break
-        }
-
         const factureId = pe?.facture_id || meta.facture_id
-        const ecoleId = pe?.ecole_id || meta.ecole_id
+        const ecoleId = pe?.ecole_id || meta.ecole_id || ecole.id
         const montantEuros = Number(((pe?.montant_centimes ?? amountTotal) / 100).toFixed(2))
 
-        // 1. Crée règlement
         let reglementId = pe?.reglement_id
         if (factureId && !reglementId) {
-          const { data: regl, error: reglErr } = await supabaseAdmin.from('reglements').insert({
+          const { data: regl } = await supabaseAdmin.from('reglements').insert({
             ecole_id: ecoleId,
             facture_id: factureId,
             famille_id: pe?.famille_id || meta.famille_id || null,
@@ -72,10 +78,9 @@ export async function POST(req: NextRequest) {
             reference: `Stripe ${sessionId.slice(0, 12)}`,
             commentaire: 'Paiement en ligne Stripe',
           }).select('id').single()
-          if (!reglErr) reglementId = regl?.id
+          reglementId = regl?.id
         }
 
-        // 2. Update paiements_en_ligne
         if (pe?.id) {
           await supabaseAdmin
             .from('paiements_en_ligne')
@@ -88,15 +93,10 @@ export async function POST(req: NextRequest) {
             .eq('id', pe.id)
         }
 
-        // 3. Update facture stripe_payment_intent_id
         if (factureId && paymentIntentId) {
-          await supabaseAdmin
-            .from('factures')
-            .update({ stripe_payment_intent_id: paymentIntentId })
-            .eq('id', factureId)
+          await supabaseAdmin.from('factures').update({ stripe_payment_intent_id: paymentIntentId }).eq('id', factureId)
         }
 
-        // 4. Recalcule statut facture via vue solde
         if (factureId) {
           const { data: sol } = await supabaseAdmin
             .from('factures_solde')
@@ -135,7 +135,6 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        // Event non géré, ack quand même
         break
     }
 

@@ -32,7 +32,7 @@ export default function PortailFacturesPage() {
         const [{ data: lig }, { data: regl }, { data: stp }] = await Promise.all([
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
-          supabase.from('parametres_stripe').select('actif').eq('ecole_id', fact.ecole_id).maybeSingle(),
+          supabase.from('parametres_integrations_public').select('actif').eq('ecole_id', fact.ecole_id).eq('provider', 'stripe').maybeSingle(),
         ])
         setLignes(lig ?? [])
         setReglements(regl ?? [])
