@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 
-type ProviderKey = 'stripe' | 'gocardless' | 'brevo_sms'
+type ProviderKey = 'stripe' | 'gocardless' | 'brevo_sms' | 'yousign'
 
 type Meta = {
   actif: boolean
@@ -16,6 +16,7 @@ const PROVIDERS: { key: ProviderKey; label: string; icon: string; desc: string }
   { key: 'stripe', label: 'Stripe', icon: '💳', desc: 'Paiement carte bancaire en ligne — chaque école sur son propre compte Stripe.' },
   { key: 'gocardless', label: 'GoCardless', icon: '🏦', desc: 'Prélèvement SEPA en ligne — mandats signés à distance par les familles.' },
   { key: 'brevo_sms', label: 'Brevo SMS', icon: '📱', desc: 'Envoi de SMS aux familles depuis votre propre compte Brevo (~0,05 €/SMS).' },
+  { key: 'yousign', label: 'YouSign', icon: '✍️', desc: 'Signature électronique de contrats et documents à distance.' },
 ]
 
 export default function IntegrationsPage() {
@@ -23,13 +24,14 @@ export default function IntegrationsPage() {
   const [provider, setProvider] = useState<ProviderKey>('stripe')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [metas, setMetas] = useState<Record<ProviderKey, Meta>>({ stripe: null, gocardless: null, brevo_sms: null })
+  const [metas, setMetas] = useState<Record<ProviderKey, Meta>>({ stripe: null, gocardless: null, brevo_sms: null, yousign: null })
   const [msg, setMsg] = useState('')
 
   // Form state per provider — secrets sont write-only (jamais relus en clair)
   const [stripeForm, setStripeForm] = useState({ publishable_key: '', secret_key: '', webhook_secret: '', mode: 'live' as 'test' | 'live' })
   const [gcForm, setGcForm] = useState({ creditor_id: '', access_token: '', webhook_secret: '', mode: 'live' as 'test' | 'live' })
   const [brevoForm, setBrevoForm] = useState({ expediteur: 'TalmidApp', signature: '', api_key: '' })
+  const [ysForm, setYsForm] = useState({ api_key: '', webhook_secret: '', mode: 'live' as 'test' | 'live' })
 
   const load = useCallback(async () => {
     if (!ecole?.id) return
@@ -38,12 +40,13 @@ export default function IntegrationsPage() {
     const { data: { session } } = await s.auth.getSession()
     if (!session) { setLoading(false); return }
     const headers = { Authorization: `Bearer ${session.access_token}` }
-    const [r1, r2, r3] = await Promise.all([
+    const [r1, r2, r3, r4] = await Promise.all([
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=stripe`, { headers }).then(r => r.json()),
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=gocardless`, { headers }).then(r => r.json()),
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=brevo_sms`, { headers }).then(r => r.json()),
+      fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=yousign`, { headers }).then(r => r.json()),
     ])
-    setMetas({ stripe: r1.integration, gocardless: r2.integration, brevo_sms: r3.integration })
+    setMetas({ stripe: r1.integration, gocardless: r2.integration, brevo_sms: r3.integration, yousign: r4.integration })
     if (r1.integration) {
       setStripeForm(f => ({ ...f, publishable_key: r1.integration.public?.publishable_key || '', mode: r1.integration.mode || 'live' }))
     }
@@ -52,6 +55,9 @@ export default function IntegrationsPage() {
     }
     if (r3.integration) {
       setBrevoForm(f => ({ ...f, expediteur: r3.integration.public?.expediteur || 'TalmidApp', signature: r3.integration.public?.signature || '' }))
+    }
+    if (r4.integration) {
+      setYsForm(f => ({ ...f, mode: r4.integration.mode || 'live' }))
     }
     setLoading(false)
   }, [ecole?.id])
@@ -78,6 +84,7 @@ export default function IntegrationsPage() {
     if (p === 'stripe') setStripeForm(f => ({ ...f, secret_key: '', webhook_secret: '' }))
     if (p === 'gocardless') setGcForm(f => ({ ...f, access_token: '', webhook_secret: '' }))
     if (p === 'brevo_sms') setBrevoForm(f => ({ ...f, api_key: '' }))
+    if (p === 'yousign') setYsForm(f => ({ ...f, api_key: '', webhook_secret: '' }))
   }
 
   async function toggleActif(p: ProviderKey) {
@@ -89,6 +96,7 @@ export default function IntegrationsPage() {
       if (p === 'stripe' && !hints.secret_key) { setMsg('Sauvegardez d\'abord la Secret Key Stripe'); return }
       if (p === 'gocardless' && !hints.access_token) { setMsg('Sauvegardez d\'abord l\'Access Token GoCardless'); return }
       if (p === 'brevo_sms' && !hints.api_key) { setMsg('Sauvegardez d\'abord la clé API Brevo'); return }
+      if (p === 'yousign' && !hints.api_key) { setMsg('Sauvegardez d\'abord la clé API YouSign'); return }
     }
     await save(p, { actif: !current })
   }
@@ -260,6 +268,53 @@ export default function IntegrationsPage() {
                 },
               })} disabled={saving} className="btn-primary">
                 {saving ? 'Sauvegarde...' : '💾 Sauvegarder GoCardless'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* YOUSIGN FORM */}
+        {provider === 'yousign' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={label}>Mode</label>
+              <select value={ysForm.mode} onChange={e => setYsForm(f => ({ ...f, mode: e.target.value as any }))} style={inp}>
+                <option value="test">Sandbox (test, signatures non légales)</option>
+                <option value="live">Production (signatures eIDAS niveau simple)</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>Clé API YouSign (Bearer token)</label>
+              <input type="password" value={ysForm.api_key} onChange={e => setYsForm(f => ({ ...f, api_key: e.target.value }))}
+                placeholder={meta?.hints.api_key ? `Configurée (****${meta.hints.api_key})` : 'YouSign API key v3'} style={inp} />
+              <div style={hint}>
+                YouSign Dashboard → Paramètres → API & Webhooks → Créer une clé API.<br/>
+                Mode sandbox : <code>app-sandbox.yousign.com</code> · Mode live : <code>app.yousign.com</code>
+              </div>
+            </div>
+            <div>
+              <label style={label}>Webhook Secret (optionnel mais recommandé)</label>
+              <input type="password" value={ysForm.webhook_secret} onChange={e => setYsForm(f => ({ ...f, webhook_secret: e.target.value }))}
+                placeholder={meta?.hints.webhook_secret ? `Configuré (****${meta.hints.webhook_secret})` : 'webhook secret'} style={inp} />
+              <div style={hint}>
+                YouSign Dashboard → Webhooks → Ajouter :
+                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#F1F5F9', borderRadius: 4, fontSize: 11 }}>https://talmidapp.fr/api/yousign/webhook?ecole={ecole?.slug || ''}</code>
+                Events à cocher : <code>signature_request.activated</code>, <code>signature_request.done</code>, <code>signature_request.declined</code>, <code>signature_request.expired</code>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 8 }}>
+              <button onClick={() => supprimer('yousign')} disabled={saving}
+                style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                🗑 Supprimer les clés
+              </button>
+              <button onClick={() => save('yousign', {
+                mode: ysForm.mode,
+                secrets: {
+                  ...(ysForm.api_key ? { api_key: ysForm.api_key } : {}),
+                  ...(ysForm.webhook_secret ? { webhook_secret: ysForm.webhook_secret } : {}),
+                },
+              })} disabled={saving} className="btn-primary">
+                {saving ? 'Sauvegarde...' : '💾 Sauvegarder YouSign'}
               </button>
             </div>
           </div>

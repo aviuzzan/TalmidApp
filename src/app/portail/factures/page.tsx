@@ -9,6 +9,7 @@ export default function PortailFacturesPage() {
   const [reglements, setReglements] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [stripeActif, setStripeActif] = useState(false)
+  const [gocardlessActif, setGocardlessActif] = useState(false)
   const [paying, setPaying] = useState(false)
 
   useEffect(() => {
@@ -29,28 +30,30 @@ export default function PortailFacturesPage() {
 
       if (fact) {
         setFacture(fact)
-        const [{ data: lig }, { data: regl }, { data: stp }] = await Promise.all([
+        const [{ data: lig }, { data: regl }, { data: integrationsActives }] = await Promise.all([
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
-          supabase.from('parametres_integrations_public').select('actif').eq('ecole_id', fact.ecole_id).eq('provider', 'stripe').maybeSingle(),
+          supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless']),
         ])
         setLignes(lig ?? [])
         setReglements(regl ?? [])
-        setStripeActif(Boolean(stp?.actif))
+        setStripeActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'stripe' && i.actif)))
+        setGocardlessActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'gocardless' && i.actif)))
       }
       setLoading(false)
     }
     load()
   }, [])
 
-  async function payerEnLigne() {
+  async function payerEnLigne(provider: 'stripe' | 'gocardless') {
     if (!facture) return
     setPaying(true)
     try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { alert('Session expirée'); setPaying(false); return }
-      const res = await fetch('/api/stripe/checkout', {
+      const endpoint = provider === 'stripe' ? '/api/stripe/checkout' : '/api/gocardless/checkout'
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +69,7 @@ export default function PortailFacturesPage() {
       }
       window.location.href = data.url
     } catch (e: any) {
-      alert(e?.message || 'Erreur Stripe')
+      alert(e?.message || 'Erreur paiement')
       setPaying(false)
     }
   }
@@ -130,19 +133,32 @@ export default function PortailFacturesPage() {
             </div>
           )}
 
-          {stripeActif && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
-            <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {(stripeActif || gocardlessActif) && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
+            <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>
                   💳 Payer en ligne — {Number(facture.solde_restant).toLocaleString('fr-FR')} €
                 </div>
                 <div style={{ fontSize: 12, color: '#64748B' }}>
-                  Carte bancaire sécurisée via Stripe. Confirmation immédiate, justificatif envoyé par email.
+                  Confirmation immédiate, justificatif envoyé par email.
                 </div>
               </div>
-              <button onClick={payerEnLigne} disabled={paying} className="btn-primary" style={{ minHeight: 44, fontSize: 13, fontWeight: 700 }}>
-                {paying ? 'Redirection…' : `Payer ${Number(facture.solde_restant).toLocaleString('fr-FR')} €`}
-              </button>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {stripeActif && (
+                  <button onClick={() => payerEnLigne('stripe')} disabled={paying} className="btn-primary" style={{ minHeight: 44, fontSize: 13, fontWeight: 700, flex: '1 1 200px' }}>
+                    {paying ? 'Redirection…' : `💳 Carte bancaire`}
+                  </button>
+                )}
+                {gocardlessActif && (
+                  <button onClick={() => payerEnLigne('gocardless')} disabled={paying} style={{
+                    background: '#fff', color: '#1E40AF', border: '1px solid #1E40AF',
+                    borderRadius: 8, padding: '11px 18px', minHeight: 44, fontSize: 13, fontWeight: 700,
+                    cursor: paying ? 'not-allowed' : 'pointer', flex: '1 1 200px',
+                  }}>
+                    {paying ? 'Redirection…' : `🏦 Prélèvement SEPA`}
+                  </button>
+                )}
+              </div>
             </div>
           )}
           {facture.statut === 'partiel' && Number(facture.solde_restant) > 0 && (

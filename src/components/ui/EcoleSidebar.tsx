@@ -28,6 +28,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Emplois du temps', href: 'emplois-du-temps', module: 'emplois_du_temps' },
     { nom: 'Devoirs', href: 'devoirs', module: 'pedagogie' },
     { nom: 'Bulletins', href: 'bulletins', module: 'pedagogie' },
+    { nom: 'Conseils de classe', href: 'conseils-de-classe', module: 'pedagogie' },
     { nom: 'Notes & évaluations', href: 'notes', module: 'pedagogie' },
   ],
   vie_scolaire: [

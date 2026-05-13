@@ -36,6 +36,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'emplois_du_temps', nom: 'Emplois du temps', description: 'Grille hebdomadaire, conflits', icone: '📅', href: 'emplois-du-temps' },
     { code: 'pedagogie', nom: 'Devoirs', description: 'Cahier de textes : créer et publier les devoirs', icone: '✏️', href: 'devoirs' },
     { code: 'pedagogie', nom: 'Bulletins', description: 'Génération auto trimestrielle + impression PDF', icone: '📋', href: 'bulletins' },
+    { code: 'pedagogie', nom: 'Conseils de classe', description: 'Moyennes auto + rang + appréciations trimestrielles', icone: '⚖️', href: 'conseils-de-classe' },
     { code: 'pedagogie', nom: 'Notes & évaluations', description: 'Saisie des notes, contrôles, évaluations', icone: '📝', href: 'notes' },
   ],
   vie_scolaire: [
