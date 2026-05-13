@@ -26,7 +26,7 @@ async function checkAdmin(req: NextRequest, ecoleId: string): Promise<{ ok: bool
   return { ok: true, userId: user.id }
 }
 
-const ALLOWED_PROVIDERS = ['stripe', 'gocardless', 'brevo_sms', 'brevo_email', 'twilio']
+const ALLOWED_PROVIDERS = ['stripe', 'gocardless', 'brevo_sms', 'brevo_email', 'twilio', 'yousign']
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)

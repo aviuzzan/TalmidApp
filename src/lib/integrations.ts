@@ -10,7 +10,7 @@
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { encrypt, decrypt, lastChars } from './crypto'
 
-export type ProviderName = 'stripe' | 'gocardless' | 'brevo_sms' | 'brevo_email' | 'twilio'
+export type ProviderName = 'stripe' | 'gocardless' | 'brevo_sms' | 'brevo_email' | 'twilio' | 'yousign'
 
 export interface IntegrationConfig {
   actif: boolean
