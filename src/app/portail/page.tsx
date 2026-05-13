@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
+import PushPrompt from '@/components/PushPrompt'
 
 export default function PortailPage() {
   const router = useRouter()
@@ -61,6 +62,7 @@ export default function PortailPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <PushPrompt />
       {/* Welcome */}
       <div style={{
         background: 'linear-gradient(135deg, #1A3A6B, #2563EB)',

@@ -8,6 +8,8 @@ export default function PortailFacturesPage() {
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [stripeActif, setStripeActif] = useState(false)
+  const [paying, setPaying] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -16,7 +18,7 @@ export default function PortailFacturesPage() {
       if (!session) return
 
       const { data: profile } = await supabase
-        .from('profiles').select('famille_id').eq('id', session.user.id).single()
+        .from('profiles').select('famille_id, ecole_id').eq('id', session.user.id).single()
       if (!profile?.famille_id) { setLoading(false); return }
 
       const { data: fact } = await supabase
@@ -27,17 +29,47 @@ export default function PortailFacturesPage() {
 
       if (fact) {
         setFacture(fact)
-        const [{ data: lig }, { data: regl }] = await Promise.all([
+        const [{ data: lig }, { data: regl }, { data: stp }] = await Promise.all([
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
+          supabase.from('parametres_stripe').select('actif').eq('ecole_id', fact.ecole_id).maybeSingle(),
         ])
         setLignes(lig ?? [])
         setReglements(regl ?? [])
+        setStripeActif(Boolean(stp?.actif))
       }
       setLoading(false)
     }
     load()
   }, [])
+
+  async function payerEnLigne() {
+    if (!facture) return
+    setPaying(true)
+    try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { alert('Session expirée'); setPaying(false); return }
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ factureId: facture.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.url) {
+        alert(data.error || 'Erreur lors de la création du paiement')
+        setPaying(false)
+        return
+      }
+      window.location.href = data.url
+    } catch (e: any) {
+      alert(e?.message || 'Erreur Stripe')
+      setPaying(false)
+    }
+  }
 
   if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>Chargement...</div>
 
@@ -95,6 +127,22 @@ export default function PortailFacturesPage() {
               <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
                 <strong>Paiement en attente.</strong> Votre facture vient d'être émise. L'école vous informera prochainement du moyen de règlement (chèques, prélèvement SEPA, ou virement). Aucune action n'est requise de votre part pour l'instant.
               </div>
+            </div>
+          )}
+
+          {stripeActif && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
+            <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>
+                  💳 Payer en ligne — {Number(facture.solde_restant).toLocaleString('fr-FR')} €
+                </div>
+                <div style={{ fontSize: 12, color: '#64748B' }}>
+                  Carte bancaire sécurisée via Stripe. Confirmation immédiate, justificatif envoyé par email.
+                </div>
+              </div>
+              <button onClick={payerEnLigne} disabled={paying} className="btn-primary" style={{ minHeight: 44, fontSize: 13, fontWeight: 700 }}>
+                {paying ? 'Redirection…' : `Payer ${Number(facture.solde_restant).toLocaleString('fr-FR')} €`}
+              </button>
             </div>
           )}
           {facture.statut === 'partiel' && Number(facture.solde_restant) > 0 && (
