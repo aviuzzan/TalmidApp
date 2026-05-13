@@ -165,27 +165,16 @@ export default function FinancesPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header */}
+      {/* Header — uniquement titre + sélecteur année (PAS de boutons d'action ici) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Finances</h1>
           <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & Règlements — {ANNEE}</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={ANNEE} onChange={e => changeAnnee(e.target.value)}
-            style={{ padding: '8px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            {ANNEES_DISPO.map(a => <option key={a} value={a}>📅 {a}</option>)}
-          </select>
-          {tab === 'tarifs' && (
-            <button className="btn-primary" onClick={() => { setTarifForm({ ...emptyTarif, annee_scolaire: ANNEE }); setShowTarifForm(true) }}>+ Nouveau tarif</button>
-          )}
-          {tab === 'factures' && (
-            <button className="btn-primary" onClick={() => { setFactureForm({ ...emptyFacture, annee_scolaire: ANNEE }); setShowFactureForm(true) }}>+ Nouvelle facture</button>
-          )}
-          {tab === 'paiements' && (
-            <button className="btn-primary" onClick={() => setShowPaiementForm(true)}>+ Saisir un paiement</button>
-          )}
-        </div>
+        <select value={ANNEE} onChange={e => changeAnnee(e.target.value)}
+          style={{ padding: '8px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          {ANNEES_DISPO.map(a => <option key={a} value={a}>📅 {a}</option>)}
+        </select>
       </div>
 
       {/* Stats */}
@@ -202,18 +191,45 @@ export default function FinancesPage() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #E2E8F0' }}>
+      {/* Tabs unifiés : tabs inline (Factures/Paiements/Tarifs) + liens vers pages séparées (Dashboard/Relances/Bordereau/Analytique/SEPA) */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #E2E8F0', flexWrap: 'wrap', overflowX: 'auto' }}>
         {[
-          { id: 'factures', label: `📄 Factures (${factures.length})` },
-          { id: 'paiements', label: `💸 Paiements (${reglements.length})` },
-          { id: 'tarifs', label: `💰 Tarifs (${tarifs.length})` },
-        ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id as Tab)}
-            style={{ padding: '10px 20px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: tab === t.id ? 600 : 400, background: 'transparent', color: tab === t.id ? '#2563EB' : '#64748B', borderBottom: tab === t.id ? '2px solid #2563EB' : '2px solid transparent', marginBottom: -2 }}>
-            {t.label}
-          </button>
-        ))}
+          { id: 'factures',  label: `📄 Factures (${factures.length})`, type: 'inline' as const },
+          { id: 'paiements', label: `💸 Paiements (${reglements.length})`, type: 'inline' as const },
+          { id: 'tarifs',    label: `💰 Tarifs (${tarifs.length})`, type: 'inline' as const },
+          { id: 'dashboard', label: '📊 Tableau de bord',       type: 'page' as const, href: 'finances/dashboard' },
+          { id: 'relances',  label: '🔔 Relances impayés',       type: 'page' as const, href: 'finances/relances' },
+          { id: 'bordereau', label: '🧾 Bordereau chèques',      type: 'page' as const, href: 'finances/bordereau' },
+          { id: 'analytique',label: '📈 Compta analytique',      type: 'page' as const, href: 'finances/analytique' },
+          { id: 'sepa',      label: '🏦 Export SEPA',            type: 'page' as const, href: 'inscriptions/sepa' },
+        ].map(t => {
+          const isInlineActive = t.type === 'inline' && tab === t.id
+          return (
+            <button key={t.id} onClick={() => t.type === 'inline' ? setTab(t.id as Tab) : router.push(`/${ecole.slug}/${t.href}`)}
+              style={{ padding: '10px 18px', border: 'none', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
+                fontWeight: isInlineActive ? 600 : 400,
+                background: 'transparent',
+                color: isInlineActive ? '#2563EB' : '#64748B',
+                borderBottom: isInlineActive ? '2px solid #2563EB' : '2px solid transparent',
+                marginBottom: -2,
+              }}>
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Toolbar d'actions — sur sa propre ligne, séparée des tabs */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        {tab === 'tarifs' && (
+          <button className="btn-primary" onClick={() => { setTarifForm({ ...emptyTarif, annee_scolaire: ANNEE }); setShowTarifForm(true) }}>+ Nouveau tarif</button>
+        )}
+        {tab === 'factures' && (
+          <button className="btn-primary" onClick={() => { setFactureForm({ ...emptyFacture, annee_scolaire: ANNEE }); setShowFactureForm(true) }}>+ Nouvelle facture</button>
+        )}
+        {tab === 'paiements' && (
+          <button className="btn-primary" onClick={() => setShowPaiementForm(true)}>+ Saisir un paiement</button>
+        )}
       </div>
 
       {/* Factures tab */}

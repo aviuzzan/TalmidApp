@@ -7,7 +7,7 @@ import { ANNEE_COURANTE } from '@/lib/inscriptions'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
-type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'services' | 'comptes_acces'
+type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'services' | 'comptes_acces' | 'integrations' | 'relances'
 type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
 
 const CATEGORIES: { id: Cat; label: string; icon: string; couleur: string; bg: string }[] = [
@@ -34,6 +34,8 @@ const TABS: { id: Tab; label: string; icon: string; cat: Cat }[] = [
   { id: 'modes_reglement',   label: 'Modes de règlement',   icon: '💳', cat: 'finances' },
   { id: 'config_paiement',   label: 'Config paiement',      icon: '⏰', cat: 'finances' },
   { id: 'sepa',              label: 'SEPA / Banque',        icon: '🏦', cat: 'finances' },
+  { id: 'integrations',      label: 'Intégrations',         icon: '🔌', cat: 'finances' },
+  { id: 'relances',          label: 'Relances impayés',     icon: '🔔', cat: 'finances' },
   // ── Communication ──
   { id: 'notifications',     label: 'Notifications',        icon: '🔔', cat: 'communication' },
   { id: 'services',          label: 'Services / Messagerie',icon: '💬', cat: 'communication' },
@@ -61,17 +63,24 @@ export default function ParametresPage() {
   const sousOnglets = TABS.filter(t => t.cat === cat)
   const catActive = CATEGORIES.find(c => c.id === cat)!
 
+  // Onglets qui sont en réalité des pages séparées (route dédiée)
+  const EXTERNAL_PAGES: Partial<Record<Tab, string>> = {
+    exercices: 'exercices',
+    integrations: 'integrations',
+    relances: 'relances',
+  }
+
   function chooseCat(newCat: Cat) {
     setCat(newCat)
     const first = TABS.find(t => t.cat === newCat)
     if (first) {
-      if (first.id === 'exercices') { router.push(`/${ecole.slug}/parametres/exercices`); return }
+      if (EXTERNAL_PAGES[first.id]) { router.push(`/${ecole.slug}/parametres/${EXTERNAL_PAGES[first.id]}`); return }
       setTab(first.id)
     }
   }
 
   function chooseTab(t: Tab) {
-    if (t === 'exercices') { router.push(`/${ecole.slug}/parametres/exercices`); return }
+    if (EXTERNAL_PAGES[t]) { router.push(`/${ecole.slug}/parametres/${EXTERNAL_PAGES[t]}`); return }
     setTab(t)
     setCat(catOfTab(t))
   }

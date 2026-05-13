@@ -26,6 +26,8 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Programmes', href: 'pedagogie', module: 'pedagogie' },
     { nom: 'Professeurs', href: 'professeurs', module: 'professeurs' },
     { nom: 'Emplois du temps', href: 'emplois-du-temps', module: 'emplois_du_temps' },
+    { nom: 'Devoirs', href: 'devoirs', module: 'pedagogie' },
+    { nom: 'Bulletins', href: 'bulletins', module: 'pedagogie' },
     { nom: 'Notes & évaluations', href: 'notes', module: 'pedagogie' },
   ],
   vie_scolaire: [
@@ -37,10 +39,13 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   communication: [
     { nom: 'Messagerie', href: 'messages', module: 'messagerie' },
     { nom: 'Documents école', href: 'documents', module: 'documents' },
+    { nom: 'SMS', href: 'sms', module: 'messagerie' },
+    { nom: 'Notifications push', href: 'notifications-push', module: 'messagerie' },
     { nom: 'Notifications', href: 'notifications', module: 'parametres' },
   ],
   configuration: [
     { nom: 'Paramètres école', href: 'parametres', module: 'parametres' },
+    { nom: 'Intégrations', href: 'parametres/integrations', module: 'parametres' },
     { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
     { nom: 'Exports CSV', href: 'exports', module: 'parametres' },
   ],
