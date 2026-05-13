@@ -21,6 +21,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Bordereau chèques', href: 'finances/bordereau', module: 'facturation' },
     { nom: 'Compta analytique', href: 'finances/analytique', module: 'compta' },
     { nom: 'Export SEPA', href: 'inscriptions/sepa', module: 'compta' },
+    { nom: 'Paie enseignants', href: 'paie', module: 'paye' },
   ],
   pedagogie: [
     { nom: 'Programmes', href: 'pedagogie', module: 'pedagogie' },
@@ -30,6 +31,8 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Bulletins', href: 'bulletins', module: 'pedagogie' },
     { nom: 'Conseils de classe', href: 'conseils-de-classe', module: 'pedagogie' },
     { nom: 'Notes & évaluations', href: 'notes', module: 'pedagogie' },
+    { nom: 'LSU (Livret Scolaire)', href: 'lsu', module: 'pedagogie' },
+    { nom: 'Connecteurs EN', href: 'connecteurs-en', module: 'pedagogie' },
   ],
   vie_scolaire: [
     { nom: 'Présences / absences', href: 'presences', module: 'pedagogie' },

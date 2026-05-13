@@ -29,6 +29,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'facturation', nom: 'Bordereau chèques', description: 'Préparer une remise de chèques à la banque', icone: '🧾', href: 'finances/bordereau' },
     { code: 'compta', nom: 'Compta analytique', description: 'Ventilation par centre de coût', icone: '📈', href: 'finances/analytique' },
     { code: 'compta', nom: 'Export SEPA', description: 'Générer un fichier de prélèvement bancaire', icone: '🏦', href: 'inscriptions/sepa' },
+    { code: 'paye', nom: 'Paie enseignants', description: 'Bulletins de paie + déclaration DSN mensuelle', icone: '💵', href: 'paie' },
   ],
   pedagogie: [
     { code: 'pedagogie', nom: 'Programmes', description: 'Matières, cursus, objectifs', icone: '📚', href: 'pedagogie' },
@@ -38,6 +39,8 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'pedagogie', nom: 'Bulletins', description: 'Génération auto trimestrielle + impression PDF', icone: '📋', href: 'bulletins' },
     { code: 'pedagogie', nom: 'Conseils de classe', description: 'Moyennes auto + rang + appréciations trimestrielles', icone: '⚖️', href: 'conseils-de-classe' },
     { code: 'pedagogie', nom: 'Notes & évaluations', description: 'Saisie des notes, contrôles, évaluations', icone: '📝', href: 'notes' },
+    { code: 'pedagogie', nom: 'LSU', description: 'Livret Scolaire Unique XML pour BOEN', icone: '📑', href: 'lsu' },
+    { code: 'pedagogie', nom: 'Connecteurs EN', description: 'ONDE / SIECLE / Parcoursup — exports conformes', icone: '🏛️', href: 'connecteurs-en' },
   ],
   vie_scolaire: [
     { code: 'pedagogie', nom: 'Présences / absences', description: 'Suivi quotidien, justificatifs', icone: '✅', href: 'presences' },
