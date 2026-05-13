@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       // récupère enfants de la classe → familles → parents
       const { data: enfants } = await supabaseAdmin
         .from('enfants').select('famille_id').eq('classe_id', cibleId).eq('ecole_id', ecoleId)
-      const famIds = [...new Set((enfants || []).map((e: any) => e.famille_id).filter(Boolean))]
+      const famIds = Array.from(new Set((enfants || []).map((e: any) => e.famille_id).filter(Boolean)))
       if (famIds.length > 0) {
         const { data: ps } = await supabaseAdmin
           .from('profiles').select('id, prenom, nom, telephone, famille_id').in('famille_id', famIds).eq('ecole_id', ecoleId)

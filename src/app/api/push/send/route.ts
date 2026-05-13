@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     } else if (cibleType === 'classe') {
       if (!cibleId) return NextResponse.json({ error: 'cibleId requis' }, { status: 400 })
       const { data: enfants } = await supabaseAdmin.from('enfants').select('famille_id').eq('classe_id', cibleId).eq('ecole_id', ecoleId)
-      const famIds = [...new Set((enfants || []).map((e: any) => e.famille_id).filter(Boolean))]
+      const famIds = Array.from(new Set((enfants || []).map((e: any) => e.famille_id).filter(Boolean)))
       if (famIds.length > 0) {
         const { data: ps } = await supabaseAdmin.from('profiles').select('id').in('famille_id', famIds).eq('ecole_id', ecoleId)
         profileIds = (ps || []).map((p: any) => p.id)
