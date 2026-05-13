@@ -224,7 +224,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                   {!accessible && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>🔒</span>}
                 </button>
 
-                {isCatActive && accessible && visibleModules.length > 0 && (
+                {accessible && visibleModules.length > 0 && (
                   <div style={{ paddingLeft: 22, marginBottom: 6, marginTop: 2 }}>
                     {visibleModules.map(m => {
                       const fullPath = '/' + slug + '/' + m.href

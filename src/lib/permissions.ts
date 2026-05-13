@@ -190,7 +190,7 @@ export const CATEGORIES: Categorie[] = [
   },
   {
     code: 'configuration',
-    nom: 'Configuration',
+    nom: 'Paramètres',
     description: 'Paramètres école, comptes & accès',
     icone: '⚙️',
     couleur: { bg: '#F1EFE8', fg: '#444441', border: '#888780' },
