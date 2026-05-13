@@ -34,18 +34,37 @@ export default function PortailProfPage() {
   async function load() {
     setLoading(true)
     const s = createClient()
-    const { data: { session } } = await s.auth.getSession()
+
+    // Retry session (peut être pas encore propagée juste après set-password)
+    let session = null
+    for (let i = 0; i < 8 && !session; i++) {
+      const { data } = await s.auth.getSession()
+      session = data.session
+      if (!session) await new Promise(r => setTimeout(r, 250))
+    }
     if (!session) { router.push('/login'); return }
 
-    const { data: profile } = await s.from('profiles')
-      .select('id, role, ecole_id').eq('id', session.user.id).single()
+    // Retry profile (timing handle_new_user trigger + upsert backend)
+    let profile: any = null
+    for (let i = 0; i < 5; i++) {
+      const { data } = await s.from('profiles')
+        .select('id, role, ecole_id').eq('id', session.user.id).maybeSingle()
+      if (data && data.role) { profile = data; break }
+      await new Promise(r => setTimeout(r, 300))
+    }
     if (!profile || profile.role !== 'teacher') {
       setUnauthorized(true); setLoading(false); return
     }
 
-    const { data: profRec } = await s.from('professeurs')
-      .select('id, prenom, nom, ecole_id')
-      .eq('profile_id', session.user.id).single()
+    // Retry record professeurs (RLS peut prendre une fraction de seconde)
+    let profRec: any = null
+    for (let i = 0; i < 5; i++) {
+      const { data } = await s.from('professeurs')
+        .select('id, prenom, nom, ecole_id')
+        .eq('profile_id', session.user.id).maybeSingle()
+      if (data) { profRec = data; break }
+      await new Promise(r => setTimeout(r, 300))
+    }
     if (!profRec) { setUnauthorized(true); setLoading(false); return }
     setProf(profRec as Prof)
 
