@@ -3,12 +3,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useI18n } from '@/lib/i18n'
+import LangSwitcher from '@/components/LangSwitcher'
 
 type Mode = 'accueil' | 'admin' | 'professeur' | 'parent'
 
 export default function EcoleLoginPage() {
   const router = useRouter()
   const ecole = useEcole()
+  const { t, dir } = useI18n()
   const [mode, setMode] = useState<Mode>('accueil')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -25,13 +28,13 @@ export default function EcoleLoginPage() {
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
-      setError('Email ou mot de passe incorrect.')
+      setError(t('login.error'))
       setLoading(false)
       return
     }
 
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setError('Session introuvable.'); setLoading(false); return }
+    if (!session) { setError(t('login.error')); setLoading(false); return }
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -43,13 +46,13 @@ export default function EcoleLoginPage() {
 
     if (mode === 'admin') {
       if (role === 'admin' || role === 'super_admin') router.push(`/${ecole.slug}/dashboard`)
-      else { setError('Ce compte n\'a pas les droits administrateur.'); setLoading(false) }
+      else { setError(t('login.no_admin_rights')); setLoading(false) }
     } else if (mode === 'professeur') {
       if (role === 'teacher') router.push('/portail/prof')
-      else { setError('Ce compte n\'a pas les droits professeur.'); setLoading(false) }
+      else { setError(t('login.no_teacher_rights')); setLoading(false) }
     } else if (mode === 'parent') {
       if (role === 'parent') router.push('/portail')
-      else { setError('Ce compte n\'a pas les droits parent.'); setLoading(false) }
+      else { setError(t('login.no_parent_rights')); setLoading(false) }
     }
   }
 
@@ -59,18 +62,17 @@ export default function EcoleLoginPage() {
   }
 
   const ROLE_CONFIG = {
-    admin:      { label: 'Administration',   icon: '⚙️',  desc: 'Gestion de l\'école',        color: '#6366F1', bg: 'rgba(99,102,241,0.12)',  border: 'rgba(99,102,241,0.25)'  },
-    professeur: { label: 'Espace Professeur', icon: '📚',  desc: 'Classes & élèves',            color: '#0891B2', bg: 'rgba(8,145,178,0.12)',   border: 'rgba(8,145,178,0.25)'   },
-    parent:     { label: 'Espace Parents',    icon: '👨‍👩‍👧', desc: 'Suivi de votre enfant',     color: primary,   bg: `${primary}20`,          border: `${primary}50`           },
+    admin:      { label: t('login.role_admin'),   icon: '⚙️',  desc: t('login.role_admin_desc'),   color: '#6366F1', bg: 'rgba(99,102,241,0.12)',  border: 'rgba(99,102,241,0.25)'  },
+    professeur: { label: t('login.role_teacher'), icon: '📚',  desc: t('login.role_teacher_desc'), color: '#0891B2', bg: 'rgba(8,145,178,0.12)',   border: 'rgba(8,145,178,0.25)'   },
+    parent:     { label: t('login.role_parent'),  icon: '👨‍👩‍👧', desc: t('login.role_parent_desc'),  color: primary,   bg: `${primary}20`,          border: `${primary}50`           },
   }
 
   return (
-    <div className="ecole-login" style={{
+    <div className="ecole-login" dir={dir} style={{
       minHeight: '100vh', display: 'flex', flexDirection: 'column',
       background: '#F0F4FA', fontFamily: 'Inter, sans-serif',
     }}>
 
-      {/* Header école */}
       <header className="ecole-login-header" style={{
         padding: '18px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: '#fff', borderBottom: '1px solid #E2E8F0',
@@ -88,30 +90,25 @@ export default function EcoleLoginPage() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1E293B' }}>{ecole.nom}</div>
-            <div style={{ fontSize: 11, color: '#94A3B8' }}>Portail scolaire</div>
+            <div style={{ fontSize: 11, color: '#94A3B8' }}>{t('login.school_portal')}</div>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: '#CBD5E1' }}>
-          Powered by <span style={{ color: '#2563EB', fontWeight: 600 }}>TalmidApp</span>
-        </div>
+        <LangSwitcher compact />
       </header>
 
-      {/* Contenu principal */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
 
-        {/* ── ACCUEIL : 3 boutons ── */}
         {mode === 'accueil' && (
           <div style={{ width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
               <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1E293B', letterSpacing: '-0.02em', margin: 0 }}>
-                Bienvenue
+                {t('login.welcome')}
               </h1>
               <p style={{ color: '#64748B', fontSize: 14, marginTop: 8 }}>
-                Choisissez votre espace de connexion
+                {t('login.choose_space')}
               </p>
             </div>
 
-            {/* Boutons Admin + Professeur — petits, côte à côte */}
             <div className="ecole-login-roles" style={{ display: 'flex', gap: 12, width: '100%' }}>
               {(['admin', 'professeur'] as const).map(role => {
                 const cfg = ROLE_CONFIG[role]
@@ -141,7 +138,6 @@ export default function EcoleLoginPage() {
               })}
             </div>
 
-            {/* Bouton Parent — grand, central */}
             <button onClick={() => setMode('parent')}
               style={{
                 width: '100%', padding: '24px 20px', borderRadius: 18, cursor: 'pointer',
@@ -159,7 +155,7 @@ export default function EcoleLoginPage() {
                 ;(e.currentTarget as HTMLElement).style.boxShadow = `0 4px 20px ${primary}40`
               }}>
               <span style={{ fontSize: 36 }}>{ROLE_CONFIG.parent.icon}</span>
-              <div style={{ textAlign: 'left' }}>
+              <div style={{ textAlign: dir === 'rtl' ? 'right' : 'left' }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>
                   {ROLE_CONFIG.parent.label}
                 </div>
@@ -167,21 +163,18 @@ export default function EcoleLoginPage() {
                   {ROLE_CONFIG.parent.desc}
                 </div>
               </div>
-              <span style={{ marginLeft: 'auto', fontSize: 20, color: 'rgba(255,255,255,0.6)' }}>→</span>
+              <span style={{ marginInlineStart: 'auto', fontSize: 20, color: 'rgba(255,255,255,0.6)' }}>→</span>
             </button>
           </div>
         )}
 
-        {/* ── FORMULAIRE DE CONNEXION ── */}
         {mode !== 'accueil' && (
           <div style={{ width: '100%', maxWidth: 420 }}>
-            {/* Retour */}
             <button onClick={back}
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 24, padding: 0 }}>
-              ← Retour
+              ← {t('common.back')}
             </button>
 
-            {/* Badge du mode */}
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               background: ROLE_CONFIG[mode].bg, border: `1px solid ${ROLE_CONFIG[mode].border}`,
@@ -195,17 +188,17 @@ export default function EcoleLoginPage() {
             </div>
 
             <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-              Connexion
+              {t('login.title')}
             </h2>
             <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 24px' }}>
-              {mode === 'parent' && 'Accédez au suivi scolaire de votre enfant'}
-              {mode === 'admin' && 'Accédez à l\'espace d\'administration'}
-              {mode === 'professeur' && 'Accédez à vos classes et élèves'}
+              {mode === 'parent' && t('login.desc_parent')}
+              {mode === 'admin' && t('login.desc_admin')}
+              {mode === 'professeur' && t('login.desc_teacher')}
             </p>
 
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 6, letterSpacing: '0.04em' }}>ADRESSE EMAIL</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{t('login.email')}</label>
                 <input
                   type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="votre@email.fr" required
@@ -215,18 +208,18 @@ export default function EcoleLoginPage() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 6, letterSpacing: '0.04em' }}>MOT DE PASSE</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{t('login.password')}</label>
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showPwd ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••" required
+                    placeholder="********" required
                     style={{ width: '100%', padding: '11px 40px 11px 14px', border: '1px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', transition: 'border 0.15s' }}
                     onFocus={e => (e.target as HTMLElement).style.borderColor = primary}
                     onBlur={e => (e.target as HTMLElement).style.borderColor = '#E2E8F0'}
                   />
                   <button type="button" onClick={() => setShowPwd(!showPwd)}
-                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 16 }}>
+                    style={{ position: 'absolute', insetInlineEnd: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 16 }}>
                     {showPwd ? '🙈' : '👁'}
                   </button>
                 </div>
@@ -249,14 +242,13 @@ export default function EcoleLoginPage() {
                   boxShadow: `0 4px 12px ${ROLE_CONFIG[mode].color}40`,
                   transition: 'all 0.15s',
                 }}>
-                {loading ? 'Connexion...' : 'Se connecter'}
+                {loading ? t('login.loading') : t('login.submit')}
               </button>
             </form>
           </div>
         )}
       </div>
 
-      {/* Footer */}
       <footer style={{ padding: '16px', textAlign: 'center', borderTop: '1px solid #E2E8F0', background: '#fff' }}>
         <span style={{ fontSize: 11, color: '#CBD5E1' }}>
           TalmidApp © {new Date().getFullYear()} ·{' '}
