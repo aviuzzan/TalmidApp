@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
+import LangSwitcher from '@/components/LangSwitcher'
 
 export default function PortailLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -111,6 +112,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff' }}>
             {email[0]?.toUpperCase()}
           </div>
+          <LangSwitcher compact />
           <button onClick={logout} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12, color: '#475569', fontWeight: 500 }}>
             Déconnexion
           </button>
