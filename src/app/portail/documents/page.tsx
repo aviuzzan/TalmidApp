@@ -69,6 +69,7 @@ export default function PortailDocumentsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <a href="/portail/demarches" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>← Démarches</a>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Mes documents</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>

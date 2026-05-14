@@ -58,6 +58,7 @@ export default function PortailBulletinsPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 48px' }}>
+      <a href="/portail/enfants" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>← Mes enfants</a>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>📋 Bulletins scolaires</h1>
         <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>Les bulletins de vos enfants, par trimestre</p>

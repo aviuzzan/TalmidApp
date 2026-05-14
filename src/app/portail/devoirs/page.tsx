@@ -80,6 +80,7 @@ export default function PortailDevoirsPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 48px' }}>
+      <a href="/portail/enfants" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>← Mes enfants</a>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>📓 Devoirs</h1>

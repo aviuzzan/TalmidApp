@@ -38,6 +38,22 @@ export default function PortailEnfantsPage() {
         <p style={{ color: '#64748B', fontSize: 13 }}>{enfants.length} élève{enfants.length > 1 ? 's' : ''} enregistré{enfants.length > 1 ? 's' : ''}</p>
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+        {[
+          { icon: '📊', label: 'Bulletins', href: '/portail/bulletins' },
+          { icon: '📚', label: 'Devoirs', href: '/portail/devoirs' },
+          { icon: '🏥', label: 'Santé', href: '/portail/sante' },
+        ].map(s => (
+          <a key={s.href} href={s.href}
+            style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, transition: 'border-color 0.15s' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2563EB' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0' }}>
+            <span style={{ fontSize: 22 }}>{s.icon}</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: '#1E293B' }}>{s.label}</span>
+          </a>
+        ))}
+      </div>
+
       {enfants.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
           Aucun élève enregistré

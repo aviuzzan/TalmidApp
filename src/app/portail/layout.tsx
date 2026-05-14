@@ -109,13 +109,9 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const navItems = [
     { href: '/portail', icon: '🏠', label: t('portail.nav.home') },
     { href: '/portail/enfants', icon: '🎓', label: t('portail.nav.children') },
-    { href: '/portail/bulletins', icon: '📊', label: t('portail.nav.bulletins') },
-    { href: '/portail/devoirs', icon: '📚', label: t('portail.nav.devoirs') },
-    { href: '/portail/sante', icon: '🏥', label: t('portail.nav.health') },
-    { href: '/portail/factures', icon: '💰', label: t('portail.nav.invoices') },
+    { href: '/portail/demarches', icon: '📝', label: t('portail.nav.demarches', 'Démarches') },
+    { href: '/portail/factures', icon: '💰', label: t('portail.nav.finances', 'Finances') },
     { href: '/portail/messages', icon: '💬', label: t('portail.nav.messaging') },
-    { href: '/portail/inscriptions', icon: '📝', label: t('portail.nav.next_year') },
-    { href: '/portail/documents', icon: '📄', label: t('portail.nav.documents') },
     { href: '/portail/mon-compte', icon: '👤', label: t('portail.nav.account') },
   ]
 
