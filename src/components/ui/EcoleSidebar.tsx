@@ -51,6 +51,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   ],
   configuration: [
     { nom: 'Paramètres école', href: 'parametres', module: 'parametres' },
+    { nom: 'Infos & identifiants', href: 'parametres/ecole-infos', module: 'parametres' },
     { nom: 'Intégrations', href: 'parametres/integrations', module: 'parametres' },
     { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
     { nom: 'Exports CSV', href: 'exports', module: 'parametres' },

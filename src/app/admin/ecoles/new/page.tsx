@@ -33,6 +33,9 @@ export default function NouvelleEcolePage() {
     ville: '',
     plan: 'pro',
     notes_admin: '',
+    admin_prenom: '',
+    admin_nom: '',
+    admin_email: '',
   })
   const [slugManuel, setSlugManuel] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -49,42 +52,50 @@ export default function NouvelleEcolePage() {
 
   async function creer() {
     if (!form.nom.trim() || !form.slug.trim()) { setError('Nom et slug obligatoires'); return }
+    if (!form.admin_prenom.trim() || !form.admin_nom.trim() || !form.admin_email.trim()) {
+      setError('Prénom, nom et email de l\'admin principal obligatoires'); return
+    }
     setLoading(true); setError('')
 
     const s = createClient()
-
-    // Vérifier que le slug n'existe pas
-    const { data: existing } = await s.from('ecoles').select('id').eq('slug', form.slug).single()
-    if (existing) { setError(`Le slug « ${form.slug} » est déjà utilisé.`); setLoading(false); return }
-
-    const { data: ecole, error: err } = await s.from('ecoles').insert({
-      nom: form.nom,
-      slug: form.slug,
-      couleur_primaire: form.couleur_primaire,
-      email_contact: form.email_contact || null,
-      telephone: form.telephone || null,
-      adresse: form.adresse || null,
-      ville: form.ville || null,
-      plan: form.plan,
-      notes_admin: form.notes_admin || null,
-      actif: true,
-      date_debut_abonnement: new Date().toISOString().split('T')[0],
-    }).select().single()
-
-    if (err) { setError(err.message); setLoading(false); return }
-
-    // Logger l'action
     const { data: { session } } = await s.auth.getSession()
-    if (session) {
-      await s.from('admin_logs').insert({
-        admin_id: session.user.id,
-        ecole_id: ecole.id,
-        action: 'ecole_creee',
-        details: { nom: form.nom, slug: form.slug, plan: form.plan },
-      })
+    if (!session) { setError('Session expirée'); setLoading(false); return }
+
+    // Appel API : crée école + exercice initial + admin principal + permissions + email invitation
+    const res = await fetch('/api/admin/creer-ecole', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({
+        nom: form.nom,
+        slug: form.slug,
+        couleurPrimaire: form.couleur_primaire,
+        emailContact: form.email_contact || null,
+        telephone: form.telephone || null,
+        adresse: form.adresse || null,
+        ville: form.ville || null,
+        plan: form.plan,
+        notesAdmin: form.notes_admin || null,
+        adminPrenom: form.admin_prenom,
+        adminNom: form.admin_nom,
+        adminEmail: form.admin_email,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error || 'Erreur lors de la création')
+      setLoading(false)
+      return
     }
 
-    router.push(`/admin/ecoles/${ecole.id}?created=1`)
+    // Logger l'action
+    await s.from('admin_logs').insert({
+      admin_id: session.user.id,
+      ecole_id: data.ecole?.id,
+      action: 'ecole_creee',
+      details: { nom: form.nom, slug: form.slug, plan: form.plan, admin_invite: form.admin_email },
+    })
+
+    router.push(`/admin/ecoles/${data.ecole?.id}?created=1`)
   }
 
   const inp = {
@@ -235,6 +246,30 @@ export default function NouvelleEcolePage() {
               <div>
                 <label style={lbl}>VILLE</label>
                 <input style={inp} value={form.ville} onChange={e => set('ville', e.target.value)} placeholder="Paris" />
+              </div>
+            </div>
+
+            {/* Admin principal */}
+            <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#A5B4FC', marginBottom: 12, letterSpacing: '0.03em' }}>
+                👤 ADMIN PRINCIPAL DE L'ÉCOLE *
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>
+                Cette personne recevra un email d'invitation pour définir son mot de passe et aura toutes les permissions.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={lbl}>PRÉNOM *</label>
+                  <input style={inp} value={form.admin_prenom} onChange={e => set('admin_prenom', e.target.value)} placeholder="Yossef" />
+                </div>
+                <div>
+                  <label style={lbl}>NOM *</label>
+                  <input style={inp} value={form.admin_nom} onChange={e => set('admin_nom', e.target.value)} placeholder="Cohen" />
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>EMAIL *</label>
+                <input style={inp} type="email" value={form.admin_email} onChange={e => set('admin_email', e.target.value)} placeholder="directeur@ecole.fr" />
               </div>
             </div>
 

@@ -15,7 +15,8 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { nom, slug, adminEmail, adminPrenom, adminNom, adminTelephone, codeUai, siren, adresse, codePostal, ville } = body
+    const { nom, slug, adminEmail, adminPrenom, adminNom, adminTelephone, codeUai, siren, adresse, codePostal, ville,
+            couleurPrimaire, emailContact, telephone, plan, notesAdmin } = body
     if (!nom || !slug || !adminEmail || !adminPrenom || !adminNom) {
       return NextResponse.json({ error: 'nom, slug, adminEmail, adminPrenom, adminNom requis' }, { status: 400 })
     }
@@ -51,7 +52,13 @@ export async function POST(req: NextRequest) {
       adresse: adresse || null,
       code_postal: codePostal || null,
       ville: ville || null,
+      couleur_primaire: couleurPrimaire || '#2563EB',
+      email_contact: emailContact || adminEmail || null,
+      telephone: telephone || null,
+      plan: plan || 'pro',
+      notes_admin: notesAdmin || null,
       actif: true,
+      date_debut_abonnement: new Date().toISOString().slice(0, 10),
     }).select().single()
     if (ecoleErr || !ecole) {
       return NextResponse.json({ error: ecoleErr?.message || 'Erreur création école' }, { status: 500 })

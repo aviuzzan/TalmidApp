@@ -7,6 +7,7 @@ import { loadPermissions, hasAtLeast, Niveau } from '@/lib/permissions'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import BoutonReinscription from '@/components/BoutonReinscription'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -31,6 +32,7 @@ export default function FamilleDetailPage() {
   const [reglements, setReglements] = useState<any[]>([])
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
+  const [exercicesDispo, setExercicesDispo] = useState<{ code: string; libelle?: string }[]>([])
 
   const initialTab = searchParams.get('tab') === 'facturation' ? 'facturation' : 'infos'
   const [tab, setTab] = useState<'infos' | 'enfants' | 'facturation'>(initialTab as any)
@@ -82,6 +84,9 @@ export default function FamilleDetailPage() {
     ])
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? [])
     setTransports(trp ?? []); setModesPaiement(modes ?? []); setTarifs(tar ?? [])
+
+    const { data: exs } = await supabase.from('exercices').select('code, libelle').eq('ecole_id', ecole.id).order('code', { ascending: false })
+    setExercicesDispo((exs ?? []) as { code: string; libelle?: string }[])
 
     const { data: fact } = await supabase.from('factures_solde').select('*').eq('famille_id', id).eq('annee_scolaire', ANNEE).single()
     if (fact) {
@@ -246,6 +251,9 @@ export default function FamilleDetailPage() {
             {famille.situation_maritale && <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{SITUATIONS[famille.situation_maritale]}</span>}
           </div>
         </div>
+        {canAdministratif && exercicesDispo.length > 0 && (
+          <BoutonReinscription familleId={id} ecoleSlug={ecole.slug} exercicesDisponibles={exercicesDispo} />
+        )}
         <ActionsMenu items={[
           { label: '📁 Documents',         href: `/${ecole.slug}/familles/${id}/documents` },
           { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },

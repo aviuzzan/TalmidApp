@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
 
 export default function PortailLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -84,6 +85,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
 
   return (
     <div style={{ minHeight: '100vh', background: '#F0F4FA', fontFamily: 'Inter, sans-serif' }}>
+      <ServiceWorkerRegister />
       <header className="portail-header" style={{
         background: '#fff', borderBottom: '1px solid #E2E8F0',
         padding: '0 32px', height: 64,
