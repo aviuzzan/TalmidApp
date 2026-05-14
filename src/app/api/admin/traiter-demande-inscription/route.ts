@@ -268,11 +268,13 @@ export async function POST(req: NextRequest) {
         }
       }
       if (userId) {
-        await supabaseAdmin.from('profiles').upsert({
+        const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
           id: userId, role: 'parent', ecole_id: demande.ecole_id, famille_id: famille.id,
           prenom: demande.parent1_prenom || null, nom: demande.parent1_nom || null, email: loginEmail,
-          telephone: demande.parent1_telephone || null,
         })
+        if (profErr) {
+          return NextResponse.json({ error: 'Compte cree mais erreur de liaison du profil : ' + profErr.message }, { status: 500 })
+        }
       }
     }
 
