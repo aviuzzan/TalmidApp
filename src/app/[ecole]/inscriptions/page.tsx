@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
+import { formatStatut } from '@/lib/inscriptions'
+import { getExerciceInscription } from '@/lib/annee-inscription'
 
 type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'cheques'
 
@@ -11,14 +12,17 @@ export default function InscriptionsAdminPage() {
   const router = useRouter()
   const ecole = useEcole()
   const [onglet, setOnglet] = useState<Onglet>('tableau_bord')
-  const [annee, setAnnee] = useState(ANNEE_COURANTE)
+  const [annee, setAnnee] = useState('')
   const [config, setConfig] = useState<any>(null)
   const [stats, setStats] = useState({ pedagogique: 0, reduction: 0, contrats: 0, cheques_a_encaisser: 0 })
   const [dossiers, setDossiers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { loadAll() }, [ecole.id, annee])
+  useEffect(() => {
+    if (ecole?.id) getExerciceInscription(createClient(), ecole.id).then(r => setAnnee(r.code))
+  }, [ecole?.id])
+  useEffect(() => { if (annee) loadAll() }, [ecole.id, annee])
 
   async function loadAll() {
     setLoading(true)
