@@ -324,18 +324,20 @@ export default function ContratPage() {
         }
       }
 
-      // Générer chèques/échéances
+      // Générer chèques/échéances — l'échéancier démarre en septembre de l'année scolaire
       if ((modeReglement === 'cheque' || modeReglement === 'sepa') && nbEcheances > 0 && dateEncaissement) {
         await s.from('cheques_prevus').delete().eq('contrat_id', contratId)
-        const today = new Date()
-        let moisDebut = today.getMonth(); let anneeDebut = today.getFullYear()
-        if (today.getDate() > dateEncaissement) { moisDebut++; if (moisDebut > 11) { moisDebut = 0; anneeDebut++ } }
+        // Année scolaire "2026-2027" => septembre 2026 (mois index 8)
+        const anneeDebut = parseInt(ANNEE_COURANTE.split('-')[0]) || new Date().getFullYear()
+        const moisDebut = 8
+        // Les chèques restent invisibles tant que l'admin n'a pas validé leur réception.
+        const statutInitial = modeReglement === 'cheque' ? 'attente_reception' : 'prevu'
         const cheques = []
         for (let i = 0; i < nbEcheances; i++) {
           let m = moisDebut + i; let y = anneeDebut
           while (m > 11) { m -= 12; y++ }
           const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(dateEncaissement).padStart(2, '0')}`
-          cheques.push({ contrat_id: contratId, famille_id: familleId, ecole_id: ecoleId, numero_cheque: i + 1, montant: montantEcheance, date_echeance: dateStr, statut: 'prevu', mode_paiement: modeReglement })
+          cheques.push({ contrat_id: contratId, famille_id: familleId, ecole_id: ecoleId, numero_cheque: i + 1, montant: montantEcheance, date_echeance: dateStr, statut: statutInitial, mode_paiement: modeReglement })
         }
         await s.from('cheques_prevus').insert(cheques)
       }

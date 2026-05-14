@@ -692,14 +692,21 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
     setCheques(p => p.map(c => c.id === id ? { ...c, statut: 'encaisse' } : c))
   }
 
+  // Valider la reception physique d'un cheque : il devient alors visible/exploitable
+  async function marquerRecu(id: string) {
+    await createClient().from('cheques_prevus').update({ statut: 'prevu' }).eq('id', id)
+    setCheques(p => p.map(c => c.id === id ? { ...c, statut: 'prevu' } : c))
+  }
+
   const today = new Date().toISOString().split('T')[0]
+  const attenteReception = cheques.filter(c => c.statut === 'attente_reception')
   const aEncaisser = cheques.filter(c => c.statut === 'prevu' && c.date_echeance <= today)
   const aVenir = cheques.filter(c => c.statut === 'prevu' && c.date_echeance > today)
   const encaisses = cheques.filter(c => c.statut === 'encaisse')
 
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
 
-  const Section = ({ title, list, color, showEncaisser }: any) => (
+  const Section = ({ title, list, color, showEncaisser, showRecu }: any) => (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden', marginBottom: 14 }}>
       <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color, display: 'flex', justifyContent: 'space-between' }}>
         {title} <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 400 }}>
@@ -721,6 +728,12 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
                 ✓ Encaisser
               </button>
             )}
+            {showRecu && (
+              <button onClick={() => marquerRecu(c.id)}
+                style={{ fontSize: 12, color: '#2563EB', background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
+                ✓ Marquer reçu
+              </button>
+            )}
           </div>
         ))
       }
@@ -729,6 +742,7 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
 
   return (
     <div>
+      <Section title={`⏳ En attente de réception (${attenteReception.length})`} list={attenteReception} color="#2563EB" showRecu />
       <Section title={`⚠️ À encaisser maintenant (${aEncaisser.length})`} list={aEncaisser} color="#EF4444" showEncaisser />
       <Section title={`📅 À venir (${aVenir.length})`} list={aVenir} color="#F59E0B" showEncaisser={false} />
       <Section title={`✅ Encaissés (${encaisses.length})`} list={encaisses} color="#10B981" showEncaisser={false} />
