@@ -15,6 +15,8 @@ export default function ComptesParentsPage() {
   const [creating, setCreating] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [showPwd, setShowPwd] = useState(false)
+  const [inviteRunning, setInviteRunning] = useState(false)
+  const [inviteMsg, setInviteMsg] = useState('')
 
   useEffect(() => { load() }, [ecole.id])
 
@@ -99,6 +101,38 @@ export default function ComptesParentsPage() {
     setCreating(false)
   }
 
+  async function inviterToutes() {
+    const sansCompteCount = familles.filter(f => f.comptes.length === 0).length
+    if (sansCompteCount === 0) { setInviteMsg('Toutes les familles ont deja un compte parent.'); return }
+    if (!confirm(`Creer un compte et envoyer l'email de bienvenue a ${sansCompteCount} famille(s) sans compte ?`)) return
+    setInviteRunning(true); setInviteMsg('Invitation en cours...')
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    let totalInvited = 0
+    const allErrors: string[] = []
+    try {
+      for (let i = 0; i < 300; i++) {
+        const res = await fetch('/api/admin/inviter-familles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ ecoleId: ecole.id, batchSize: 8 }),
+        })
+        const data = await res.json()
+        if (!res.ok) { allErrors.push(data.error || 'Erreur serveur'); break }
+        totalInvited += data.invited || 0
+        if (data.erreurs?.length) allErrors.push(...data.erreurs)
+        setInviteMsg(`${totalInvited} compte(s) cree(s)... ${data.restant} restant(s)`)
+        if (data.done) break
+      }
+    } catch (e: any) {
+      allErrors.push('Erreur reseau : ' + (e?.message || ''))
+    }
+    setInviteRunning(false)
+    setInviteMsg(`${totalInvited} compte(s) cree(s) et email(s) de bienvenue envoye(s).` + (allErrors.length ? ` ${allErrors.length} echec(s) (voir console).` : ''))
+    if (allErrors.length) console.warn('Invitations en echec :', allErrors)
+    await load()
+  }
+
   const filtered = familles.filter(f => {
     if (!search) return true
     const q = search.toLowerCase()
@@ -120,12 +154,22 @@ export default function ComptesParentsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Comptes parents</h1>
-        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
-          Créez les accès portail pour chaque famille
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Comptes parents</h1>
+          <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
+            Créez les accès portail pour chaque famille
+          </p>
+        </div>
+        <button onClick={inviterToutes} disabled={inviteRunning} className="btn-primary">
+          {inviteRunning ? 'Invitation en cours…' : '✉️ Inviter toutes les familles sans compte'}
+        </button>
       </div>
+      {inviteMsg && (
+        <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', color: '#1E40AF', fontSize: 13 }}>
+          {inviteMsg}
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
