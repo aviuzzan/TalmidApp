@@ -37,8 +37,10 @@ export default function BordereauPage() {
   const [loading, setLoading] = useState(true)
   const [banque, setBanque] = useState('')
   const [ribDestinataire, setRibDestinataire] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
-  useEffect(() => { if (ecole?.id) load() }, [ecole?.id, filter])
+  useEffect(() => { if (ecole?.id) load() }, [ecole?.id, filter, dateFrom, dateTo])
 
   async function load() {
     setLoading(true)
@@ -48,6 +50,8 @@ export default function BordereauPage() {
       .eq('ecole_id', ecole.id)
       .order('date_echeance', { ascending: true })
     if (filter === 'prevu') q = q.eq('statut', 'prevu')
+    if (dateFrom) q = q.gte('date_echeance', dateFrom)
+    if (dateTo) q = q.lte('date_echeance', dateTo)
     const { data } = await q
     setCheques((data as any) || [])
     setLoading(false)
@@ -115,6 +119,16 @@ export default function BordereauPage() {
               <option value="prevu">À déposer (prévus)</option>
               <option value="tous">Tous</option>
             </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>Échéance du</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, background: '#fff', boxSizing: 'border-box' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>Échéance au</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, background: '#fff', boxSizing: 'border-box' }} />
           </div>
           <div>
             <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase' }}>Banque de dépôt</label>

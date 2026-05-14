@@ -19,6 +19,7 @@ export default function EnfantDetailPage() {
   const [form, setForm] = useState<any>(null)
   const [classes, setClasses] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
+  const [inscriptionDocs, setInscriptionDocs] = useState<any[]>([])
 
   useEffect(() => { load() }, [enfantId])
 
@@ -51,6 +52,10 @@ export default function EnfantDetailPage() {
     ])
     setInscriptions(inscr ?? [])
     setContrats(cont ?? [])
+
+    const { data: idocs } = await s.from('inscription_documents_uploaded')
+      .select('*').eq('enfant_id', enfantId).order('uploaded_at', { ascending: false })
+    setInscriptionDocs(idocs ?? [])
     setLoading(false)
   }
 
@@ -295,6 +300,31 @@ export default function EnfantDetailPage() {
               }}>
                 {c.contrats_scolarisation?.statut || '—'}
               </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Documents d'inscription fournis par la famille */}
+      {inscriptionDocs.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
+            📎 Documents d&apos;inscription fournis
+          </div>
+          {inscriptionDocs.map((d, i) => (
+            <div key={d.id} style={{ padding: '12px 20px', borderBottom: i < inscriptionDocs.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{d.label}</div>
+                <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                  {d.nom_fichier}{d.taille_ko ? ` · ${d.taille_ko} Ko` : ''} · {new Date(d.uploaded_at).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+              {d.url && (
+                <a href={d.url} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '5px 12px', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                  Ouvrir ↗
+                </a>
+              )}
             </div>
           ))}
         </div>

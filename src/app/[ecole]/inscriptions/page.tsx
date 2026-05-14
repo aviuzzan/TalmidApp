@@ -366,6 +366,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
           enfant_id: null,
           description: descForfait,
           montant: parseFloat(ddr.tarif_accorde) || 0,
+          deductible: true,
         })
         for (const e of enfants) {
           const totalOptions = (e.postes || []).reduce((acc: number, p: any) => {
@@ -378,6 +379,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
               enfant_id: e.enfant_id,
               description: `Options ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
               montant: totalOptions,
+              deductible: false,
             })
           }
         }
@@ -390,6 +392,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
               enfant_id: e.enfant_id,
               description: `Scolarité ${annee}${e.classe_prevue ? ' — ' + e.classe_prevue : ''}${e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''}`.trim(),
               montant: parseFloat(e.sous_total) || 0,
+              deductible: true,
             })
           }
         }
@@ -402,6 +405,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
           enfant_id: null,
           description: `Assurance scolaire ${annee}`,
           montant: parseFloat(contrat.assurance_montant_total) || 0,
+          deductible: false,
         })
       }
 
@@ -420,6 +424,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
               enfant_id: e.enfant_id,
               description: `Frais d'inscription ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
               montant: fraisInscEnfant,
+              deductible: false,
             })
           }
         }
@@ -431,6 +436,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
             enfant_id: null,
             description: `Frais d'inscription forfait famille ${annee}`,
             montant: fraisInscFamille,
+            deductible: false,
           })
         }
         // Réinscription par enfant
@@ -442,6 +448,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
               enfant_id: e.enfant_id,
               description: `Frais de réinscription ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
               montant: fraisReinsEnfant,
+              deductible: false,
             })
           }
         }
@@ -453,6 +460,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
             enfant_id: null,
             description: `Frais de réinscription forfait famille ${annee}`,
             montant: fraisReinsFamille,
+            deductible: false,
           })
         }
       }

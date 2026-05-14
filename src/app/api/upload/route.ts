@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
     const familleId = formData.get('familleId') as string
     const configId = formData.get('configId') as string | null
     const label = formData.get('label') as string
+    const target = formData.get('target') as string | null
+    const enfantId = formData.get('enfantId') as string | null
 
     if (!file || !familleId) {
       return NextResponse.json({ error: 'Fichier et familleId requis' }, { status: 400 })
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Upload dans le bucket
     const ext = file.name.split('.').pop()
-    const path = `${familleId}/${demandeId || 'temp'}/${Date.now()}_${file.name}`
+    const path = `${familleId}/${demandeId || enfantId || 'temp'}/${Date.now()}_${file.name}`
     const buffer = await file.arrayBuffer()
 
     const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
@@ -43,8 +45,18 @@ export async function POST(req: NextRequest) {
       .createSignedUrl(path, 365 * 24 * 3600)
     const signedUrl = signedUrlResult.data?.signedUrl || ''
 
-    // Enregistrer en base si demandeId fourni
-    if (demandeId) {
+    // Enregistrer en base selon la cible
+    if (target === 'inscription' && enfantId) {
+      await supabaseAdmin.from('inscription_documents_uploaded').insert({
+        enfant_id: enfantId,
+        famille_id: familleId,
+        config_id: configId || null,
+        label: label || file.name,
+        nom_fichier: file.name,
+        url: signedUrl || '',
+        taille_ko: Math.round(file.size / 1024),
+      })
+    } else if (demandeId) {
       await supabaseAdmin.from('reduction_documents_uploaded').insert({
         demande_id: demandeId,
         famille_id: familleId,

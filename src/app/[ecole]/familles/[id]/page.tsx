@@ -65,7 +65,7 @@ export default function FamilleDetailPage() {
     annee_scolaire: ANNEE,
   }
   const [enfantForm, setEnfantForm] = useState(emptyEnfant)
-  const emptyLigne = { enfant_id: '', tarif_id: '', description: '', montant: '' }
+  const emptyLigne = { enfant_id: '', tarif_id: '', description: '', montant: '', deductible: true }
   const [ligneForm, setLigneForm] = useState(emptyLigne)
   const emptyReglement = { montant: '', date_reglement: new Date().toISOString().split('T')[0], mode_paiement: '', reference: '', notes: '' }
   const [reglementForm, setReglementForm] = useState(emptyReglement)
@@ -195,6 +195,7 @@ export default function FamilleDetailPage() {
       facture_id: facture.id, enfant_id: ligneForm.enfant_id,
       tarif_id: ligneForm.tarif_id || null, description: ligneForm.description,
       montant: parseFloat(ligneForm.montant),
+      deductible: ligneForm.deductible,
     })
     if (err) { setError(err.message); setSaving(false); return }
     setShowLigneForm(false); setLigneForm(emptyLigne); load(); setSaving(false)
@@ -256,10 +257,12 @@ export default function FamilleDetailPage() {
         )}
         <ActionsMenu items={[
           { label: '📁 Documents',         href: `/${ecole.slug}/familles/${id}/documents` },
-          { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
-          { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
-          { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
-          { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
+          ...(canFacturation ? [
+            { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
+            { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
+            { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
+            { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
+          ] : []),
         ]} onNav={(h) => router.push(h)} />
       </div>
 
@@ -376,7 +379,7 @@ export default function FamilleDetailPage() {
                     <tbody>{lignes.map((l, i) => (
                       <tr key={l.id} style={{ borderBottom: i < lignes.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>{l.enfants?.prenom} {l.enfants?.nom}</td>
-                        <td style={{ padding: '10px 12px', color: '#475569', fontSize: 13 }}>{l.description}</td>
+                        <td style={{ padding: '10px 12px', color: '#475569', fontSize: 13 }}>{l.description}{l.deductible === false && <span style={{ marginLeft: 8, background: '#FEF3C7', color: '#92400E', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6 }}>non déductible</span>}</td>
                         <td style={{ padding: '10px 12px', fontWeight: 700 }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
                         <td style={{ padding: '10px 12px' }}><button onClick={() => deleteLigne(l.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button></td>
                       </tr>
@@ -422,6 +425,10 @@ export default function FamilleDetailPage() {
               <div>{lbl('Tarif')}<select style={inp} value={ligneForm.tarif_id} onChange={e => onTarifChange(e.target.value)}><option value="">-- Sélectionner --</option>{tarifs.map(t => <option key={t.id} value={t.id}>{t.nom} — {Number(t.montant).toLocaleString('fr-FR')} €</option>)}</select></div>
               <div>{lbl('Description', true)}<input style={inp} value={ligneForm.description} onChange={e => setLigneForm(p => ({ ...p, description: e.target.value }))} required /></div>
               <div>{lbl('Montant (€)', true)}<input style={inp} type="number" min="0" step="0.01" value={ligneForm.montant} onChange={e => setLigneForm(p => ({ ...p, montant: e.target.value }))} required /></div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+                <input type="checkbox" checked={ligneForm.deductible} onChange={e => setLigneForm(p => ({ ...p, deductible: e.target.checked }))} />
+                Poste déductible (inclus dans l&apos;attestation fiscale)
+              </label>
               {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#DC2626', fontSize: 13 }}>{error}</div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}><button type="button" className="btn-secondary" onClick={() => setShowLigneForm(false)}>Annuler</button><button type="submit" className="btn-primary" disabled={saving}>{saving ? '...' : '✓ Ajouter'}</button></div>
             </form>
