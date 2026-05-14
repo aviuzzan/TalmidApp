@@ -110,7 +110,7 @@ export default function CategoryHub({ code }: { code: string }) {
   const accessibleCount = modules.filter(m => moduleAccessible(m).ok).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '24px clamp(16px, 4vw, 40px) 48px', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box' }}>
       {/* Bouton retour — pilule lisible */}
       <button onClick={() => router.push('/' + ecole.slug + '/dashboard')}
         style={{
