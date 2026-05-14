@@ -643,7 +643,14 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
   }, [ecoleId, annee])
 
   async function changerStatut(id: string, statut: string) {
-    await createClient().from('inscriptions_pedagogiques').update({ statut }).eq('id', id)
+    const s = createClient()
+    await s.from('inscriptions_pedagogiques').update({ statut }).eq('id', id)
+    // Repercuter sur l'eleve : accepte => inscrit (debloque la reinscription), refuse => refuse
+    const fiche = liste.find(d => d.id === id)
+    if (fiche?.enfant_id) {
+      if (statut === 'accepte') await s.from('enfants').update({ statut_inscription: 'inscrit' }).eq('id', fiche.enfant_id)
+      else if (statut === 'refuse') await s.from('enfants').update({ statut_inscription: 'refuse' }).eq('id', fiche.enfant_id)
+    }
     setListe(p => p.map(d => d.id === id ? { ...d, statut } : d))
   }
 

@@ -247,6 +247,10 @@ export default function ContratPage() {
     // (caution chèques retirée — plus exigée)
     if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { alert('Renseignez les informations du mandat SEPA (IBAN, BIC, titulaire)'); return }
     if (!signatureData) { alert('Veuillez signer le contrat'); return }
+    if (nouvelEnfantEnAttente) {
+      alert("Un nouvel enfant est en attente de validation par l'etablissement. Le contrat sera disponible une fois la validation effectuee.")
+      return
+    }
 
     setSaving(true)
     const s = createClient()
@@ -384,6 +388,7 @@ export default function ContratPage() {
 
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }
+  const nouvelEnfantEnAttente = enfants.some((e: any) => e.statut_inscription === 'en_attente')
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -391,6 +396,20 @@ export default function ContratPage() {
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Contrat de scolarisation {anneeInscription}</h1>
       </div>
+
+      {/* ── VERROU NOUVEL ENFANT EN ATTENTE ── */}
+      {nouvelEnfantEnAttente && (
+        <div style={{ background: '#FFFBEB', border: '2px solid #FDE68A', borderRadius: 12, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>⏳</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>Nouvel enfant en attente de validation</div>
+            <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.5 }}>
+              Vous avez ajouté un enfant qui doit d&apos;abord être validé par l&apos;établissement.
+              Le contrat de réinscription sera disponible une fois la validation effectuée — le tarif dépend du nombre d&apos;enfants.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── ALERTE DDR ── */}
       {ddrStatut && ddrStatut !== 'accepte' && (
@@ -632,7 +651,7 @@ export default function ContratPage() {
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
         <button onClick={() => router.push('/portail/inscriptions')} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '11px 20px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>Annuler</button>
-        <button onClick={soumettre} disabled={saving} style={{ background: '#2563EB', border: 'none', borderRadius: 10, padding: '11px 28px', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+        <button onClick={soumettre} disabled={saving || nouvelEnfantEnAttente} style={{ background: '#2563EB', border: 'none', borderRadius: 10, padding: '11px 28px', color: '#fff', fontSize: 14, fontWeight: 600, cursor: (saving || nouvelEnfantEnAttente) ? 'not-allowed' : 'pointer', opacity: (saving || nouvelEnfantEnAttente) ? 0.7 : 1 }}>
           {saving ? 'Envoi...' : '📝 Soumettre le contrat'}
         </button>
       </div>
