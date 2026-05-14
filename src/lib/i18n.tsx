@@ -2,119 +2,124 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 
 /**
- * Infrastructure i18n légère pour TalmidApp.
- *
- * 3 langues : français (défaut), anglais, hébreu (RTL).
- *
- * Usage :
- *   - Wrapper l'app dans <I18nProvider> (déjà fait dans AppProviders)
- *   - Dans un composant : const { t, lang, setLang, dir } = useI18n()
- *   - t('cle.de.traduction') → string traduite
- *
- * La migration des strings est PROGRESSIVE : on ajoute les clés au dictionnaire
- * au fur et à mesure. Les composants non migrés restent en français en dur,
- * ce qui n'est pas bloquant.
- *
- * Le choix de langue est persisté dans localStorage.
+ * Infrastructure i18n pour TalmidApp.
+ * 3 langues : francais (defaut), anglais, hebreu (RTL).
+ * Ecrans migres : accueil ecole, login, portail famille (nav + accueil).
+ * L'admin reste en francais (personnel) - migration progressive possible.
+ * Usage : const { t, lang, setLang, dir } = useI18n()
+ * Choix de langue persiste dans localStorage.
  */
 
 export type Lang = 'fr' | 'en' | 'he'
 
 export const LANGS: { code: Lang; label: string; flag: string; dir: 'ltr' | 'rtl' }[] = [
-  { code: 'fr', label: 'Français', flag: '🇫🇷', dir: 'ltr' },
-  { code: 'en', label: 'English', flag: '🇬🇧', dir: 'ltr' },
-  { code: 'he', label: 'עברית', flag: '🇮🇱', dir: 'rtl' },
+  { code: 'fr', label: 'Francais', flag: 'FR', dir: 'ltr' },
+  { code: 'en', label: 'English', flag: 'EN', dir: 'ltr' },
+  { code: 'he', label: 'Hebrew', flag: 'HE', dir: 'rtl' },
 ]
 
-// Dictionnaire de traductions. Structure plate "section.cle".
-// On enrichit au fur et à mesure de la migration des écrans.
 const TRANSLATIONS: Record<Lang, Record<string, string>> = {
   fr: {
     'common.save': 'Enregistrer',
     'common.cancel': 'Annuler',
-    'common.delete': 'Supprimer',
-    'common.edit': 'Modifier',
-    'common.add': 'Ajouter',
     'common.loading': 'Chargement...',
-    'common.search': 'Rechercher',
-    'common.close': 'Fermer',
-    'common.confirm': 'Confirmer',
     'common.back': 'Retour',
-    'common.yes': 'Oui',
-    'common.no': 'Non',
-    'nav.dashboard': 'Tableau de bord',
-    'nav.families': 'Familles',
-    'nav.students': 'Élèves',
-    'nav.finances': 'Finances',
-    'nav.messaging': 'Messagerie',
-    'nav.settings': 'Paramètres',
-    'nav.logout': 'Se déconnecter',
-    'portail.welcome': 'Bonjour',
-    'portail.my_invoices': 'Mes factures',
-    'portail.my_children': 'Mes enfants',
-    'portail.documents': 'Documents',
+    'accueil.welcome_on': 'Bienvenue sur',
+    'accueil.desc': "Espace de gestion scolaire - administration, inscriptions, facturation et portail famille.",
+    'accueil.login_button': 'Se connecter',
+    'accueil.powered_by': 'Propulse par',
     'login.title': 'Connexion',
+    'login.subtitle': 'Accedez a votre espace',
     'login.email': 'Adresse e-mail',
     'login.password': 'Mot de passe',
     'login.submit': 'Se connecter',
+    'login.loading': 'Connexion...',
+    'login.forgot': 'Mot de passe oublie ?',
+    'login.error': 'E-mail ou mot de passe incorrect',
+    'portail.nav.home': 'Accueil',
+    'portail.nav.children': 'Mes enfants',
+    'portail.nav.health': 'Sante',
+    'portail.nav.invoices': 'Mes factures',
+    'portail.nav.messaging': 'Messagerie',
+    'portail.nav.next_year': 'Annee N+1',
+    'portail.nav.documents': 'Documents',
+    'portail.nav.family_space': 'Espace Famille',
+    'portail.logout': 'Deconnexion',
+    'portail.welcome': 'Bonjour, famille',
+    'portail.school_year': 'Annee scolaire',
+    'portail.students_enrolled': 'Eleves inscrits',
+    'portail.invoice': 'Facture',
+    'portail.remaining_balance': 'Solde restant',
+    'portail.no_family': "Votre compte n'est pas encore lie a une famille. Contactez l'administration.",
+    'portail.welcome_title': 'Bienvenue sur TalmidApp',
   },
   en: {
     'common.save': 'Save',
     'common.cancel': 'Cancel',
-    'common.delete': 'Delete',
-    'common.edit': 'Edit',
-    'common.add': 'Add',
     'common.loading': 'Loading...',
-    'common.search': 'Search',
-    'common.close': 'Close',
-    'common.confirm': 'Confirm',
     'common.back': 'Back',
-    'common.yes': 'Yes',
-    'common.no': 'No',
-    'nav.dashboard': 'Dashboard',
-    'nav.families': 'Families',
-    'nav.students': 'Students',
-    'nav.finances': 'Finances',
-    'nav.messaging': 'Messaging',
-    'nav.settings': 'Settings',
-    'nav.logout': 'Sign out',
-    'portail.welcome': 'Hello',
-    'portail.my_invoices': 'My invoices',
-    'portail.my_children': 'My children',
-    'portail.documents': 'Documents',
+    'accueil.welcome_on': 'Welcome to',
+    'accueil.desc': 'School management platform - administration, enrolment, billing and family portal.',
+    'accueil.login_button': 'Sign in',
+    'accueil.powered_by': 'Powered by',
     'login.title': 'Sign in',
+    'login.subtitle': 'Access your space',
     'login.email': 'Email address',
     'login.password': 'Password',
     'login.submit': 'Sign in',
+    'login.loading': 'Signing in...',
+    'login.forgot': 'Forgot password?',
+    'login.error': 'Incorrect email or password',
+    'portail.nav.home': 'Home',
+    'portail.nav.children': 'My children',
+    'portail.nav.health': 'Health',
+    'portail.nav.invoices': 'My invoices',
+    'portail.nav.messaging': 'Messages',
+    'portail.nav.next_year': 'Next year',
+    'portail.nav.documents': 'Documents',
+    'portail.nav.family_space': 'Family space',
+    'portail.logout': 'Sign out',
+    'portail.welcome': 'Hello,',
+    'portail.school_year': 'School year',
+    'portail.students_enrolled': 'Enrolled students',
+    'portail.invoice': 'Invoice',
+    'portail.remaining_balance': 'Outstanding balance',
+    'portail.no_family': 'Your account is not yet linked to a family. Please contact the administration.',
+    'portail.welcome_title': 'Welcome to TalmidApp',
   },
   he: {
     'common.save': 'שמור',
     'common.cancel': 'ביטול',
-    'common.delete': 'מחק',
-    'common.edit': 'ערוך',
-    'common.add': 'הוסף',
     'common.loading': 'טוען...',
-    'common.search': 'חיפוש',
-    'common.close': 'סגור',
-    'common.confirm': 'אישור',
     'common.back': 'חזרה',
-    'common.yes': 'כן',
-    'common.no': 'לא',
-    'nav.dashboard': 'לוח בקרה',
-    'nav.families': 'משפחות',
-    'nav.students': 'תלמידים',
-    'nav.finances': 'כספים',
-    'nav.messaging': 'הודעות',
-    'nav.settings': 'הגדרות',
-    'nav.logout': 'התנתק',
-    'portail.welcome': 'שלום',
-    'portail.my_invoices': 'החשבוניות שלי',
-    'portail.my_children': 'הילדים שלי',
-    'portail.documents': 'מסמכים',
+    'accueil.welcome_on': 'ברוכים הבאים אל',
+    'accueil.desc': 'מערכת לניהול בית הספר - מנהלה, הרשמות, חיוב ופורטל משפחות.',
+    'accueil.login_button': 'התחברות',
+    'accueil.powered_by': 'מופעל על ידי',
     'login.title': 'התחברות',
+    'login.subtitle': 'גישה למרחב שלך',
     'login.email': 'כתובת אימייל',
     'login.password': 'סיסמה',
     'login.submit': 'התחבר',
+    'login.loading': 'מתחבר...',
+    'login.forgot': 'שכחת סיסמה?',
+    'login.error': 'אימייל או סיסמה שגויים',
+    'portail.nav.home': 'בית',
+    'portail.nav.children': 'הילדים שלי',
+    'portail.nav.health': 'בריאות',
+    'portail.nav.invoices': 'החשבוניות שלי',
+    'portail.nav.messaging': 'הודעות',
+    'portail.nav.next_year': 'שנה הבאה',
+    'portail.nav.documents': 'מסמכים',
+    'portail.nav.family_space': 'מרחב המשפחה',
+    'portail.logout': 'התנתק',
+    'portail.welcome': 'שלום, משפחת',
+    'portail.school_year': 'שנת לימודים',
+    'portail.students_enrolled': 'תלמידים רשומים',
+    'portail.invoice': 'חשבונית',
+    'portail.remaining_balance': 'יתרה לתשלום',
+    'portail.no_family': 'החשבון שלך עדיין לא מקושר למשפחה. אנא פנה למנהלה.',
+    'portail.welcome_title': 'ברוכים הבאים ל-TalmidApp',
   },
 }
 
@@ -145,7 +150,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const dir = LANGS.find(l => l.code === lang)?.dir || 'ltr'
 
-  // Applique la direction au <html> pour le support RTL
   useEffect(() => {
     if (typeof document === 'undefined') return
     document.documentElement.dir = dir
