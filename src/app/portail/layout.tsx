@@ -98,6 +98,8 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const navItems = [
     { href: '/portail', icon: '🏠', label: t('portail.nav.home') },
     { href: '/portail/enfants', icon: '🎓', label: t('portail.nav.children') },
+    { href: '/portail/bulletins', icon: '📊', label: t('portail.nav.bulletins') },
+    { href: '/portail/devoirs', icon: '📚', label: t('portail.nav.devoirs') },
     { href: '/portail/sante', icon: '🏥', label: t('portail.nav.health') },
     { href: '/portail/factures', icon: '💰', label: t('portail.nav.invoices') },
     { href: '/portail/messages', icon: '💬', label: t('portail.nav.messaging') },

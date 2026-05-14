@@ -26,9 +26,10 @@ export default function PortailPage() {
       if (!profile?.famille_id) { setLoading(false); return }
 
       const familleId = profile.famille_id
+      const ecoleId = (profile as any).familles?.ecole_id
       const now = new Date().toISOString().split('T')[0]
 
-      const [{ count: enfants }, { data: facture }] = await Promise.all([
+      const [{ count: enfants }, { data: facture }, { data: cfg }] = await Promise.all([
         supabase.from('enfants').select('*', { count: 'exact', head: true })
           .eq('famille_id', familleId)
           .or(`date_entree.is.null,date_entree.lte.${now}`)
@@ -37,12 +38,21 @@ export default function PortailPage() {
           .eq('famille_id', familleId)
           .eq('annee_scolaire', anneeInscription)
           .single(),
+        supabase.from('inscriptions_config')
+          .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction')
+          .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
       ])
+
+      const inscriptionsOuvertes = !!cfg && (
+        (!!cfg.inscriptions_ouvertes && cfg.date_ouverture_inscription <= now && cfg.date_cloture_inscription >= now) ||
+        (!!cfg.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now)
+      )
 
       setData({
         famille: (profile as any).familles,
         nbEnfants: enfants ?? 0,
         facture: facture ?? null,
+        inscriptionsOuvertes,
       })
       setLoading(false)
     }
@@ -104,26 +114,30 @@ export default function PortailPage() {
         {[
           { icon: '🎓', title: 'Mes enfants', desc: 'Consulter les informations de vos enfants', href: '/portail/enfants' },
           { icon: '💰', title: 'Mes factures', desc: 'Voir vos factures et règlements', href: '/portail/factures' },
-          { icon: '📝', title: 'Inscriptions N+1', desc: 'Gérer les inscriptions 2026/2027', href: '/portail/inscriptions' },
+          { icon: '📝', key: 'insc', title: 'Inscriptions N+1', desc: 'Gérer les inscriptions 2026/2027', href: '/portail/inscriptions' },
           { icon: '📄', title: 'Documents', desc: 'Envoyer et consulter vos documents', href: '/portail/documents' },
-          { icon: '📞', title: 'Contact', desc: 'Contacter l\'administration', href: 'mailto:admin@talmid.fr' },
-        ].map(item => (
-          <a key={item.title} href={item.href}
+          { icon: '📞', title: 'Contact', desc: 'Coordonnees de l\'etablissement', href: '/portail/contact' },
+        ].map(item => {
+          const bloque = (item as any).key === 'insc' && data && data.inscriptionsOuvertes === false
+          return (
+          <a key={item.title} href={bloque ? '#' : item.href}
+            onClick={bloque ? (ev => ev.preventDefault()) : undefined}
             style={{
               background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12,
               padding: '20px 24px', textDecoration: 'none', display: 'flex',
               alignItems: 'center', gap: 16, transition: 'all 0.15s',
+              opacity: bloque ? 0.5 : 1, cursor: bloque ? 'not-allowed' : 'pointer',
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2563EB'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(37,99,235,0.1)' }}
+            onMouseEnter={e => { if (bloque) return; (e.currentTarget as HTMLElement).style.borderColor = '#2563EB'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(37,99,235,0.1)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}>
             <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{item.icon}</div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#1E293B', marginBottom: 2 }}>{item.title}</div>
-              <div style={{ fontSize: 12, color: '#64748B' }}>{item.desc}</div>
+              <div style={{ fontSize: 12, color: '#64748B' }}>{bloque ? 'Ouverture prochainement' : item.desc}</div>
             </div>
             <div style={{ marginLeft: 'auto', color: '#94A3B8', fontSize: 18 }}>→</div>
           </a>
-        ))}
+        )})}
       </div>
     </div>
   )
