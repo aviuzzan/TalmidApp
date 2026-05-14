@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
+import { useParentCtx } from '@/lib/parent-context'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -54,6 +55,7 @@ export default function PortailInscriptionsPage() {
 // ── ONGLET 1 : DOSSIER (DDR + Contrat + Nouvel enfant) ──
 function DossierTab({ router }: { router: any }) {
   const { anneeInscription } = useAnneeInscription()
+  const parent = useParentCtx()
   const [famille, setFamille] = useState<any>(null)
   const [enfants, setEnfants] = useState<any[]>([])
   const [config, setConfig] = useState<any>(null)
@@ -94,6 +96,12 @@ function DossierTab({ router }: { router: any }) {
 
   return (
     <div>
+      {!parent.estPrincipal && (
+        <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#1E40AF', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 16 }}>ℹ️</span>
+          <div>Les démarches d&apos;inscription (demande de réduction, contrat, ajout d&apos;un nouvel enfant) sont gérées par le <strong>parent principal</strong> de la famille. Vous pouvez en suivre l&apos;avancement ci-dessous.</div>
+        </div>
+      )}
       {/* Mes enfants */}
       {enfants.length > 0 && (
         <div style={{ marginBottom: 28 }}>

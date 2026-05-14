@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Récupère email parent depuis familles (pas profiles.email qui n'existe pas)
     const { data: famille } = await supa
       .from('familles')
-      .select('parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email, nom')
+      .select('parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email, nom, situation_maritale, part_pere, part_mere')
       .eq('id', facture.famille_id).single()
     if (!famille?.parent1_email) {
       return NextResponse.json({ error: 'Aucun email parent enregistré' }, { status: 400 })
@@ -73,24 +73,60 @@ export async function POST(req: NextRequest) {
     const dateEch = facture.date_echeance ? new Date(facture.date_echeance) :
       (() => { const d = new Date(facture.date_emission); d.setDate(d.getDate() + 30); return d })()
 
-    const vars: Record<string, string> = {
-      prenom_parent: famille.parent1_prenom || '',
-      nom_parent: famille.parent1_nom || '',
-      numero_facture: facture.numero,
-      montant_du: Number(facture.solde_restant).toFixed(2) + ' EUR',
-      total_facture: Number(facture.total_facture).toFixed(2) + ' EUR',
-      date_echeance: dateEch.toLocaleDateString('fr-FR'),
-      nom_ecole: ecole?.nom || '',
+    const buildHtml = (montantDu: number, prenomParent: string, nomParent: string) => {
+      const vars: Record<string, string> = {
+        prenom_parent: prenomParent,
+        nom_parent: nomParent,
+        numero_facture: facture.numero,
+        montant_du: montantDu.toFixed(2) + ' EUR',
+        total_facture: Number(facture.total_facture).toFixed(2) + ' EUR',
+        date_echeance: dateEch.toLocaleDateString('fr-FR'),
+        nom_ecole: ecole?.nom || '',
+      }
+      let html = corps[niveau]
+      let sujet = subjects[niveau]
+      for (const [k, v] of Object.entries(vars)) {
+        const re = new RegExp('{{\\s*' + k + '\\s*}}', 'g')
+        html = html.replace(re, v)
+        sujet = sujet.replace(re, v)
+      }
+      return { html, sujet }
     }
 
-    let html = corps[niveau]
-    let sujet = subjects[niveau]
-    for (const [k, v] of Object.entries(vars)) {
-      const re = new RegExp('{{\\s*' + k + '\\s*}}', 'g')
-      html = html.replace(re, v)
-      sujet = sujet.replace(re, v)
+    const estSeparee = famille.situation_maritale === 'divorce' || famille.situation_maritale === 'separe'
+
+    // Famille separee : un email personnalise au(x) parent(s) qui ont une part impayee
+    if (estSeparee) {
+      const total = Number(facture.total_facture)
+      const { data: regs } = await supa.from('reglements').select('montant, paye_par').eq('facture_id', factureId)
+      const regleP1 = (regs || []).filter((r: any) => r.paye_par === 'parent1').reduce((s: number, r: any) => s + Number(r.montant), 0)
+      const regleP2 = (regs || []).filter((r: any) => r.paye_par === 'parent2').reduce((s: number, r: any) => s + Number(r.montant), 0)
+      const soldeP1 = total * Number(famille.part_pere ?? 100) / 100 - regleP1
+      const soldeP2 = total * Number(famille.part_mere ?? 0) / 100 - regleP2
+      const cibles: { email: string; prenom: string; nom: string; montantDu: number }[] = []
+      if (soldeP1 > 0.005 && famille.parent1_email) cibles.push({ email: famille.parent1_email, prenom: famille.parent1_prenom || '', nom: famille.parent1_nom || '', montantDu: soldeP1 })
+      if (soldeP2 > 0.005 && famille.parent2_email) cibles.push({ email: famille.parent2_email, prenom: famille.parent2_prenom || '', nom: famille.parent2_nom || '', montantDu: soldeP2 })
+      if (cibles.length === 0) {
+        return NextResponse.json({ error: 'Aucune part de parent impayée à relancer pour cette facture' }, { status: 400 })
+      }
+      const sentEmails: string[] = []
+      for (const c of cibles) {
+        const { html, sujet } = buildHtml(c.montantDu, c.prenom, c.nom)
+        const r = await sendEmail({ to: [{ email: c.email, name: `${c.prenom} ${c.nom}`.trim() || undefined }], subject: sujet, html })
+        if (r.ok) sentEmails.push(c.email)
+      }
+      if (sentEmails.length === 0) {
+        return NextResponse.json({ error: 'Erreur envoi email' }, { status: 500 })
+      }
+      await supa.from('relances_log').insert({
+        facture_id: factureId, ecole_id: ecoleId, famille_id: facture.famille_id, niveau,
+        envoye_a: sentEmails.join(', '), envoye_at: new Date().toISOString(), succes: true,
+      })
+      return NextResponse.json({ success: true, message: 'Relance N' + niveau + ' envoyée à ' + sentEmails.join(', ') })
     }
 
+    // Famille non separee : un seul email aux deux parents
+    const { html, sujet } = buildHtml(Number(facture.solde_restant), famille.parent1_prenom || '', famille.parent1_nom || '')
     const dests: { email: string; name?: string }[] = [
       { email: famille.parent1_email, name: `${famille.parent1_prenom ?? ''} ${famille.parent1_nom ?? ''}`.trim() || undefined },
     ]

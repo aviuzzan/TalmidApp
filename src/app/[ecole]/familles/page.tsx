@@ -40,6 +40,7 @@ export default function FamillesPage() {
     parent2_prenom: '', parent2_nom: '', parent2_email: '', parent2_telephone: '', parent2_emploi: '',
     parent2_adresse: '', parent2_code_postal: '', parent2_ville: '',
     mode_paiement: '', part_pere: 100, part_mere: 0,
+    parent_principal: 'parent1', garde: '', autorite_parentale: 'conjointe',
   }
   const [form, setForm] = useState(empty)
 
@@ -83,6 +84,7 @@ export default function FamillesPage() {
       parent2_emploi: f.parent2_emploi ?? '', parent2_adresse: f.parent2_adresse ?? '',
       parent2_code_postal: f.parent2_code_postal ?? '', parent2_ville: f.parent2_ville ?? '',
       mode_paiement: f.mode_paiement ?? '', part_pere: f.part_pere ?? 100, part_mere: f.part_mere ?? 0,
+      parent_principal: f.parent_principal ?? 'parent1', garde: f.garde ?? '', autorite_parentale: f.autorite_parentale ?? 'conjointe',
     })
     setEditId(f.id); setShowForm(true); setError('')
   }
@@ -103,6 +105,7 @@ export default function FamillesPage() {
       parent2_adresse: form.parent2_adresse || null,
       parent2_code_postal: form.parent2_code_postal || null, parent2_ville: form.parent2_ville || null,
       mode_paiement: form.mode_paiement || null, part_pere: form.part_pere, part_mere: form.part_mere,
+      parent_principal: form.parent_principal, garde: form.garde || null, autorite_parentale: form.autorite_parentale,
     }
     const supabase = createClient()
     const { error: err } = editId
@@ -241,6 +244,43 @@ export default function FamillesPage() {
                 <div><label className="label">Code postal</label><input style={inp} value={form.parent2_code_postal} onChange={e => set('parent2_code_postal', e.target.value)} /></div>
                 <div><label className="label">Ville</label><input style={inp} value={form.parent2_ville} onChange={e => set('parent2_ville', e.target.value)} /></div>
               </div>
+
+              {(form.situation_maritale === 'divorce' || form.situation_maritale === 'separe') && (
+                <>
+                  {sec('Parents séparés')}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label className="label">Parent principal</label>
+                      <select style={inp} value={form.parent_principal} onChange={e => set('parent_principal', e.target.value)}>
+                        <option value="parent1">Parent 1 — {form.parent1_prenom} {form.parent1_nom}</option>
+                        <option value="parent2">Parent 2 — {form.parent2_prenom} {form.parent2_nom}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Type de garde</label>
+                      <select style={inp} value={form.garde} onChange={e => set('garde', e.target.value)}>
+                        <option value="">-- Sélectionner --</option>
+                        <option value="conjointe">Garde conjointe</option>
+                        <option value="alternee">Garde alternée</option>
+                        <option value="parent1">Garde parent 1</option>
+                        <option value="parent2">Garde parent 2</option>
+                        <option value="autre">Autre</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Autorité parentale</label>
+                      <select style={inp} value={form.autorite_parentale} onChange={e => set('autorite_parentale', e.target.value)}>
+                        <option value="conjointe">Conjointe</option>
+                        <option value="parent1">Parent 1 uniquement</option>
+                        <option value="parent2">Parent 2 uniquement</option>
+                      </select>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: '#FFF7ED', borderRadius: 8, fontSize: 12, color: '#9A3412' }}>
+                      ℹ️ Le parent principal signe les contrats et fait les démarches N+1. La répartition de facturation se règle dans la section ci-dessous (part père / part mère).
+                    </div>
+                  </div>
+                </>
+              )}
 
               {sec('Informations financières')}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

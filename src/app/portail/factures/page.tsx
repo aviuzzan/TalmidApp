@@ -2,9 +2,11 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
+import { useParentCtx } from '@/lib/parent-context'
 
 export default function PortailFacturesPage() {
   const { anneeInscription } = useAnneeInscription()
+  const parent = useParentCtx()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
@@ -37,7 +39,7 @@ export default function PortailFacturesPage() {
           supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless']),
         ])
         setLignes(lig ?? [])
-        setReglements(regl ?? [])
+        setReglements(parent.estSeparee ? (regl ?? []).filter((r: any) => r.paye_par === parent.parentSlot) : (regl ?? []))
         setStripeActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'stripe' && i.actif)))
         setGocardlessActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'gocardless' && i.actif)))
       }
@@ -77,6 +79,10 @@ export default function PortailFacturesPage() {
 
   if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>Chargement...</div>
 
+  const maPart = facture ? Number(facture.total_facture) * parent.partPct / 100 : 0
+  const regleMoi = reglements.reduce((s, r) => s + Number(r.montant), 0)
+  const monSolde = maPart - regleMoi
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
@@ -87,6 +93,13 @@ export default function PortailFacturesPage() {
         <p style={{ color: '#64748B', fontSize: 13 }}>Année scolaire {anneeInscription}</p>
       </div>
 
+      {parent.estSeparee && (
+        <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#7C2D12', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 16 }}>👥</span>
+          <div>Vous consultez <strong>votre part ({parent.partPct}%)</strong> de la facture famille. L&apos;autre parent gère la sienne de son côté — son mode et sa fréquence de règlement ne vous sont pas visibles.</div>
+        </div>
+      )}
+
       {!facture ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
           Aucune facture pour l'année {anneeInscription.replace('-', '/')}
@@ -95,11 +108,15 @@ export default function PortailFacturesPage() {
         <>
           {/* Solde */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {[
+            {(parent.estSeparee ? [
+              { label: 'Ma part', value: `${maPart.toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+              { label: 'Réglé par moi', value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
+              { label: 'Mon solde', value: `${monSolde.toLocaleString('fr-FR')} €`, color: monSolde > 0 ? '#DC2626' : '#059669', bg: monSolde > 0 ? '#FEF2F2' : '#ECFDF5' },
+            ] : [
               { label: 'Total facturé', value: `${Number(facture.total_facture).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
               { label: 'Total réglé', value: `${Number(facture.total_regle).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
               { label: 'Reste à régler', value: `${Number(facture.solde_restant).toLocaleString('fr-FR')} €`, color: Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
-            ].map(s => (
+            ]).map(s => (
               <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
                 <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{s.label}</div>
@@ -134,7 +151,7 @@ export default function PortailFacturesPage() {
             </div>
           )}
 
-          {(stripeActif || gocardlessActif) && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
+          {!parent.estSeparee && (stripeActif || gocardlessActif) && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
             <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>
@@ -208,7 +225,7 @@ export default function PortailFacturesPage() {
 
           {/* Règlements */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>💳 Historique des règlements</div>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>💳 {parent.estSeparee ? 'Mes règlements' : 'Historique des règlements'}</div>
             {reglements.length === 0 ? (
               <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun règlement enregistré</div>
             ) : (

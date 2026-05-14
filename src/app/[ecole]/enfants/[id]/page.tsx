@@ -20,6 +20,7 @@ export default function EnfantDetailPage() {
   const [classes, setClasses] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [inscriptionDocs, setInscriptionDocs] = useState<any[]>([])
+  const [personnesAutorisees, setPersonnesAutorisees] = useState<any[]>([])
 
   useEffect(() => { load() }, [enfantId])
 
@@ -56,6 +57,10 @@ export default function EnfantDetailPage() {
     const { data: idocs } = await s.from('inscription_documents_uploaded')
       .select('*').eq('enfant_id', enfantId).order('uploaded_at', { ascending: false })
     setInscriptionDocs(idocs ?? [])
+
+    const { data: persAuto } = await s.from('enfant_personnes_autorisees')
+      .select('*').eq('enfant_id', enfantId).order('created_at')
+    setPersonnesAutorisees(persAuto ?? [])
     setLoading(false)
   }
 
@@ -329,6 +334,26 @@ export default function EnfantDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Personnes autorisées à récupérer l'enfant */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
+          👤 Personnes autorisées à récupérer l&apos;enfant
+        </div>
+        {personnesAutorisees.length === 0 ? (
+          <div style={{ padding: '16px 20px', fontSize: 12, color: '#94A3B8' }}>Aucune personne déclarée. Seuls les parents sont autorisés. La famille peut compléter cette liste depuis son espace.</div>
+        ) : personnesAutorisees.map((pa, i) => (
+          <div key={pa.id} style={{ padding: '12px 20px', borderBottom: i < personnesAutorisees.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{[pa.prenom, pa.nom].filter(Boolean).join(' ')}</div>
+              <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                {pa.lien || 'Lien non précisé'}{pa.telephone ? ` · ${pa.telephone}` : ''}
+              </div>
+            </div>
+            {pa.autorise_sortie === false && <span style={{ fontSize: 10, fontWeight: 700, color: '#92400E', background: '#FEF3C7', borderRadius: 6, padding: '2px 8px' }}>NON AUTORISÉ SORTIE</span>}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

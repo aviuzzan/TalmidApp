@@ -57,6 +57,13 @@ export default function FacturePrintPage() {
   const fmt = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
   const date = (d: string) => new Date(d).toLocaleDateString('fr-FR')
   const lastRegl = reglements[reglements.length - 1]
+  const estSeparee = famille?.situation_maritale === 'divorce' || famille?.situation_maritale === 'separe'
+  const partP1 = Number(famille?.part_pere ?? 100)
+  const partP2 = Number(famille?.part_mere ?? 0)
+  const partP1Montant = total * partP1 / 100
+  const partP2Montant = total * partP2 / 100
+  const regleP1 = reglements.filter(r => r.paye_par === 'parent1').reduce((s, r) => s + Number(r.montant), 0)
+  const regleP2 = reglements.filter(r => r.paye_par === 'parent2').reduce((s, r) => s + Number(r.montant), 0)
 
   const titre = facture.statut === 'paye' ? 'FACTURE ACQUITTÉE' : facture.statut === 'partiel' ? 'RELEVÉ DE COMPTE' : facture.statut === 'annule' ? 'FACTURE ANNULÉE' : 'FACTURE'
 
@@ -175,6 +182,32 @@ export default function FacturePrintPage() {
             <tr><td colSpan={2} style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14, borderTop: '2px solid #1E293B' }}>TOTAL TTC</td><td style={{ textAlign: 'right', fontWeight: 800, fontSize: 14, paddingTop: 14, borderTop: '2px solid #1E293B' }}>{fmt(total)}</td></tr>
           </tbody>
         </table>
+
+        {estSeparee && (
+          <div style={{ marginTop: 26 }}>
+            <h2>Répartition entre parents</h2>
+            <table>
+              <thead>
+                <tr><th>Parent</th><th style={{ textAlign: 'right' }}>Part</th><th style={{ textAlign: 'right' }}>Réglé</th><th style={{ textAlign: 'right' }}>Solde</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Parent 1 — {`${famille?.parent1_prenom ?? ''} ${famille?.parent1_nom ?? ''}`.trim()}</td>
+                  <td style={{ textAlign: 'right' }}>{partP1}% · {fmt(partP1Montant)}</td>
+                  <td style={{ textAlign: 'right', color: '#059669' }}>{fmt(regleP1)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: partP1Montant - regleP1 > 0 ? '#DC2626' : '#059669' }}>{fmt(partP1Montant - regleP1)}</td>
+                </tr>
+                <tr>
+                  <td>Parent 2 — {`${famille?.parent2_prenom ?? ''} ${famille?.parent2_nom ?? ''}`.trim()}</td>
+                  <td style={{ textAlign: 'right' }}>{partP2}% · {fmt(partP2Montant)}</td>
+                  <td style={{ textAlign: 'right', color: '#059669' }}>{fmt(regleP2)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: partP2Montant - regleP2 > 0 ? '#DC2626' : '#059669' }}>{fmt(partP2Montant - regleP2)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 6 }}>Facture émise au nom de la famille, répartie entre les deux parents selon l&apos;accord en vigueur.</div>
+          </div>
+        )}
 
         {/* Tableau règlements (si existants) */}
         {reglements.length > 0 && (

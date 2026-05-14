@@ -72,16 +72,27 @@ export async function POST(req: NextRequest) {
     // Familles de l'ecole + familles deja dotees d'un compte parent
     const [{ data: familles }, { data: parentProfiles }] = await Promise.all([
       supabaseAdmin.from('familles')
-        .select('id, nom, parent1_prenom, parent1_nom, parent1_email')
+        .select('id, nom, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email, situation_maritale')
         .eq('ecole_id', ecoleId),
       supabaseAdmin.from('profiles')
-        .select('famille_id').eq('ecole_id', ecoleId).eq('role', 'parent'),
+        .select('famille_id, parent_slot').eq('ecole_id', ecoleId).eq('role', 'parent'),
     ])
-    const dejaInvitees = new Set((parentProfiles || []).map((p: any) => p.famille_id))
-    const aInviter = (familles || []).filter((f: any) => f.parent1_email && !dejaInvitees.has(f.id))
-    const sansEmail = (familles || []).filter((f: any) => !f.parent1_email && !dejaInvitees.has(f.id)).length
+    // Slots déjà pourvus : "familleId:parent1" / "familleId:parent2"
+    const slotsPris = new Set((parentProfiles || []).map((p: any) => `${p.famille_id}:${p.parent_slot || 'parent1'}`))
+    // Cibles d'invitation : parent1 toujours, parent2 uniquement pour les familles séparées
+    const cibles: { f: any; slot: 'parent1' | 'parent2'; email: string; prenom: string; nom: string }[] = []
+    for (const f of (familles || []) as any[]) {
+      if (f.parent1_email && !slotsPris.has(`${f.id}:parent1`)) {
+        cibles.push({ f, slot: 'parent1', email: String(f.parent1_email).trim(), prenom: f.parent1_prenom, nom: f.parent1_nom })
+      }
+      const sep = f.situation_maritale === 'divorce' || f.situation_maritale === 'separe'
+      if (sep && f.parent2_email && f.parent2_email !== f.parent1_email && !slotsPris.has(`${f.id}:parent2`)) {
+        cibles.push({ f, slot: 'parent2', email: String(f.parent2_email).trim(), prenom: f.parent2_prenom, nom: f.parent2_nom })
+      }
+    }
+    const sansEmail = (familles || []).filter((f: any) => !f.parent1_email && !slotsPris.has(`${f.id}:parent1`)).length
 
-    const lot = aInviter.slice(0, limit)
+    const lot = cibles.slice(0, limit)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
     const redirectTo = baseUrl + '/auth/set-password?invited=1'
     const emailOk = isEmailConfigured()
@@ -95,8 +106,9 @@ export async function POST(req: NextRequest) {
     let invited = 0
     const erreurs: string[] = []
 
-    for (const f of lot) {
-      const email = String(f.parent1_email).trim()
+    for (const c of lot) {
+      const f = c.f
+      const email = c.email
       try {
         let userId = usersByEmail.get(email.toLowerCase()) || null
         if (!userId) {
@@ -114,7 +126,8 @@ export async function POST(req: NextRequest) {
 
         const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
           id: userId, role: 'parent', ecole_id: ecoleId, famille_id: f.id,
-          prenom: f.parent1_prenom || null, nom: f.parent1_nom || null, email,
+          parent_slot: c.slot,
+          prenom: c.prenom || null, nom: c.nom || null, email,
         })
         if (profErr) {
           erreurs.push(`${f.nom} (${email}) : ${profErr.message}`)
@@ -128,9 +141,9 @@ export async function POST(req: NextRequest) {
           const inviteLink = linkData?.properties?.action_link
           if (inviteLink) {
             await sendEmail({
-              to: { email, name: `${f.parent1_prenom || ''} ${f.parent1_nom || ''}`.trim() },
+              to: { email, name: `${c.prenom || ''} ${c.nom || ''}`.trim() },
               subject: 'Bienvenue sur le portail famille - ' + ecoleNom,
-              html: buildBienvenueEmail(f.parent1_prenom, ecoleNom, inviteLink),
+              html: buildBienvenueEmail(c.prenom, ecoleNom, inviteLink),
             })
           }
         }
@@ -140,7 +153,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const restant = aInviter.length - lot.length
+    const restant = cibles.length - lot.length
     return NextResponse.json({
       success: true,
       processed: lot.length,

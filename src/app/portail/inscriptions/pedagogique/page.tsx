@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
+import { useParentCtx } from '@/lib/parent-context'
 
 /**
  * Fiche pédagogique = formulaire pour AJOUTER UN NOUVEL ENFANT à la famille.
@@ -11,6 +12,7 @@ import { useAnneeInscription } from '@/lib/inscription-context'
 export default function PedagogiqueNouvelEnfantPage() {
   const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
+  const parent = useParentCtx()
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
   const [secteurs, setSecteurs] = useState<any[]>([])
@@ -167,6 +169,17 @@ export default function PedagogiqueNouvelEnfantPage() {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
+
+  if (!parent.estPrincipal) return (
+    <div style={{ maxWidth: 640, margin: '40px auto', padding: '0 20px' }}>
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '32px 28px', textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Démarche réservée au parent principal</h2>
+        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>Cette démarche d&apos;inscription est gérée par le parent principal de la famille. Vous pouvez en suivre l&apos;avancement depuis la page « Année N+1 ».</p>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ marginTop: 18, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Retour</button>
+      </div>
+    </div>
+  )
 
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }

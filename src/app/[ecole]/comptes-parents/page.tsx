@@ -11,7 +11,7 @@ export default function ComptesParentsPage() {
 
   // Modal création
   const [modal, setModal] = useState<any>(null) // { famille }
-  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', parentSlot: 'parent1' })
   const [creating, setCreating] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [showPwd, setShowPwd] = useState(false)
@@ -62,6 +62,7 @@ export default function ComptesParentsPage() {
       email: famille.parent1_email || '',
       password: '',
       confirmPassword: '',
+      parentSlot: 'parent1',
     })
     setResult(null)
   }
@@ -87,6 +88,7 @@ export default function ComptesParentsPage() {
         password: form.password,
         familleId: modal.famille.id,
         ecoleId: ecole.id,
+        parentSlot: form.parentSlot,
       }),
     })
 
@@ -276,6 +278,20 @@ export default function ComptesParentsPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Pour quel parent
+                </label>
+                <select style={inp} value={form.parentSlot} onChange={e => {
+                  const slot = e.target.value
+                  const em = slot === 'parent2' ? (modal.famille.parent2_email || '') : (modal.famille.parent1_email || '')
+                  setForm(p => ({ ...p, parentSlot: slot, email: em }))
+                }}>
+                  <option value="parent1">Parent 1 — {[modal.famille.parent1_prenom, modal.famille.parent1_nom].filter(Boolean).join(' ') || 'Parent 1'}</option>
+                  <option value="parent2">Parent 2 — {[modal.famille.parent2_prenom, modal.famille.parent2_nom].filter(Boolean).join(' ') || 'Parent 2'}</option>
+                </select>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Pour les familles séparées, créez un accès distinct pour chaque parent.</div>
+              </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Adresse email

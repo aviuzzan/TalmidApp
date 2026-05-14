@@ -26,13 +26,14 @@ function AttestationFiscaleInner() {
 
   const [loading, setLoading] = useState(true)
   const [annee, setAnnee] = useState(anneeParam)
+  const [parentFiltre, setParentFiltre] = useState<'tous' | 'parent1' | 'parent2'>('tous')
   const [famille, setFamille] = useState<any>(null)
   const [parents, setParents] = useState<any[]>([])
   const [enfants, setEnfants] = useState<any[]>([])
   const [reglements, setReglements] = useState<Reglement[]>([])
   const [ecoleInfo, setEcoleInfo] = useState<any>(null)
 
-  useEffect(() => { if (familleId && ecole?.id) load() }, [familleId, ecole?.id, annee])
+  useEffect(() => { if (familleId && ecole?.id) load() }, [familleId, ecole?.id, annee, parentFiltre])
 
   async function load() {
     setLoading(true)
@@ -57,12 +58,14 @@ function AttestationFiscaleInner() {
 
     const debut = `${annee}-01-01`
     const fin = `${annee}-12-31`
-    const { data: regs } = await s.from('reglements')
+    let regQuery = s.from('reglements')
       .select('id, montant, date_reglement, mode_paiement, reference, facture_id, factures(numero)')
       .eq('famille_id', familleId)
       .gte('date_reglement', debut)
       .lte('date_reglement', fin)
       .order('date_reglement', { ascending: true })
+    if (parentFiltre !== 'tous') regQuery = regQuery.eq('paye_par', parentFiltre)
+    const { data: regs } = await regQuery
 
     // Part deductible : ratio des lignes deductibles de chaque facture reglee
     const factureIds = Array.from(new Set((regs || []).map((r: any) => r.facture_id).filter(Boolean)))
@@ -111,6 +114,12 @@ function AttestationFiscaleInner() {
   const familleNom = famille?.nom_famille || parents[0]?.nom || '-'
   const parentNoms = parents.map(p => `${p.prenom || ''} ${p.nom || ''}`.trim()).filter(Boolean).join(' et ')
   const enfantsListe = enfants.map(e => `${e.prenom || ''} ${e.nom || ''}`.trim()).filter(Boolean).join(', ')
+  const estSeparee = famille?.situation_maritale === 'divorce' || famille?.situation_maritale === 'separe'
+  const destinataireNom = parentFiltre === 'parent1'
+    ? `${famille?.parent1_prenom || ''} ${famille?.parent1_nom || ''}`.trim()
+    : parentFiltre === 'parent2'
+    ? `${famille?.parent2_prenom || ''} ${famille?.parent2_nom || ''}`.trim()
+    : ''
 
   return (
     <div>
@@ -130,6 +139,17 @@ function AttestationFiscaleInner() {
               return <option key={y} value={y}>{y}</option>
             })}
           </select>
+          {estSeparee && (
+            <>
+              <label style={{ fontSize: 12, color: '#475569' }}>Pour :</label>
+              <select value={parentFiltre} onChange={e => setParentFiltre(e.target.value as any)}
+                style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #E2E8F0', fontSize: 13 }}>
+                <option value="tous">Toute la famille</option>
+                <option value="parent1">Parent 1 — {famille?.parent1_prenom} {famille?.parent1_nom}</option>
+                <option value="parent2">Parent 2 — {famille?.parent2_prenom} {famille?.parent2_nom}</option>
+              </select>
+            </>
+          )}
           <button onClick={print}
             style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             Imprimer / PDF
@@ -161,6 +181,7 @@ function AttestationFiscaleInner() {
         <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: 16, marginBottom: 18, fontSize: 13, lineHeight: 1.7 }}>
           {parentNoms && <div><strong>Famille :</strong> {parentNoms}</div>}
           <div><strong>Nom de famille :</strong> {familleNom}</div>
+          {destinataireNom && <div><strong>Attestation établie pour :</strong> {destinataireNom}</div>}
           {enfantsListe && <div><strong>Enfant(s) scolarisé(s) :</strong> {enfantsListe}</div>}
         </div>
 

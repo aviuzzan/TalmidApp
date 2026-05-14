@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, familleId, ecoleId } = await req.json()
+    const { email, password, familleId, ecoleId, parentSlot } = await req.json()
+    const slot = parentSlot === 'parent2' ? 'parent2' : 'parent1'
 
     if (!email || !password || !familleId || !ecoleId) {
       return NextResponse.json({ error: 'Tous les champs sont obligatoires' }, { status: 400 })
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
         role: 'parent',
         famille_id: familleId,
         ecole_id: ecoleId,
+        parent_slot: slot,
       })
       if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 500 })
 
@@ -67,6 +69,7 @@ export async function POST(req: NextRequest) {
       role: 'parent',
       famille_id: familleId,
       ecole_id: ecoleId,
+      parent_slot: slot,
     })
     if (profileErr) {
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)

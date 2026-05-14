@@ -3,10 +3,12 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
+import { useParentCtx } from '@/lib/parent-context'
 import PushPrompt from '@/components/PushPrompt'
 
 export default function PortailPage() {
   const { anneeInscription } = useAnneeInscription()
+  const parent = useParentCtx()
   const router = useRouter()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -43,6 +45,12 @@ export default function PortailPage() {
           .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
       ])
 
+      let reglements: any[] = []
+      if (facture) {
+        const { data: regs } = await supabase.from('reglements').select('montant, paye_par').eq('facture_id', facture.id)
+        reglements = regs ?? []
+      }
+
       const inscriptionsOuvertes = !!cfg && (
         (!!cfg.inscriptions_ouvertes && cfg.date_ouverture_inscription <= now && cfg.date_cloture_inscription >= now) ||
         (!!cfg.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now)
@@ -52,6 +60,7 @@ export default function PortailPage() {
         famille: (profile as any).familles,
         nbEnfants: enfants ?? 0,
         facture: facture ?? null,
+        reglements,
         inscriptionsOuvertes,
       })
       setLoading(false)
@@ -70,6 +79,9 @@ export default function PortailPage() {
   )
 
   const solde = data.facture ? Number(data.facture.solde_restant) : 0
+  const maPart = data.facture ? Number(data.facture.total_facture) * parent.partPct / 100 : 0
+  const regleMoi = (data.reglements || []).filter((r: any) => r.paye_par === parent.parentSlot).reduce((s: number, r: any) => s + Number(r.montant), 0)
+  const monSolde = maPart - regleMoi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -93,8 +105,8 @@ export default function PortailPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
           { icon: '🎓', label: 'Élèves inscrits', value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
-          { icon: '📄', label: `Facture ${anneeInscription.replace('-', '/')}`, value: data.facture ? `${Number(data.facture.total_facture).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
-          { icon: '💳', label: 'Solde restant', value: data.facture ? `${solde.toLocaleString('fr-FR')} €` : '—', color: solde > 0 ? '#DC2626' : '#059669', bg: solde > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '📄', label: parent.estSeparee ? 'Ma part' : `Facture ${anneeInscription.replace('-', '/')}`, value: data.facture ? `${(parent.estSeparee ? maPart : Number(data.facture.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '💳', label: parent.estSeparee ? 'Mon solde' : 'Solde restant', value: data.facture ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
         ].map(s => (
           <div key={s.label} onClick={s.action} style={{
             background: s.bg, borderRadius: 12, padding: '20px 24px', cursor: 'pointer',

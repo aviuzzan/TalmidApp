@@ -69,7 +69,7 @@ async function handle(req: NextRequest) {
 
     const { data: factures } = await supabaseAdmin
       .from('factures_solde')
-      .select('id, numero, total_facture, solde_restant, date_echeance, statut, famille_id, familles!inner(ecole_id, parent1_prenom, parent1_email)')
+      .select('id, numero, total_facture, solde_restant, date_echeance, statut, famille_id, familles!inner(ecole_id, parent1_prenom, parent1_email, parent2_prenom, parent2_email, situation_maritale, part_pere, part_mere)')
       .gt('solde_restant', 0)
       .neq('statut', 'annule')
       .not('date_echeance', 'is', null)
@@ -94,43 +94,61 @@ async function handle(req: NextRequest) {
         .eq('facture_id', f.id).eq('niveau', niveau).eq('succes', true).limit(1)
       if (logExist && logExist.length > 0) { ecoleSkipped++; continue }
 
-      const parentEmail: string | null = f.familles?.parent1_email
-      const parentPrenom: string = f.familles?.parent1_prenom || 'Madame, Monsieur'
+      const fam = f.familles || {}
+      const estSeparee = fam.situation_maritale === 'divorce' || fam.situation_maritale === 'separe'
+      const cibles: { email: string; prenom: string; montantDu: number }[] = []
 
-      if (!parentEmail) {
+      if (estSeparee) {
+        const total = Number(f.total_facture)
+        const { data: regs } = await supabaseAdmin.from('reglements').select('montant, paye_par').eq('facture_id', f.id)
+        const regleP1 = (regs || []).filter((r: any) => r.paye_par === 'parent1').reduce((s: number, r: any) => s + Number(r.montant), 0)
+        const regleP2 = (regs || []).filter((r: any) => r.paye_par === 'parent2').reduce((s: number, r: any) => s + Number(r.montant), 0)
+        const soldeP1 = total * Number(fam.part_pere ?? 100) / 100 - regleP1
+        const soldeP2 = total * Number(fam.part_mere ?? 0) / 100 - regleP2
+        if (soldeP1 > 0.005 && fam.parent1_email) cibles.push({ email: fam.parent1_email, prenom: fam.parent1_prenom || 'Madame, Monsieur', montantDu: soldeP1 })
+        if (soldeP2 > 0.005 && fam.parent2_email) cibles.push({ email: fam.parent2_email, prenom: fam.parent2_prenom || 'Madame, Monsieur', montantDu: soldeP2 })
+      } else if (fam.parent1_email) {
+        cibles.push({ email: fam.parent1_email, prenom: fam.parent1_prenom || 'Madame, Monsieur', montantDu: Number(f.solde_restant) })
+      }
+
+      if (cibles.length === 0) {
         await supabaseAdmin.from('relances_log').insert({
           facture_id: f.id, famille_id: f.famille_id, ecole_id: ecoleId,
           niveau, envoye_a: '(aucun email)', jours_apres_echeance: joursRetard,
-          succes: false, erreur: 'Pas d\'email parent1',
+          succes: false, erreur: estSeparee ? 'Aucune part de parent impayee' : "Pas d'email parent1",
         })
         result.errors.push({ facture: f.numero, error: 'no email' })
         continue
       }
 
-      const vars = {
-        prenom_parent: parentPrenom,
-        numero_facture: f.numero,
-        montant_du: fmtMontant(f.solde_restant),
-        date_echeance: fmtDate(f.date_echeance),
-        nom_ecole: ecoleNom,
+      const emailsOk: string[] = []
+      let factureSent = false
+      for (const c of cibles) {
+        const vars = {
+          prenom_parent: c.prenom,
+          numero_facture: f.numero,
+          montant_du: fmtMontant(c.montantDu),
+          date_echeance: fmtDate(f.date_echeance),
+          nom_ecole: ecoleNom,
+        }
+        const sujet = fillTemplate(cfg[`sujet_${niveau}`] || '', vars)
+        const corps = fillTemplate(cfg[`corps_${niveau}`] || '', vars)
+        const res = await sendEmail({
+          to: { email: c.email, name: c.prenom },
+          subject: sujet,
+          html: toHtml(corps),
+        })
+        if (res.ok) { factureSent = true; emailsOk.push(c.email) }
+        else result.errors.push({ facture: f.numero, error: res.error })
       }
-      const sujet = fillTemplate(cfg[`sujet_${niveau}`] || '', vars)
-      const corps = fillTemplate(cfg[`corps_${niveau}`] || '', vars)
-
-      const res = await sendEmail({
-        to: { email: parentEmail, name: parentPrenom },
-        subject: sujet,
-        html: toHtml(corps),
-      })
 
       await supabaseAdmin.from('relances_log').insert({
         facture_id: f.id, famille_id: f.famille_id, ecole_id: ecoleId,
-        niveau, envoye_a: parentEmail, jours_apres_echeance: joursRetard,
-        succes: res.ok, erreur: res.ok ? null : (res.error || 'inconnu'),
+        niveau, envoye_a: emailsOk.join(', ') || '(echec)', jours_apres_echeance: joursRetard,
+        succes: factureSent, erreur: factureSent ? null : 'envoi echoue',
       })
 
-      if (res.ok) { ecoleSent++; result.sent++ }
-      else result.errors.push({ facture: f.numero, error: res.error })
+      if (factureSent) { ecoleSent++; result.sent++ }
     }
 
     result.skipped += ecoleSkipped

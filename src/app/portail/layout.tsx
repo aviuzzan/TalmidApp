@@ -7,6 +7,7 @@ import LangSwitcher from '@/components/LangSwitcher'
 import { useI18n } from '@/lib/i18n'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { InscriptionContext } from '@/lib/inscription-context'
+import { ParentContext, ParentCtx } from '@/lib/parent-context'
 
 export default function PortailLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -18,6 +19,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const [ready, setReady] = useState(false)
   const [nonLus, setNonLus] = useState(0)
   const [inscriptionCtx, setInscriptionCtx] = useState<{ anneeInscription: string; exerciceInscriptionId: string | null }>({ anneeInscription: '', exerciceInscriptionId: null })
+  const [parentCtx, setParentCtx] = useState<ParentCtx>({ parentSlot: 'parent1', estSeparee: false, estPrincipal: true, partPct: 100 })
 
   useEffect(() => {
     async function check() {
@@ -27,7 +29,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, famille_id, ecole_id, familles(nom, numero)')
+        .select('role, famille_id, ecole_id, parent_slot, familles(nom, numero, situation_maritale, parent_principal, part_pere, part_mere)')
         .eq('id', session.user.id)
         .single()
 
@@ -54,8 +56,17 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         return
       }
 
+      const fam = (profile as any).familles
+      const slot: 'parent1' | 'parent2' = (profile as any).parent_slot === 'parent2' ? 'parent2' : 'parent1'
+      const sep = fam?.situation_maritale === 'divorce' || fam?.situation_maritale === 'separe'
+      setParentCtx({
+        parentSlot: slot,
+        estSeparee: sep,
+        estPrincipal: !sep || (fam?.parent_principal || 'parent1') === slot,
+        partPct: !sep ? 100 : Number((slot === 'parent1' ? fam?.part_pere : fam?.part_mere) ?? 50),
+      })
       setEmail(session.user.email ?? '')
-      setFamille((profile as any).familles)
+      setFamille(fam)
       setProfileId(session.user.id)
       setReady(true)
     }
@@ -158,9 +169,11 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       </nav>
 
       <main className="portail-main" style={{ maxWidth: 900, margin: '0 auto', padding: '28px 24px' }}>
-        <InscriptionContext.Provider value={inscriptionCtx}>
-          {children}
-        </InscriptionContext.Provider>
+        <ParentContext.Provider value={parentCtx}>
+          <InscriptionContext.Provider value={inscriptionCtx}>
+            {children}
+          </InscriptionContext.Provider>
+        </ParentContext.Provider>
       </main>
     </div>
   )
