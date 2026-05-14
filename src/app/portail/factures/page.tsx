@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { ANNEE_COURANTE } from '@/lib/inscriptions'
+import { useAnneeInscription } from '@/lib/inscription-context'
 
 export default function PortailFacturesPage() {
+  const { anneeInscription } = useAnneeInscription()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
@@ -25,7 +26,7 @@ export default function PortailFacturesPage() {
       const { data: fact } = await supabase
         .from('factures_solde').select('*')
         .eq('famille_id', profile.famille_id)
-        .eq('annee_scolaire', ANNEE_COURANTE)
+        .eq('annee_scolaire', anneeInscription)
         .maybeSingle()
 
       if (fact) {
@@ -83,12 +84,12 @@ export default function PortailFacturesPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>Mes factures</h1>
           {facture && <a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" style={{ background: '#2563EB', color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600 }}>📥 Télécharger PDF</a>}
         </div>
-        <p style={{ color: '#64748B', fontSize: 13 }}>Année scolaire {ANNEE_COURANTE}</p>
+        <p style={{ color: '#64748B', fontSize: 13 }}>Année scolaire {anneeInscription}</p>
       </div>
 
       {!facture ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-          Aucune facture pour l'année {ANNEE_COURANTE.replace('-', '/')}
+          Aucune facture pour l'année {anneeInscription.replace('-', '/')}
         </div>
       ) : (
         <>

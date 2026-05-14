@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ANNEE_COURANTE } from '@/lib/inscriptions'
+import { useAnneeInscription } from '@/lib/inscription-context'
 
 /**
  * Fiche pédagogique = formulaire pour AJOUTER UN NOUVEL ENFANT à la famille.
  * Pour les enfants existants (réinscriptions), utiliser /portail/inscriptions/contrat.
  */
 export default function PedagogiqueNouvelEnfantPage() {
+  const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
@@ -88,7 +89,7 @@ export default function PedagogiqueNouvelEnfantPage() {
         famille_id: familleId,
         prenom, deuxieme_prenom: deuxiemePrenom || null, nom,
         genre, date_naissance: dateNaissance, lieu_naissance: lieuNaissance || null,
-        annee_scolaire: ANNEE_COURANTE,
+        annee_scolaire: anneeInscription,
         statut_inscription: 'en_attente',
       })
       .select()
@@ -106,7 +107,7 @@ export default function PedagogiqueNouvelEnfantPage() {
       ecole_id: ecoleId,
       famille_id: familleId,
       enfant_id: nouvelEnfant.id,
-      annee_scolaire: ANNEE_COURANTE,
+      annee_scolaire: anneeInscription,
       secteur_souhaite_id: secteurSouhaite || classeChoisie?.secteur_id || null,
       classe_souhaitee: classeChoisie?.nom || null,
       date_entree_souhaitee: dateEntreeSouhaitee || null,

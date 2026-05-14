@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
 import LangSwitcher from '@/components/LangSwitcher'
 import { useI18n } from '@/lib/i18n'
+import { getExerciceInscription } from '@/lib/annee-inscription'
+import { InscriptionContext } from '@/lib/inscription-context'
 
 export default function PortailLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -15,6 +17,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const [profileId, setProfileId] = useState<string>('')
   const [ready, setReady] = useState(false)
   const [nonLus, setNonLus] = useState(0)
+  const [inscriptionCtx, setInscriptionCtx] = useState<{ anneeInscription: string; exerciceInscriptionId: string | null }>({ anneeInscription: '', exerciceInscriptionId: null })
 
   useEffect(() => {
     async function check() {
@@ -24,7 +27,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, famille_id, familles(nom, numero)')
+        .select('role, famille_id, ecole_id, familles(nom, numero)')
         .eq('id', session.user.id)
         .single()
 
@@ -38,6 +41,12 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         router.push(`/${slug}/dashboard`)
         return
       }
+
+      if (profile?.ecole_id) {
+        const insc = await getExerciceInscription(supabase, profile.ecole_id)
+        setInscriptionCtx({ anneeInscription: insc.code, exerciceInscriptionId: insc.exercice_id })
+      }
+
       if (!profile?.famille_id) {
         setEmail(session.user.email ?? '')
         setProfileId(session.user.id)
@@ -147,7 +156,9 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       </nav>
 
       <main className="portail-main" style={{ maxWidth: 900, margin: '0 auto', padding: '28px 24px' }}>
-        {children}
+        <InscriptionContext.Provider value={inscriptionCtx}>
+          {children}
+        </InscriptionContext.Provider>
       </main>
     </div>
   )

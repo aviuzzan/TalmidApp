@@ -2,11 +2,13 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
+import { formatStatut } from '@/lib/inscriptions'
+import { useAnneeInscription } from '@/lib/inscription-context'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
 export default function PortailInscriptionsPage() {
+  const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
   const searchParams = useSearchParams()
   const initTab = (searchParams.get('tab') as SubTab) || 'dossier'
@@ -15,7 +17,7 @@ export default function PortailInscriptionsPage() {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', fontFamily: 'Inter, sans-serif', padding: '0 0 48px' }}>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Année {ANNEE_COURANTE}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Année {anneeInscription}</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>
           Tout pour préparer la rentrée : votre dossier d'inscription, votre facture et les documents partagés par l'école.
         </p>
@@ -51,6 +53,7 @@ export default function PortailInscriptionsPage() {
 
 // ── ONGLET 1 : DOSSIER (DDR + Contrat + Nouvel enfant) ──
 function DossierTab({ router }: { router: any }) {
+  const { anneeInscription } = useAnneeInscription()
   const [famille, setFamille] = useState<any>(null)
   const [enfants, setEnfants] = useState<any[]>([])
   const [config, setConfig] = useState<any>(null)
@@ -71,9 +74,9 @@ function DossierTab({ router }: { router: any }) {
     const [{ data: fam }, { data: enf }, { data: cfg }, { data: red }, { data: cont }] = await Promise.all([
       s.from('familles').select('*').eq('id', profile.famille_id).single(),
       s.from('enfants').select('*').eq('famille_id', profile.famille_id).order('prenom'),
-      s.from('inscriptions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', ANNEE_COURANTE).maybeSingle(),
-      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).maybeSingle(),
-      s.from('contrats_scolarisation').select('*, contrat_enfants(enfant_id)').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).maybeSingle(),
+      s.from('inscriptions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+      s.from('contrats_scolarisation').select('*, contrat_enfants(enfant_id)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
     ])
     setFamille(fam); setEnfants(enf ?? []); setConfig(cfg)
     setReduction(red); setContrat(cont)
@@ -152,7 +155,7 @@ function DossierTab({ router }: { router: any }) {
         <EtapeCard
           numero={3}
           titre="Contrat de scolarisation"
-          desc={enfants.length > 0 ? `Réinscrivez ${enfants.length > 1 ? 'vos enfants' : enfants[0]?.prenom || 'votre enfant'} pour ${ANNEE_COURANTE}` : `Finalisez votre inscription pour ${ANNEE_COURANTE}`}
+          desc={enfants.length > 0 ? `Réinscrivez ${enfants.length > 1 ? 'vos enfants' : enfants[0]?.prenom || 'votre enfant'} pour ${anneeInscription}` : `Finalisez votre inscription pour ${anneeInscription}`}
           status={contratSoumis ? 'done' : contrat?.statut === 'brouillon' ? 'inprogress' : 'todo'}
           ouvert={inscriptionsOuvertes || !!contrat}
           dateLimite={config?.date_cloture_inscription ? `Avant le ${new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}` : null}
@@ -187,6 +190,7 @@ function DossierTab({ router }: { router: any }) {
 
 // ── ONGLET 2 : FACTURE (année courante) ──
 function FactureTab() {
+  const { anneeInscription } = useAnneeInscription()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
@@ -203,7 +207,7 @@ function FactureTab() {
       const { data: fact } = await s
         .from('factures_solde').select('*')
         .eq('famille_id', profile.famille_id)
-        .eq('annee_scolaire', ANNEE_COURANTE)
+        .eq('annee_scolaire', anneeInscription)
         .maybeSingle()
 
       if (fact) {
@@ -223,7 +227,7 @@ function FactureTab() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
   if (!facture) return (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-      Aucune facture pour l'année {ANNEE_COURANTE}.<br /><br />
+      Aucune facture pour l'année {anneeInscription}.<br /><br />
       <span style={{ fontSize: 12 }}>La facture sera générée automatiquement après la validation de votre contrat de scolarisation par l'école.</span>
     </div>
   )
@@ -338,6 +342,7 @@ function FactureTab() {
 
 // ── ONGLET 3 : DOCUMENTS ÉCOLE ──
 function DocumentsTab() {
+  const { anneeInscription } = useAnneeInscription()
   const [docs, setDocs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -351,7 +356,7 @@ function DocumentsTab() {
       const { data } = await s.from('documents_ecole_publics')
         .select('*')
         .eq('ecole_id', profile.ecole_id)
-        .eq('annee_scolaire', ANNEE_COURANTE)
+        .eq('annee_scolaire', anneeInscription)
         .eq('actif', true)
         .order('ordre').order('created_at', { ascending: false })
       setDocs(data ?? [])
@@ -372,7 +377,7 @@ function DocumentsTab() {
 
   if (docs.length === 0) return (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-      Aucun document partagé par l'école pour l'année {ANNEE_COURANTE}.<br /><br />
+      Aucun document partagé par l'école pour l'année {anneeInscription}.<br /><br />
       <span style={{ fontSize: 12 }}>L'établissement publiera ici la circulaire de rentrée, la liste des affaires, etc.</span>
     </div>
   )

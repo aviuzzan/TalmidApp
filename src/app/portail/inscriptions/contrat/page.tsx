@@ -2,7 +2,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
+import { formatStatut } from '@/lib/inscriptions'
+import { useAnneeInscription } from '@/lib/inscription-context'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -13,6 +14,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 )
 
 export default function ContratPage() {
+  const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
   const ks = () => {} // no-op (ancien hack scroll cassait la saisie)
 
@@ -85,14 +87,14 @@ export default function ContratPage() {
       s.from('familles').select('*').eq('id', profile.famille_id).single(),
       s.from('enfants').select('*, classes(id, nom, secteur_id, secteurs(id, nom))').eq('famille_id', profile.famille_id),
       s.from('classes').select('id, nom, secteur_id, secteurs(id, nom)').eq('ecole_id', profile.ecole_id).order('nom'),
-      s.from('tarifs_secteur').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', ANNEE_COURANTE).order('ordre'),
+      s.from('tarifs_secteur').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).order('ordre'),
       s.from('modes_reglement_ecole').select('*').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
       s.from('contrat_paiement_config').select('*').eq('ecole_id', profile.ecole_id).single(),
       s.from('dates_encaissement').select('*').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
-      s.from('reductions_famille_nombreuse').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', ANNEE_COURANTE).order('nb_enfants'),
-      s.from('demandes_reduction').select('tarif_accorde, statut, id').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).eq('statut', 'accepte').single(),
-      s.from('contrats_scolarisation').select('*, contrat_enfants(*)').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).single(),
-      s.from('demandes_reduction').select('statut').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).single(),
+      s.from('reductions_famille_nombreuse').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).order('nb_enfants'),
+      s.from('demandes_reduction').select('tarif_accorde, statut, id').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).eq('statut', 'accepte').single(),
+      s.from('contrats_scolarisation').select('*, contrat_enfants(*)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
+      s.from('demandes_reduction').select('statut').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
       s.from('mandats_sepa').select('*').eq('famille_id', profile.famille_id).eq('ecole_id', profile.ecole_id).eq('actif', true).single(),
     ])
 
@@ -274,8 +276,8 @@ export default function ContratPage() {
     }
 
     const payload: any = {
-      famille_id: familleId, ecole_id: ecoleId, annee_scolaire: ANNEE_COURANTE,
-      demande_reduction_id: reductionAccordee ? (await s.from('demandes_reduction').select('id').eq('famille_id', familleId).eq('annee_scolaire', ANNEE_COURANTE).single()).data?.id : null,
+      famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription,
+      demande_reduction_id: reductionAccordee ? (await s.from('demandes_reduction').select('id').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).single()).data?.id : null,
       assurance_ecole: assuranceEcole, assurance_montant_total: totalAssurance,
       mode_reglement: modeReglement, nb_echeances: nbEcheances,
       montant_total: totalAnnuel, autorisation_image: autorisationImage,
@@ -311,7 +313,7 @@ export default function ContratPage() {
       }
 
       // Sauvegarder scolarité N actuelle pour N+1
-      await s.from('familles').update({ scolarite_n1: totalAnnuel, scolarite_n1_annee: ANNEE_COURANTE }).eq('id', familleId)
+      await s.from('familles').update({ scolarite_n1: totalAnnuel, scolarite_n1_annee: anneeInscription }).eq('id', familleId)
 
       // Mandat SEPA
       if (modeReglement === 'sepa') {
@@ -328,7 +330,7 @@ export default function ContratPage() {
       if ((modeReglement === 'cheque' || modeReglement === 'sepa') && nbEcheances > 0 && dateEncaissement) {
         await s.from('cheques_prevus').delete().eq('contrat_id', contratId)
         // Année scolaire "2026-2027" => septembre 2026 (mois index 8)
-        const anneeDebut = parseInt(ANNEE_COURANTE.split('-')[0]) || new Date().getFullYear()
+        const anneeDebut = parseInt(anneeInscription.split('-')[0]) || new Date().getFullYear()
         const moisDebut = 8
         // Les chèques restent invisibles tant que l'admin n'a pas validé leur réception.
         const statutInitial = modeReglement === 'cheque' ? 'attente_reception' : 'prevu'
@@ -387,7 +389,7 @@ export default function ContratPage() {
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>← Retour</button>
       <div>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Contrat de scolarisation {ANNEE_COURANTE}</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Contrat de scolarisation {anneeInscription}</h1>
       </div>
 
       {/* ── ALERTE DDR ── */}
@@ -611,7 +613,7 @@ export default function ContratPage() {
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>Engagement et signature</div>
         <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', padding: '14px 18px', fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 16 }}>
-          Nous soussigné(e)s, <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, reconnaissons avoir pris connaissance des tarifs pour l'année scolaire {ANNEE_COURANTE} et approuvons le règlement de l'établissement. Nous nous engageons à régler la somme de <strong>{totalAnnuel.toLocaleString('fr-FR')} €</strong> selon les modalités choisies.
+          Nous soussigné(e)s, <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, reconnaissons avoir pris connaissance des tarifs pour l'année scolaire {anneeInscription} et approuvons le règlement de l'établissement. Nous nous engageons à régler la somme de <strong>{totalAnnuel.toLocaleString('fr-FR')} €</strong> selon les modalités choisies.
         </div>
 
         <label style={lbl}>Signature *</label>

@@ -2,7 +2,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
+import { formatStatut } from '@/lib/inscriptions'
+import { useAnneeInscription } from '@/lib/inscription-context'
 
 // IMPORTANT : Section est défini AU NIVEAU MODULE (hors du composant page).
 // Si on le définit dans le composant, à chaque render React voit une nouvelle
@@ -15,6 +16,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 )
 
 export default function DemandeReductionPage() {
+  const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
   // ks() est un no-op gardé pour compat avec les onChange existants — le hack scroll précédent
   // (useLayoutEffect + window.scrollTo) cassait la saisie en remontant la page à chaque caractère.
@@ -106,8 +108,8 @@ export default function DemandeReductionPage() {
       s.from('enfants').select('*, classes(id, nom, secteur_id, secteurs(nom))').eq('famille_id', profile.famille_id),
       s.from('classes').select('id, nom, secteur_id, secteurs(nom)').eq('ecole_id', profile.ecole_id).order('nom'),
       s.from('secteurs').select('id, nom').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
-      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', ANNEE_COURANTE).single(),
-      s.from('reduction_documents_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', ANNEE_COURANTE).eq('actif', true).order('ordre'),
+      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
+      s.from('reduction_documents_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).eq('actif', true).order('ordre'),
     ])
 
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? []); setSecteurs(sec ?? [])
@@ -245,7 +247,7 @@ export default function DemandeReductionPage() {
     if (!demandeIdActuel) {
       const s = createClient()
       const { data: nd } = await s.from('demandes_reduction').insert({
-        famille_id: familleId, ecole_id: ecoleId, annee_scolaire: ANNEE_COURANTE, statut: 'brouillon',
+        famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription, statut: 'brouillon',
       }).select().single()
       demandeIdActuel = nd?.id; if (nd) setDemande(nd)
     }
@@ -295,7 +297,7 @@ export default function DemandeReductionPage() {
     const totalRev = Math.round(totalRevenusMensuel() * 100) / 100
 
     const payload: any = {
-      famille_id: familleId, ecole_id: ecoleId, annee_scolaire: ANNEE_COURANTE,
+      famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription,
       statut: 'soumis', soumis_le: new Date().toISOString(),
       situation_familiale: situation,
       logement_type: logType,
@@ -402,7 +404,7 @@ export default function DemandeReductionPage() {
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>← Retour</button>
       <div>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demande de réduction {ANNEE_COURANTE}</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demande de réduction {anneeInscription}</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>Toutes les informations restent confidentielles. Les champs * sont obligatoires.</p>
       </div>
 
