@@ -117,10 +117,26 @@ function DossierTab({ router }: { router: any }) {
         </div>
       )}
 
-      {/* Étapes */}
+      {/* Étapes — l'inscription d'un nouvel enfant precede la reduction et le contrat */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Étape 1 : Nouvel enfant (si besoin) */}
+        <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 14, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#94A3B8' }}>1</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>Inscrire un nouvel enfant</span>
+              <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>SI BESOIN</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#64748B' }}>Pour un enfant qui n'est pas encore dans l'école — à faire avant la demande de réduction et le contrat</div>
+          </div>
+          <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
+            style={{ background: '#1E293B', border: 'none', borderRadius: 10, padding: '10px 18px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            Fiche d'inscription →
+          </button>
+        </div>
+
         <EtapeCard
-          numero={1}
+          numero={2}
           titre="Demande de réduction"
           desc="Facultatif — déposez votre dossier avant la date limite"
           optional
@@ -134,7 +150,7 @@ function DossierTab({ router }: { router: any }) {
         />
 
         <EtapeCard
-          numero={2}
+          numero={3}
           titre="Contrat de scolarisation"
           desc={enfants.length > 0 ? `Réinscrivez ${enfants.length > 1 ? 'vos enfants' : enfants[0]?.prenom || 'votre enfant'} pour ${ANNEE_COURANTE}` : `Finalisez votre inscription pour ${ANNEE_COURANTE}`}
           status={contratSoumis ? 'done' : contrat?.statut === 'brouillon' ? 'inprogress' : 'todo'}
@@ -146,18 +162,6 @@ function DossierTab({ router }: { router: any }) {
           actionLabel={contrat ? 'Voir mon contrat →' : `Remplir le contrat${enfants.length > 1 ? ` (${enfants.length} enfants)` : ''} →`}
           highlight
         />
-
-        {/* Nouvel enfant */}
-        <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>➕ Inscrire un nouvel enfant</div>
-            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>Pour un enfant qui n'est pas encore dans l'école</div>
-          </div>
-          <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
-            style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 9, padding: '8px 16px', fontSize: 12, color: '#475569', cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>
-            Fiche d'inscription →
-          </button>
-        </div>
       </div>
 
       {(config?.date_cloture_reduction || config?.date_cloture_inscription) && (
