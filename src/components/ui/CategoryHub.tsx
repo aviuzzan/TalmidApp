@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { CATEGORIES, MODULE_HREF, NIVEAU_LABEL, NIVEAU_COLOR, loadPermissions, hasAtLeast, Niveau, Categorie } from '@/lib/permissions'
+import { CATEGORIES, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
 
 type ModuleInfo = {
   code: string
@@ -110,63 +110,87 @@ export default function CategoryHub({ code }: { code: string }) {
   const accessibleCount = modules.filter(m => moduleAccessible(m).ok).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <button onClick={() => router.push('/' + ecole.slug + '/dashboard')}
-          style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
-          ← Retour tableau de bord
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 13,
-            background: cat.couleur.bg, color: cat.couleur.fg,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
-          }}>{cat.icone}</div>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>{cat.nom}</h1>
-            <p style={{ fontSize: 13, color: '#64748B', margin: '2px 0 0' }}>
-              {cat.description} · {accessibleCount}/{modules.length} module{modules.length > 1 ? 's' : ''} accessible{accessibleCount > 1 ? 's' : ''}
-            </p>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* Bouton retour — pilule lisible */}
+      <button onClick={() => router.push('/' + ecole.slug + '/dashboard')}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, alignSelf: 'flex-start',
+          background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10,
+          padding: '8px 14px', fontSize: 13, color: '#1E293B', cursor: 'pointer',
+          fontWeight: 500, transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#F1F5F9')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+        <span style={{ fontSize: 15 }}>←</span> Tableau de bord
+      </button>
+
+      {/* Bandeau catégorie — couleur pleine de la catégorie */}
+      <div style={{
+        background: cat.couleur.border,
+        borderRadius: 14, padding: '18px 22px',
+        display: 'flex', alignItems: 'center', gap: 16,
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 12, flexShrink: 0,
+          background: 'rgba(255,255,255,0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
+        }}>{cat.icone}</div>
+        <div>
+          <h1 style={{ fontSize: 23, fontWeight: 800, color: '#fff', margin: 0 }}>{cat.nom}</h1>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', margin: '3px 0 0' }}>
+            {cat.description} · {accessibleCount}/{modules.length} module{modules.length > 1 ? 's' : ''} accessible{accessibleCount > 1 ? 's' : ''}
+          </p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 260px))', gap: 14, justifyContent: 'center' }}>
+      {/* Grille de cards — largeur égale, remplit la ligne */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
         {modules.map((m, i) => {
           const { ok, niveau } = moduleAccessible(m)
           const onClick = ok ? () => router.push('/' + ecole.slug + '/' + m.href) : undefined
-          const couleur = ok ? NIVEAU_COLOR[niveau] : NIVEAU_COLOR.aucun
 
           return (
             <div key={m.code + '-' + i} onClick={onClick}
               style={{
                 background: ok ? '#fff' : '#F8FAFC',
                 border: '1px solid #E2E8F0',
-                borderRadius: 12, padding: 18,
+                borderRadius: 14, padding: 18,
                 cursor: ok ? 'pointer' : 'not-allowed',
-                opacity: ok ? 1 : 0.55,
-                minHeight: 130,
-                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                transition: 'border-color 0.15s, transform 0.15s',
+                opacity: ok ? 1 : 0.6,
+                minHeight: 138,
+                display: 'flex', flexDirection: 'column', gap: 10,
+                transition: 'border-color 0.15s, transform 0.15s, box-shadow 0.15s',
               }}
-              onMouseEnter={e => { if (ok) { (e.currentTarget as HTMLElement).style.borderColor = cat!.couleur.border; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)' } }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}>
-              <div>
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{m.icone}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: ok ? '#1E293B' : '#64748B' }}>{m.nom}</div>
-                <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{m.description}</div>
+              onMouseEnter={e => {
+                if (ok) {
+                  const el = e.currentTarget as HTMLElement
+                  el.style.borderColor = cat!.couleur.border
+                  el.style.transform = 'translateY(-2px)'
+                  el.style.boxShadow = `0 6px 16px ${cat!.couleur.border}22`
+                }
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLElement
+                el.style.borderColor = '#E2E8F0'
+                el.style.transform = 'translateY(0)'
+                el.style.boxShadow = 'none'
+              }}>
+              {/* Pastille icône */}
+              <div style={{
+                width: 42, height: 42, borderRadius: 11, flexShrink: 0,
+                background: ok ? cat.couleur.border : '#E2E8F0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 21,
+              }}>{ok ? m.icone : '🔒'}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: ok ? '#1E293B' : '#64748B' }}>{m.nom}</div>
+                <div style={{ fontSize: 12, color: '#64748B', marginTop: 3, lineHeight: 1.45 }}>{m.description}</div>
               </div>
-              <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>
                 {ok ? (
-                  niveau !== 'aucun' && niveau !== 'admin' ? (
-                    <span style={{
-                      display: 'inline-block',
-                      background: couleur.bg, color: couleur.fg,
-                      fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 8,
-                    }}>{NIVEAU_LABEL[niveau]}</span>
-                  ) : null
+                  <span style={{ color: cat.couleur.border }}>Ouvrir →</span>
                 ) : (
-                  <span style={{ color: '#94A3B8', fontSize: 11, fontStyle: 'italic' }}>🔒 Accès non accordé</span>
+                  <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>🔒 Accès non accordé</span>
                 )}
               </div>
             </div>
