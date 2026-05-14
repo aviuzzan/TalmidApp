@@ -61,6 +61,25 @@ function buildRefusEmail(prenom: string, ecoleNom: string, motif: string): strin
   ].join('')
 }
 
+/**
+ * Normalise la situation maritale vers les valeurs autorisees par la
+ * contrainte familles_situation_maritale_check :
+ * marie | celibataire | divorce | veuf | separe | non_connu (ou null).
+ */
+function normalizeSituation(v: any): string | null {
+  if (!v) return null
+  const s = String(v).toLowerCase().trim()
+  const map: Record<string, string> = {
+    marie: 'marie', maries: 'marie', 'marie(e)': 'marie',
+    celibataire: 'celibataire',
+    divorce: 'divorce', divorces: 'divorce', 'divorce(e)': 'divorce',
+    veuf: 'veuf', veuve: 'veuf',
+    separe: 'separe', separes: 'separe', 'separe(e)': 'separe',
+    pacses: 'non_connu', union_libre: 'non_connu', non_connu: 'non_connu',
+  }
+  return map[s] || null
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { demandeId, action, motif } = await req.json()
@@ -135,7 +154,7 @@ export async function POST(req: NextRequest) {
         telephone: demande.parent1_telephone || null,
         statut_dossier: 'en_attente',
         date_creation: new Date().toISOString(),
-        situation_maritale: demande.situation_maritale || null,
+        situation_maritale: normalizeSituation(demande.situation_maritale),
         parent1_prenom: demande.parent1_prenom || null,
         parent1_nom: demande.parent1_nom || null,
         parent1_email: demande.parent1_email || null,

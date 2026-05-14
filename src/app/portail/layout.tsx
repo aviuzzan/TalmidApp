@@ -94,6 +94,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
     { href: '/portail/messages', icon: '💬', label: t('portail.nav.messaging') },
     { href: '/portail/inscriptions', icon: '📝', label: t('portail.nav.next_year') },
     { href: '/portail/documents', icon: '📄', label: t('portail.nav.documents') },
+    { href: '/portail/mon-compte', icon: '👤', label: t('portail.nav.account') },
   ]
 
   return (

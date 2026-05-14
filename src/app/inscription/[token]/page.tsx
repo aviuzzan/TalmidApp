@@ -224,13 +224,12 @@ export default function DemandeInscriptionPage() {
             <label style={lbl}>Situation familiale</label>
             <select style={inp} value={form.situation_maritale} onChange={e => set('situation_maritale', e.target.value)}>
               <option value="">- Choisir -</option>
-              <option value="maries">Maries</option>
-              <option value="pacses">Pacses</option>
-              <option value="union_libre">Union libre</option>
-              <option value="divorces">Divorces</option>
-              <option value="separes">Separes</option>
-              <option value="veuf">Veuf / Veuve</option>
+              <option value="marie">Marie(e)</option>
               <option value="celibataire">Celibataire</option>
+              <option value="divorce">Divorce(e)</option>
+              <option value="separe">Separe(e)</option>
+              <option value="veuf">Veuf / Veuve</option>
+              <option value="non_connu">Non communique</option>
             </select>
           </div>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginTop: 4 }}>Responsable 1</div>

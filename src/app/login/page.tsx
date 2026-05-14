@@ -128,6 +128,11 @@ export default function LoginPage() {
             style={{ padding: '12px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
             {loading ? 'Connexion...' : 'Se connecter'}
           </button>
+
+          <a href="/auth/mot-de-passe-oublie"
+            style={{ textAlign: 'center', fontSize: 12, color: '#94A3B8', textDecoration: 'none' }}>
+            Mot de passe oublié ?
+          </a>
         </form>
       </div>
     </div>

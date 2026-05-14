@@ -244,6 +244,11 @@ export default function EcoleLoginPage() {
                 }}>
                 {loading ? t('login.loading') : t('login.submit')}
               </button>
+
+              <a href="/auth/mot-de-passe-oublie"
+                style={{ textAlign: 'center', fontSize: 12, color: '#94A3B8', textDecoration: 'none', marginTop: 2 }}>
+                {t('login.forgot')}
+              </a>
             </form>
           </div>
         )}
