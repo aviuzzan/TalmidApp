@@ -20,6 +20,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'administratif', nom: 'Familles', description: 'Liste, fiche détaillée, contacts', icone: '👨‍👩‍👧', href: 'familles' },
     { code: 'administratif', nom: 'Élèves', description: 'Liste, fiches, classes', icone: '🎓', href: 'enfants' },
     { code: 'administratif', nom: 'Comptes parents', description: 'Création et gestion des accès parents', icone: '👥', href: 'comptes-parents' },
+    { code: 'inscriptions', nom: 'Demandes de nouvelles inscriptions', description: 'Nouvelles familles : demandes reçues par lien et leur traitement', icone: '📨', href: 'demandes-inscription' },
     { code: 'inscriptions', nom: 'Inscriptions N+1', description: 'Dossiers DDR, contrats, validations', icone: '📝', href: 'inscriptions' },
   ],
   finances: [
@@ -63,6 +64,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'parametres', nom: 'Intégrations', description: 'Stripe, GoCardless, Brevo SMS, YouSign', icone: '🔌', href: 'parametres/integrations' },
     { code: 'parametres', nom: 'Comptes & accès', description: 'Permissions des admins (admin principal)', icone: '🔐', href: 'parametres/comptes-acces' },
     { code: 'parametres', nom: 'Exports CSV', description: 'Exporter familles, élèves, factures', icone: '📤', href: 'exports' },
+    { code: 'parametres', nom: 'Importer des données', description: 'Importer la base familles & élèves depuis un fichier CSV', icone: '📥', href: 'import' },
   ],
 }
 

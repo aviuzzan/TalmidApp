@@ -12,9 +12,8 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Familles', href: 'familles', module: 'administratif' },
     { nom: 'Élèves', href: 'enfants', module: 'administratif' },
     { nom: 'Comptes parents', href: 'comptes-parents', module: 'administratif' },
-    { nom: "Demandes d'inscription", href: 'demandes-inscription', module: 'inscriptions' },
+    { nom: 'Demandes de nouvelles inscriptions', href: 'demandes-inscription', module: 'inscriptions' },
     { nom: 'Inscriptions N+1', href: 'inscriptions', module: 'inscriptions' },
-    { nom: 'Importer des donnees', href: 'import', module: 'administratif' },
   ],
   finances: [
     { nom: 'Tableau de bord', href: 'finances/dashboard', module: 'facturation' },
@@ -57,6 +56,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Intégrations', href: 'parametres/integrations', module: 'parametres' },
     { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
     { nom: 'Exports CSV', href: 'exports', module: 'parametres' },
+    { nom: 'Importer des donnees', href: 'import', module: 'parametres' },
   ],
 }
 

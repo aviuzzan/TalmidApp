@@ -1,16 +1,22 @@
-import nodemailer from 'nodemailer'
-
 /**
- * Helper d'envoi d'email partagé entre /api/emails (notifs familles)
- * et /api/notify-admin (notifs admin DDR/contrat).
+ * Helper d'envoi d'email partagé (notifs familles, notifs admin, invitations,
+ * relances, etc.).
  *
- * Configuration via env vars (Vercel) :
- *   SMTP_HOST     ex: smtp.gmail.com
- *   SMTP_PORT     ex: 587 (STARTTLS) ou 465 (SSL)
- *   SMTP_USER     ex: noreply@talmidapp.fr
- *   SMTP_PASSWORD ex: App Password Google 16 chars
- *   SMTP_FROM     ex: "Heder Loubavitch <noreply@talmidapp.fr>" (optionnel, fallback = SMTP_USER)
+ * Deux canaux possibles, dans l'ordre de priorité :
+ *  1. Brevo (API transactionnelle HTTP) — meilleure délivrabilité, évite les
+ *     spams. Activé dès que BREVO_API_KEY est défini.
+ *  2. SMTP (nodemailer) — fallback historique (Gmail Workspace).
+ *
+ * Variables d'environnement (Vercel) :
+ *   Brevo :
+ *     BREVO_API_KEY        clé API Brevo (xkeysib-...)
+ *     BREVO_SENDER_EMAIL   ex: noreply@talmidapp.fr (domaine vérifié dans Brevo)
+ *     BREVO_SENDER_NAME    ex: TalmidApp (optionnel)
+ *   SMTP (fallback) :
+ *     SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / SMTP_FROM
  */
+
+import nodemailer from 'nodemailer'
 
 export interface EmailRecipient {
   email: string
@@ -28,20 +34,94 @@ export interface SendEmailResult {
   ok: boolean
   messageId?: string
   error?: string
+  canal?: 'brevo' | 'smtp'
 }
 
+// ─────────────────────────────────────────────
+//  Détection de configuration
+// ─────────────────────────────────────────────
+function isBrevoConfigured(): boolean {
+  return !!(process.env.BREVO_API_KEY && (process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER))
+}
+
+function isSmtpConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD)
+}
+
+export function isEmailConfigured(): boolean {
+  return isBrevoConfigured() || isSmtpConfigured()
+}
+
+// ─────────────────────────────────────────────
+//  Helpers communs
+// ─────────────────────────────────────────────
+/** Extrait "Nom <email>" -> { name, email }. */
+function parseFrom(raw: string | undefined, fallbackEmail: string): { name?: string; email: string } {
+  if (!raw) return { email: fallbackEmail }
+  const m = raw.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/)
+  if (m) return { name: m[1].trim() || undefined, email: m[2].trim() }
+  return { email: raw.trim() }
+}
+
+function toRecipients(to: EmailRecipient | EmailRecipient[]): EmailRecipient[] {
+  return (Array.isArray(to) ? to : [to]).filter(r => r && r.email)
+}
+
+// ─────────────────────────────────────────────
+//  Canal 1 : Brevo (API transactionnelle)
+// ─────────────────────────────────────────────
+async function sendViaBrevo(params: SendEmailParams): Promise<SendEmailResult> {
+  const apiKey = process.env.BREVO_API_KEY!
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER!
+  const senderName = process.env.BREVO_SENDER_NAME
+    || parseFrom(process.env.SMTP_FROM, senderEmail).name
+    || 'TalmidApp'
+
+  const recipients = toRecipients(params.to)
+  if (recipients.length === 0) return { ok: false, error: 'Aucun destinataire valide' }
+
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: senderName, email: senderEmail },
+        to: recipients.map(r => ({ email: r.email, name: r.name || undefined })),
+        subject: params.subject,
+        htmlContent: params.html,
+        ...(params.replyTo ? { replyTo: { email: params.replyTo } } : {}),
+      }),
+    })
+
+    if (!res.ok) {
+      let detail = ''
+      try { detail = JSON.stringify(await res.json()) } catch { detail = await res.text().catch(() => '') }
+      return { ok: false, error: `Brevo ${res.status} : ${detail}`.slice(0, 300), canal: 'brevo' }
+    }
+
+    const data = await res.json().catch(() => ({} as any))
+    return { ok: true, messageId: data?.messageId, canal: 'brevo' }
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? 'Erreur Brevo inconnue', canal: 'brevo' }
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Canal 2 : SMTP (nodemailer) — fallback
+// ─────────────────────────────────────────────
 let cachedTransporter: nodemailer.Transporter | null = null
 
 function getTransporter(): nodemailer.Transporter | null {
   if (cachedTransporter) return cachedTransporter
-
   const host = process.env.SMTP_HOST
   const port = Number(process.env.SMTP_PORT) || 587
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASSWORD
-
   if (!host || !user || !pass) return null
-
   cachedTransporter = nodemailer.createTransport({
     host,
     port,
@@ -51,26 +131,17 @@ function getTransporter(): nodemailer.Transporter | null {
   return cachedTransporter
 }
 
-export function isEmailConfigured(): boolean {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD)
-}
-
-export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+async function sendViaSmtp(params: SendEmailParams): Promise<SendEmailResult> {
   const transporter = getTransporter()
   if (!transporter) {
     return { ok: false, error: 'Configuration SMTP manquante (SMTP_HOST, SMTP_USER, SMTP_PASSWORD)' }
   }
 
-  const fromEnv = process.env.SMTP_FROM
-  const fromUser = process.env.SMTP_USER!
-  const from = fromEnv || fromUser
-
-  const toList = Array.isArray(params.to) ? params.to : [params.to]
-  const formattedTo = toList
-    .filter(r => r.email)
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER!
+  const recipients = toRecipients(params.to)
+  const formattedTo = recipients
     .map(r => (r.name ? `"${r.name.replace(/"/g, '')}" <${r.email}>` : r.email))
     .join(', ')
-
   if (!formattedTo) return { ok: false, error: 'Aucun destinataire valide' }
 
   try {
@@ -81,8 +152,31 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       html: params.html,
       replyTo: params.replyTo,
     })
-    return { ok: true, messageId: info.messageId }
+    return { ok: true, messageId: info.messageId, canal: 'smtp' }
   } catch (err: any) {
-    return { ok: false, error: err?.message ?? 'Erreur SMTP inconnue' }
+    return { ok: false, error: err?.message ?? 'Erreur SMTP inconnue', canal: 'smtp' }
   }
+}
+
+// ─────────────────────────────────────────────
+//  Point d'entrée : Brevo d'abord, SMTP en secours
+// ─────────────────────────────────────────────
+export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  if (isBrevoConfigured()) {
+    const result = await sendViaBrevo(params)
+    if (result.ok) return result
+    // Brevo a échoué : on tente le SMTP si disponible
+    if (isSmtpConfigured()) {
+      const fallback = await sendViaSmtp(params)
+      if (fallback.ok) return fallback
+      return { ok: false, error: `Brevo: ${result.error} | SMTP: ${fallback.error}` }
+    }
+    return result
+  }
+
+  if (isSmtpConfigured()) {
+    return sendViaSmtp(params)
+  }
+
+  return { ok: false, error: 'Aucun canal email configuré (ni Brevo ni SMTP)' }
 }

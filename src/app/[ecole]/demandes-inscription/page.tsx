@@ -150,7 +150,7 @@ export default function DemandesInscriptionPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demandes d&apos;inscription</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demandes de nouvelles inscriptions</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Envoyez un lien a une nouvelle famille et traitez les demandes recues</p>
         </div>
         <button onClick={() => { setShowEnvoi(true); setEnvoiMsg(''); setEnvoiErr('') }} className="btn-primary">+ Envoyer un lien d&apos;inscription</button>

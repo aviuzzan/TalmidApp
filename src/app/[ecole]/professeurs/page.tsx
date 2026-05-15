@@ -20,6 +20,7 @@ export default function ProfesseursPage() {
   const [form, setForm] = useState({ prenom: '', nom: '', email: '', telephone: '', classeIds: [] as string[], matieres: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [inviteResult, setInviteResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
 
@@ -89,6 +90,14 @@ export default function ProfesseursPage() {
       })
       const j = await res.json()
       if (!res.ok) { setError(j.error || 'Erreur'); setSaving(false); return }
+      // Retour clair sur l'envoi de l'invitation
+      if (j.invited && j.emailSent) {
+        setInviteResult({ ok: true, msg: `Professeur ${form.prenom} ${form.nom} créé — invitation envoyée à ${form.email}.` })
+      } else if (j.invited && !j.emailSent) {
+        setInviteResult({ ok: false, msg: `Professeur ${form.prenom} ${form.nom} créé, mais l'email d'invitation n'a pas pu être envoyé${j.emailError ? ` (${j.emailError})` : ''}. ${j.message || ''}` })
+      } else {
+        setInviteResult({ ok: true, msg: j.message || `Professeur ${form.prenom} ${form.nom} enregistré.` })
+      }
     }
 
     setShowForm(false); setSaving(false)
@@ -120,6 +129,19 @@ export default function ProfesseursPage() {
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: '#1E293B' }}>👨‍🏫 Professeurs</h1>
         <button onClick={openCreate} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Nouveau professeur</button>
       </div>
+
+      {inviteResult && (
+        <div style={{
+          background: inviteResult.ok ? '#ECFDF5' : '#FFFBEB',
+          border: `1px solid ${inviteResult.ok ? '#A7F3D0' : '#FDE68A'}`,
+          color: inviteResult.ok ? '#065F46' : '#92400E',
+          borderRadius: 10, padding: '12px 16px', fontSize: 13, marginBottom: 16,
+          display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start',
+        }}>
+          <div style={{ flex: 1, wordBreak: 'break-word' }}>{inviteResult.ok ? '✓ ' : '⚠️ '}{inviteResult.msg}</div>
+          <button onClick={() => setInviteResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, flexShrink: 0 }}>✕</button>
+        </div>
+      )}
 
       <div className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
         {profs.length === 0 ? (
