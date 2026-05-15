@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 
-type ProviderKey = 'stripe' | 'gocardless' | 'brevo_sms' | 'yousign'
+type ProviderKey = 'stripe' | 'gocardless' | 'brevo_sms' | 'yousign' | 'paypal'
 
 type Meta = {
   actif: boolean
@@ -17,6 +17,7 @@ const PROVIDERS: { key: ProviderKey; label: string; icon: string; desc: string }
   { key: 'gocardless', label: 'GoCardless', icon: '🏦', desc: 'Prélèvement SEPA en ligne — mandats signés à distance par les familles.' },
   { key: 'brevo_sms', label: 'Brevo SMS', icon: '📱', desc: 'Envoi de SMS aux familles depuis votre propre compte Brevo (~0,05 €/SMS).' },
   { key: 'yousign', label: 'YouSign', icon: '✍️', desc: 'Signature électronique de contrats et documents à distance.' },
+  { key: 'paypal', label: 'PayPal', icon: '🅿️', desc: 'Paiement en ligne via PayPal — carte ou compte PayPal, sur votre propre compte marchand.' },
 ]
 
 export default function IntegrationsPage() {
@@ -24,7 +25,7 @@ export default function IntegrationsPage() {
   const [provider, setProvider] = useState<ProviderKey>('stripe')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [metas, setMetas] = useState<Record<ProviderKey, Meta>>({ stripe: null, gocardless: null, brevo_sms: null, yousign: null })
+  const [metas, setMetas] = useState<Record<ProviderKey, Meta>>({ stripe: null, gocardless: null, brevo_sms: null, yousign: null, paypal: null })
   const [msg, setMsg] = useState('')
 
   // Form state per provider — secrets sont write-only (jamais relus en clair)
@@ -32,6 +33,7 @@ export default function IntegrationsPage() {
   const [gcForm, setGcForm] = useState({ creditor_id: '', access_token: '', webhook_secret: '', mode: 'live' as 'test' | 'live' })
   const [brevoForm, setBrevoForm] = useState({ expediteur: 'TalmidApp', signature: '', api_key: '' })
   const [ysForm, setYsForm] = useState({ api_key: '', webhook_secret: '', mode: 'live' as 'test' | 'live' })
+  const [paypalForm, setPaypalForm] = useState({ client_id: '', client_secret: '', webhook_id: '', mode: 'live' as 'test' | 'live' })
 
   const load = useCallback(async () => {
     if (!ecole?.id) return
@@ -40,13 +42,14 @@ export default function IntegrationsPage() {
     const { data: { session } } = await s.auth.getSession()
     if (!session) { setLoading(false); return }
     const headers = { Authorization: `Bearer ${session.access_token}` }
-    const [r1, r2, r3, r4] = await Promise.all([
+    const [r1, r2, r3, r4, r5] = await Promise.all([
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=stripe`, { headers }).then(r => r.json()),
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=gocardless`, { headers }).then(r => r.json()),
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=brevo_sms`, { headers }).then(r => r.json()),
       fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=yousign`, { headers }).then(r => r.json()),
+      fetch(`/api/admin/integrations?ecoleId=${ecole.id}&provider=paypal`, { headers }).then(r => r.json()),
     ])
-    setMetas({ stripe: r1.integration, gocardless: r2.integration, brevo_sms: r3.integration, yousign: r4.integration })
+    setMetas({ stripe: r1.integration, gocardless: r2.integration, brevo_sms: r3.integration, yousign: r4.integration, paypal: r5.integration })
     if (r1.integration) {
       setStripeForm(f => ({ ...f, publishable_key: r1.integration.public?.publishable_key || '', mode: r1.integration.mode || 'live' }))
     }
@@ -58,6 +61,9 @@ export default function IntegrationsPage() {
     }
     if (r4.integration) {
       setYsForm(f => ({ ...f, mode: r4.integration.mode || 'live' }))
+    }
+    if (r5.integration) {
+      setPaypalForm(f => ({ ...f, client_id: r5.integration.public?.client_id || '', mode: r5.integration.mode || 'live' }))
     }
     setLoading(false)
   }, [ecole?.id])
@@ -97,6 +103,7 @@ export default function IntegrationsPage() {
       if (p === 'gocardless' && !hints.access_token) { setMsg('Sauvegardez d\'abord l\'Access Token GoCardless'); return }
       if (p === 'brevo_sms' && !hints.api_key) { setMsg('Sauvegardez d\'abord la clé API Brevo'); return }
       if (p === 'yousign' && !hints.api_key) { setMsg('Sauvegardez d\'abord la clé API YouSign'); return }
+      if (p === 'paypal' && !hints.client_secret) { setMsg('Sauvegardez d\'abord le Client Secret PayPal'); return }
     }
     await save(p, { actif: !current })
   }
@@ -348,6 +355,56 @@ export default function IntegrationsPage() {
                 secrets: brevoForm.api_key ? { api_key: brevoForm.api_key } : {},
               })} disabled={saving} className="btn-primary">
                 {saving ? 'Sauvegarde...' : '💾 Sauvegarder Brevo SMS'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PAYPAL FORM */}
+        {provider === 'paypal' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={label}>Mode</label>
+              <select value={paypalForm.mode} onChange={e => setPaypalForm(f => ({ ...f, mode: e.target.value as any }))} style={inp}>
+                <option value="live">Live (production)</option>
+                <option value="test">Sandbox (test)</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>Client ID</label>
+              <input type="text" value={paypalForm.client_id} onChange={e => setPaypalForm(f => ({ ...f, client_id: e.target.value }))} placeholder="AY..." style={inp} />
+              <div style={hint}>PayPal Developer Dashboard → Apps &amp; Credentials → votre application → Client ID.</div>
+            </div>
+            <div>
+              <label style={label}>Client Secret</label>
+              <input type="password" value={paypalForm.client_secret} onChange={e => setPaypalForm(f => ({ ...f, client_secret: e.target.value }))}
+                placeholder={meta?.hints.client_secret ? `Configuré (****${meta.hints.client_secret}) — laissez vide pour ne pas changer` : 'EK...'} style={inp} />
+              <div style={hint}>Même page PayPal → Secret. Stocké chiffré, jamais relu en clair.</div>
+            </div>
+            <div>
+              <label style={label}>Webhook ID (optionnel)</label>
+              <input type="password" value={paypalForm.webhook_id} onChange={e => setPaypalForm(f => ({ ...f, webhook_id: e.target.value }))}
+                placeholder={meta?.hints.webhook_id ? `Configuré (****${meta.hints.webhook_id})` : 'webhook id'} style={inp} />
+              <div style={hint}>
+                PayPal Dashboard → Webhooks → Ajouter :
+                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#F1F5F9', borderRadius: 4, fontSize: 11 }}>https://talmidapp.fr/api/paypal/webhook?ecole={ecole?.slug || ''}</code>
+                Events : <code>CHECKOUT.ORDER.APPROVED</code>, <code>PAYMENT.CAPTURE.COMPLETED</code>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 8 }}>
+              <button onClick={() => supprimer('paypal')} disabled={saving}
+                style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                🗑 Supprimer les clés
+              </button>
+              <button onClick={() => save('paypal', {
+                mode: paypalForm.mode,
+                publicConfig: { client_id: paypalForm.client_id },
+                secrets: {
+                  ...(paypalForm.client_secret ? { client_secret: paypalForm.client_secret } : {}),
+                  ...(paypalForm.webhook_id ? { webhook_id: paypalForm.webhook_id } : {}),
+                },
+              })} disabled={saving} className="btn-primary">
+                {saving ? 'Sauvegarde...' : '💾 Sauvegarder PayPal'}
               </button>
             </div>
           </div>

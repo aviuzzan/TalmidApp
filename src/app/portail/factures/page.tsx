@@ -13,6 +13,7 @@ export default function PortailFacturesPage() {
   const [loading, setLoading] = useState(true)
   const [stripeActif, setStripeActif] = useState(false)
   const [gocardlessActif, setGocardlessActif] = useState(false)
+  const [paypalActif, setPaypalActif] = useState(false)
   const [paying, setPaying] = useState(false)
 
   useEffect(() => {
@@ -36,26 +37,27 @@ export default function PortailFacturesPage() {
         const [{ data: lig }, { data: regl }, { data: integrationsActives }] = await Promise.all([
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
-          supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless']),
+          supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless', 'paypal']),
         ])
         setLignes(lig ?? [])
         setReglements(parent.estSeparee ? (regl ?? []).filter((r: any) => r.paye_par === parent.parentSlot) : (regl ?? []))
         setStripeActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'stripe' && i.actif)))
         setGocardlessActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'gocardless' && i.actif)))
+        setPaypalActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'paypal' && i.actif)))
       }
       setLoading(false)
     }
     load()
   }, [])
 
-  async function payerEnLigne(provider: 'stripe' | 'gocardless') {
+  async function payerEnLigne(provider: 'stripe' | 'gocardless' | 'paypal') {
     if (!facture) return
     setPaying(true)
     try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { alert('Session expirée'); setPaying(false); return }
-      const endpoint = provider === 'stripe' ? '/api/stripe/checkout' : '/api/gocardless/checkout'
+      const endpoint = provider === 'stripe' ? '/api/stripe/checkout' : provider === 'paypal' ? '/api/paypal/checkout' : '/api/gocardless/checkout'
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -151,7 +153,7 @@ export default function PortailFacturesPage() {
             </div>
           )}
 
-          {!parent.estSeparee && (stripeActif || gocardlessActif) && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
+          {!parent.estSeparee && (stripeActif || gocardlessActif || paypalActif) && Number(facture.solde_restant) > 0 && facture.statut !== 'annule' && (
             <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>
@@ -174,6 +176,15 @@ export default function PortailFacturesPage() {
                     cursor: paying ? 'not-allowed' : 'pointer', flex: '1 1 200px',
                   }}>
                     {paying ? 'Redirection…' : `🏦 Prélèvement SEPA`}
+                  </button>
+                )}
+                {paypalActif && (
+                  <button onClick={() => payerEnLigne('paypal')} disabled={paying} style={{
+                    background: '#FFC439', color: '#003087', border: 'none',
+                    borderRadius: 8, padding: '11px 18px', minHeight: 44, fontSize: 13, fontWeight: 800,
+                    cursor: paying ? 'not-allowed' : 'pointer', flex: '1 1 200px',
+                  }}>
+                    {paying ? 'Redirection…' : 'PayPal'}
                   </button>
                 )}
               </div>
