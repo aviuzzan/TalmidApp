@@ -67,8 +67,8 @@ export async function loadPermissions(
  */
 export const TEMPLATES: Record<string, { label: string; description: string; permissions: Record<string, Niveau> }> = {
   admin_principal: {
-    label: 'Admin principal',
-    description: 'Tous modules en admin (équivalent rôle admin actuel)',
+    label: 'Direction',
+    description: 'Accès complet à tous les modules — chef d\'établissement',
     permissions: {
       dashboard: 'admin', administratif: 'admin', inscriptions: 'admin',
       facturation: 'admin', compta: 'admin', paye: 'admin', pedagogie: 'admin',
@@ -77,8 +77,8 @@ export const TEMPLATES: Record<string, { label: string; description: string; per
     },
   },
   comptable: {
-    label: 'Comptable',
-    description: 'Facturation/compta/paye en admin, reste en lecture',
+    label: 'Compta',
+    description: 'Facturation, comptabilité et paye en admin ; le reste en lecture',
     permissions: {
       dashboard: 'admin', administratif: 'lecture', inscriptions: 'lecture',
       facturation: 'admin', compta: 'admin', paye: 'admin', pedagogie: 'aucun',
@@ -87,8 +87,8 @@ export const TEMPLATES: Record<string, { label: string; description: string; per
     },
   },
   secretariat: {
-    label: 'Secrétariat',
-    description: 'Administratif + inscriptions + messagerie en écriture',
+    label: 'Secrétaire',
+    description: 'Administratif, inscriptions et communication en écriture',
     permissions: {
       dashboard: 'admin', administratif: 'ecriture', inscriptions: 'ecriture',
       facturation: 'lecture', compta: 'aucun', paye: 'aucun', pedagogie: 'lecture',
@@ -96,14 +96,14 @@ export const TEMPLATES: Record<string, { label: string; description: string; per
       cantine: 'ecriture', messagerie: 'ecriture', documents: 'ecriture', parametres: 'aucun',
     },
   },
-  direction: {
-    label: 'Direction',
-    description: 'Tous modules en lecture minimum',
+  vie_scolaire: {
+    label: 'Vie scolaire',
+    description: 'Présences, sanctions, transport, cantine, casiers — vie de l\'élève',
     permissions: {
-      dashboard: 'admin', administratif: 'lecture', inscriptions: 'lecture',
-      facturation: 'lecture', compta: 'lecture', paye: 'lecture', pedagogie: 'lecture',
-      professeurs: 'lecture', emplois_du_temps: 'lecture', transport: 'lecture',
-      cantine: 'lecture', messagerie: 'lecture', documents: 'lecture', parametres: 'lecture',
+      dashboard: 'admin', administratif: 'lecture', inscriptions: 'aucun',
+      facturation: 'aucun', compta: 'aucun', paye: 'aucun', pedagogie: 'ecriture',
+      professeurs: 'lecture', emplois_du_temps: 'lecture', transport: 'admin',
+      cantine: 'admin', messagerie: 'ecriture', documents: 'lecture', parametres: 'aucun',
     },
   },
 }
