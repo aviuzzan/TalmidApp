@@ -94,25 +94,8 @@ export default function DossierReductionPage() {
   const tarifOfficiel = parseFloat(demande.nb_enfants_concernes > 0 ? (demande.tarif_officiel || 0) : 0)
   const scolariteN1 = parseFloat(famille?.scolarite_n1) || 0
 
-  // Comparaison proposition vs N-1
-  const evolutionVsN1 = scolariteN1 > 0 ? Math.round(((parseFloat(demande.tarif_propose) - scolariteN1) / scolariteN1) * 100) : null
-
-  // Taux logement
+  // Taux logement (chiffre clé, pas un tarif)
   const tauxLogement = totalRev > 0 ? Math.round((totalChargesLog / totalRev) * 100) : 0
-
-  // Alerte demande trop basse (si < 45% du tarif proposé l'an dernier)
-  const alertBasse = scolariteN1 > 0 && parseFloat(demande.tarif_propose) < scolariteN1 * 0.7
-
-  // Suggestion fourchette basée sur reste à vivre
-  const getSuggestion = () => {
-    if (!totalRev) return null
-    const ratio = resteAvie / totalRev
-    if (ratio < 0.3) return { label: 'Situation précaire', min: scolariteN1 * 0.5, max: scolariteN1 * 0.7, color: '#EF4444' }
-    if (ratio < 0.5) return { label: 'Situation modeste', min: scolariteN1 * 0.7, max: scolariteN1 * 0.85, color: '#F59E0B' }
-    if (ratio < 0.7) return { label: 'Situation intermédiaire', min: scolariteN1 * 0.85, max: scolariteN1 * 0.95, color: '#0891B2' }
-    return { label: 'Situation confortable', min: scolariteN1 * 0.95, max: scolariteN1, color: '#10B981' }
-  }
-  const suggestion = getSuggestion()
 
   const avisCount = { favorable: 0, defavorable: 0, reserve: 0, abstention: 0 }
   avis.forEach((a: any) => { if (a.avis) avisCount[a.avis as keyof typeof avisCount]++ })
@@ -327,39 +310,10 @@ export default function DossierReductionPage() {
                       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Proposition actuelle</div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: '#60A5FA' }}>{parseFloat(demande.tarif_propose || 0).toLocaleString('fr-FR')} €</div>
                     </div>
-                    {evolutionVsN1 !== null && (
-                      <div style={{ background: evolutionVsN1 < -20 ? 'rgba(239,68,68,0.2)' : evolutionVsN1 < 0 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)', borderRadius: 8, padding: '6px 12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: evolutionVsN1 < -20 ? '#FCA5A5' : evolutionVsN1 < 0 ? '#FCD34D' : '#34D399' }}>
-                          {evolutionVsN1 > 0 ? '+' : ''}{evolutionVsN1}%
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
 
-              {/* Alerte + Suggestion */}
-              {alertBasse && (
-                <div style={{ background: 'rgba(239,68,68,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span>⚠️</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#FCA5A5' }}>Demande très basse</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>La proposition est significativement inférieure à l'an dernier</div>
-                  </div>
-                </div>
-              )}
-
-              {suggestion && scolariteN1 > 0 && (
-                <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 14px' }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>SUGGESTION OUTIL — {suggestion.label}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Fourchette estimée</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: suggestion.color }}>
-                      {Math.round(suggestion.min).toLocaleString('fr-FR')} — {Math.round(suggestion.max).toLocaleString('fr-FR')} €
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Synthèse avis commission */}
