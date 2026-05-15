@@ -72,9 +72,15 @@ export default function EnfantsPage() {
         </div>
       </div>
 
-      <div style={{ fontSize: 12, color: '#64748B', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 9, padding: '9px 14px' }}>
-        Cette liste correspond à l’année <strong>{exerciceSelectionne?.code || '…'}</strong>. Changez d’année avec le sélecteur en haut de page pour voir les inscriptions d’une autre année scolaire.
-      </div>
+      {exerciceSelectionne?.statut === 'cloture' ? (
+        <div style={{ fontSize: 12, color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 9, padding: '9px 14px' }}>
+          🔒 L’année <strong>{exerciceSelectionne?.code}</strong> est <strong>clôturée</strong> : consultation uniquement. Les inscriptions, classes et factures de cette année ne peuvent plus être modifiées.
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: '#64748B', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 9, padding: '9px 14px' }}>
+          Cette liste correspond à l’année <strong>{exerciceSelectionne?.code || '…'}</strong>. Changez d’année avec le sélecteur en haut de page pour voir les inscriptions d’une autre année scolaire.
+        </div>
+      )}
 
       {/* Barre de recherche */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
