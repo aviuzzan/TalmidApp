@@ -35,7 +35,7 @@ export default function FamilleDetailPage() {
   const [reglements, setReglements] = useState<any[]>([])
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
-  const [exercicesDispo, setExercicesDispo] = useState<{ code: string; libelle?: string }[]>([])
+  const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
 
   const initialTab = searchParams.get('tab') === 'facturation' ? 'facturation' : 'infos'
   const [tab, setTab] = useState<'infos' | 'enfants' | 'facturation'>(initialTab as any)
@@ -88,8 +88,8 @@ export default function FamilleDetailPage() {
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? [])
     setTransports(trp ?? []); setModesPaiement(modes ?? []); setTarifs(tar ?? [])
 
-    const { data: exs } = await supabase.from('exercices').select('code, libelle').eq('ecole_id', ecole.id).order('code', { ascending: false })
-    setExercicesDispo((exs ?? []) as { code: string; libelle?: string }[])
+    const { data: exs } = await supabase.from('exercices').select('id, code, libelle').eq('ecole_id', ecole.id).order('code', { ascending: false })
+    setExercicesDispo((exs ?? []) as { id: string; code: string; libelle?: string }[])
 
     const { data: fact } = await supabase.from('factures_solde').select('*').eq('famille_id', id).eq('annee_scolaire', ANNEE).single()
     if (fact) {
@@ -150,6 +150,7 @@ export default function FamilleDetailPage() {
       date_entree: enfantForm.date_entree || null, date_sortie: enfantForm.date_sortie || null,
       etablissement_origine: enfantForm.etablissement_origine || null,
       transport: enfantForm.transport || null, annee_scolaire: enfantForm.annee_scolaire,
+      exercice_id: exercicesDispo.find(ex => ex.code === enfantForm.annee_scolaire)?.id || null,
     }
     const { error: err } = editEnfantId
       ? await supabase.from('enfants').update(payload).eq('id', editEnfantId)
@@ -546,7 +547,7 @@ export default function FamilleDetailPage() {
                   <div>{lbl('Classe', true)}<select style={inp} value={enfantForm.classe} onChange={e => setE('classe', e.target.value)} required><option value="">-- Sélectionner --</option>{classes.map((c: any) => <option key={c.id} value={c.nom}>{c.nom}</option>)}</select></div>
                   <div>{lbl('Régime', true)}<select style={inp} value={enfantForm.regime} onChange={e => setE('regime', e.target.value)}><option value="demi_pension">🍽 Demi-pension</option><option value="externe">🏠 Externe</option><option value="interne">🛏 Interne</option></select></div>
                   <div>{lbl('Statut')}<select style={inp} value={enfantForm.statut_inscription} onChange={e => setE('statut_inscription', e.target.value)}><option value="en_attente">⏳ En attente</option><option value="inscrit">✓ Inscrit</option><option value="sorti">👋 Sorti</option><option value="refuse">✗ Refusé</option></select></div>
-                  <div>{lbl('Année scolaire')}<select style={inp} value={enfantForm.annee_scolaire} onChange={e => setE('annee_scolaire', e.target.value)}><option value="2025-2026">2025-2026</option><option value="2026-2027">2026-2027</option></select></div>
+                  <div>{lbl('Année scolaire')}<select style={inp} value={enfantForm.annee_scolaire} onChange={e => setE('annee_scolaire', e.target.value)}>{exercicesDispo.length === 0 ? <option value={enfantForm.annee_scolaire}>{enfantForm.annee_scolaire}</option> : exercicesDispo.map(ex => <option key={ex.id} value={ex.code}>{ex.libelle || ex.code}</option>)}</select></div>
                   <div>{lbl('Date d\'entrée', true)}<input style={inp} type="date" value={enfantForm.date_entree} onChange={e => setE('date_entree', e.target.value)} required /></div>
                   <div>{lbl('Date de sortie')}<input style={inp} type="date" value={enfantForm.date_sortie} onChange={e => setE('date_sortie', e.target.value)} /></div>
                   <div>{lbl('Établissement d\'origine')}<input style={inp} value={enfantForm.etablissement_origine} onChange={e => setE('etablissement_origine', e.target.value)} /></div>

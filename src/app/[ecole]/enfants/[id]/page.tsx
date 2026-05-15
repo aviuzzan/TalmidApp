@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { getScolaritesEnfant } from '@/lib/scolarite'
 
 export default function EnfantDetailPage() {
   const router = useRouter()
@@ -22,6 +23,7 @@ export default function EnfantDetailPage() {
   const [inscriptionDocs, setInscriptionDocs] = useState<any[]>([])
   const [personnesAutorisees, setPersonnesAutorisees] = useState<any[]>([])
   const [historique, setHistorique] = useState<any[]>([])
+  const [scolarites, setScolarites] = useState<any[]>([])
   const [showSortieModal, setShowSortieModal] = useState(false)
   const [sortieForm, setSortieForm] = useState({ date_sortie: new Date().toISOString().slice(0, 10), motif_sortie: '' })
 
@@ -71,6 +73,8 @@ export default function EnfantDetailPage() {
       .order('date_evenement', { ascending: false })
       .order('created_at', { ascending: false })
     setHistorique(hist ?? [])
+
+    setScolarites(await getScolaritesEnfant(s, enfantId))
     setLoading(false)
   }
 
@@ -422,6 +426,39 @@ export default function EnfantDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Parcours scolaire (une ligne par annee) */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
+          🎓 Parcours scolaire (par année)
+        </div>
+        {scolarites.length === 0 ? (
+          <div style={{ padding: '16px 20px', fontSize: 12, color: '#94A3B8' }}>Aucune scolarité enregistrée.</div>
+        ) : scolarites.map((sc, i) => {
+          const stMap: Record<string, { bg: string; fg: string; label: string }> = {
+            inscrit: { bg: '#ECFDF5', fg: '#059669', label: 'Inscrit' },
+            en_attente: { bg: '#FFFBEB', fg: '#D97706', label: 'En attente' },
+            sorti: { bg: '#FEF2F2', fg: '#B91C1C', label: 'Sorti' },
+            refuse: { bg: '#F1F5F9', fg: '#64748B', label: 'Refusé' },
+          }
+          const st = stMap[sc.statut_inscription] || stMap.en_attente
+          return (
+            <div key={sc.id} style={{ padding: '12px 20px', borderBottom: i < scolarites.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', minWidth: 90 }}>
+                {sc.exercices?.code || '—'}
+                {sc.exercices?.statut === 'cloture' && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#64748B', background: '#F1F5F9', borderRadius: 4, padding: '1px 5px' }}>CLÔTURÉ</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 120, fontSize: 13, color: '#475569' }}>
+                {sc.classes?.nom
+                  ? <span style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{sc.classes.nom}</span>
+                  : <span style={{ color: '#CBD5E1' }}>Sans classe</span>}
+                {sc.date_sortie && <span style={{ marginLeft: 8, fontSize: 11, color: '#94A3B8' }}>Sortie le {new Date(sc.date_sortie).toLocaleDateString('fr-FR')}{sc.motif_sortie ? ` · ${sc.motif_sortie}` : ''}</span>}
+              </div>
+              <span style={{ background: st.bg, color: st.fg, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{st.label}</span>
+            </div>
+          )
+        })}
+      </div>
 
       {/* Historique de scolarité */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
