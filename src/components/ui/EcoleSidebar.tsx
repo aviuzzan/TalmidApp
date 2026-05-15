@@ -11,6 +11,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   administration: [
     { nom: 'Familles', href: 'familles', module: 'administratif' },
     { nom: 'Élèves', href: 'enfants', module: 'administratif' },
+    { nom: 'Passages de classe', href: 'passages-de-classe', module: 'administratif' },
     { nom: 'Comptes parents', href: 'comptes-parents', module: 'administratif' },
     { nom: 'Demandes de nouvelles inscriptions', href: 'demandes-inscription', module: 'inscriptions' },
     { nom: 'Inscriptions N+1', href: 'inscriptions', module: 'inscriptions' },

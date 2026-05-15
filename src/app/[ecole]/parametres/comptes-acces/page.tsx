@@ -7,7 +7,8 @@ import { useEcole } from '@/lib/ecole-context'
 import { Niveau, NIVEAUX, NIVEAU_LABEL, NIVEAU_COLOR, TEMPLATES, loadPermissions } from '@/lib/permissions'
 
 type Module = { code: string; nom: string; description: string | null; icone: string; ordre: number }
-type Admin = { id: string; prenom: string | null; nom: string | null; email: string; role: string }
+type Admin = { id: string; prenom: string | null; nom: string | null; email: string; role: string; secteur_id: string | null }
+type Secteur = { id: string; nom: string }
 
 export default function ComptesAccesPage() {
   const router = useRouter()
@@ -16,6 +17,7 @@ export default function ComptesAccesPage() {
   const [authorized, setAuthorized] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [admins, setAdmins] = useState<Admin[]>([])
+  const [secteurs, setSecteurs] = useState<Secteur[]>([])
   const [modules, setModules] = useState<Module[]>([])
   const [perms, setPerms] = useState<Record<string, Record<string, Niveau>>>({})
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null)
@@ -46,13 +48,17 @@ export default function ComptesAccesPage() {
     setAuthorized(true)
 
     const { data: profs } = await s.from('profiles_with_email')
-      .select('id, prenom, nom, email, role')
+      .select('id, prenom, nom, email, role, secteur_id')
       .eq('ecole_id', ecole.id)
       .in('role', ['admin', 'super_admin'])
       .order('nom')
     const adminsList = (profs ?? []) as Admin[]
     setAdmins(adminsList)
     if (adminsList.length > 0 && !selectedProfile) setSelectedProfile(adminsList[0].id)
+
+    const { data: secs } = await s.from('secteurs')
+      .select('id, nom').eq('ecole_id', ecole.id).eq('actif', true).order('ordre')
+    setSecteurs((secs ?? []) as Secteur[])
 
     const { data: mods } = await s.from('modules').select('*').eq('actif', true).order('ordre')
     setModules((mods ?? []) as Module[])
@@ -145,6 +151,16 @@ export default function ComptesAccesPage() {
     } finally {
       setRevoking(false)
     }
+  }
+
+  async function setSecteurAgent(profileId: string, secteurId: string) {
+    setSaving(true)
+    const s = createClient()
+    const { error } = await s.from('profiles').update({ secteur_id: secteurId || null }).eq('id', profileId)
+    if (!error) {
+      setAdmins(prev => prev.map(a => a.id === profileId ? { ...a, secteur_id: secteurId || null } : a))
+    }
+    setSaving(false)
   }
 
   async function applyTemplate(profileId: string, templateKey: string) {
@@ -265,6 +281,25 @@ export default function ComptesAccesPage() {
                   ))}
                 </div>
               </div>
+
+              {secteurs.length > 0 && (
+                <div style={{ background: '#F8FAFC', borderRadius: 8, padding: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Secteur / établissement</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <select
+                      value={selectedAdmin.secteur_id || ''}
+                      disabled={saving || isSuperAdmin}
+                      onChange={e => setSecteurAgent(selectedAdmin.id, e.target.value)}
+                      style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#1E293B', outline: 'none' }}>
+                      <option value="">Tous les secteurs</option>
+                      {secteurs.map(sec => <option key={sec.id} value={sec.id}>{sec.nom}</option>)}
+                    </select>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>
+                      {isSuperAdmin ? 'Un super-admin voit tous les secteurs.' : 'Restreint cet agent à un établissement / secteur précis.'}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

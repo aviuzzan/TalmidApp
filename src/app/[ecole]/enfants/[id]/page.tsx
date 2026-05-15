@@ -21,6 +21,9 @@ export default function EnfantDetailPage() {
   const [saving, setSaving] = useState(false)
   const [inscriptionDocs, setInscriptionDocs] = useState<any[]>([])
   const [personnesAutorisees, setPersonnesAutorisees] = useState<any[]>([])
+  const [historique, setHistorique] = useState<any[]>([])
+  const [showSortieModal, setShowSortieModal] = useState(false)
+  const [sortieForm, setSortieForm] = useState({ date_sortie: new Date().toISOString().slice(0, 10), motif_sortie: '' })
 
   useEffect(() => { load() }, [enfantId])
 
@@ -61,6 +64,13 @@ export default function EnfantDetailPage() {
     const { data: persAuto } = await s.from('enfant_personnes_autorisees')
       .select('*').eq('enfant_id', enfantId).order('created_at')
     setPersonnesAutorisees(persAuto ?? [])
+
+    const { data: hist } = await s.from('eleve_historique')
+      .select('*')
+      .eq('enfant_id', enfantId)
+      .order('date_evenement', { ascending: false })
+      .order('created_at', { ascending: false })
+    setHistorique(hist ?? [])
     setLoading(false)
   }
 
@@ -84,6 +94,59 @@ export default function EnfantDetailPage() {
     await createClient().from('enfants').update({ statut_inscription: 'inscrit' }).eq('id', enfantId)
     await load()
     setSaving(false)
+  }
+
+  async function confirmerSortie() {
+    setSaving(true)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    const dateEvt = sortieForm.date_sortie || new Date().toISOString().slice(0, 10)
+    const { error } = await s.from('enfants').update({
+      statut_inscription: 'sorti',
+      date_sortie: dateEvt,
+      motif_sortie: sortieForm.motif_sortie || null,
+    }).eq('id', enfantId)
+    if (!error) {
+      await s.from('eleve_historique').insert({
+        enfant_id: enfantId, ecole_id: enfant.ecole_id, type: 'sortie',
+        exercice_id: enfant.exercice_id,
+        classe_avant_id: enfant.classe_id, classe_avant_nom: enfant.classes?.nom ?? null,
+        date_evenement: dateEvt,
+        motif: sortieForm.motif_sortie || null,
+        created_by: session?.user.id ?? null,
+      })
+    }
+    setShowSortieModal(false)
+    await load()
+    setSaving(false)
+  }
+
+  async function reintegrer() {
+    setSaving(true)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    const { error } = await s.from('enfants').update({
+      statut_inscription: 'inscrit', date_sortie: null, motif_sortie: null,
+    }).eq('id', enfantId)
+    if (!error) {
+      await s.from('eleve_historique').insert({
+        enfant_id: enfantId, ecole_id: enfant.ecole_id, type: 'retour',
+        exercice_id: enfant.exercice_id,
+        classe_apres_id: enfant.classe_id, classe_apres_nom: enfant.classes?.nom ?? null,
+        motif: 'Réintégration de l’élève',
+        created_by: session?.user.id ?? null,
+      })
+    }
+    await load()
+    setSaving(false)
+  }
+
+  const HIST_META: Record<string, { label: string; icone: string; color: string }> = {
+    entree: { label: 'Entrée', icone: '🚪', color: '#2563EB' },
+    passage: { label: 'Passage de classe', icone: '🎒', color: '#7C3AED' },
+    reinscription: { label: 'Réinscription', icone: '🔁', color: '#0891B2' },
+    sortie: { label: 'Sortie', icone: '👋', color: '#DC2626' },
+    retour: { label: 'Réintégration', icone: '↩️', color: '#059669' },
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
@@ -143,31 +206,56 @@ export default function EnfantDetailPage() {
         )}
       </div>
 
-      {/* Statut d'inscription (banner avec bouton Valider si en_attente) */}
-      <div style={{
-        background: enfant.statut_inscription === 'inscrit' ? '#ECFDF5' : '#FFFBEB',
-        border: `1px solid ${enfant.statut_inscription === 'inscrit' ? '#A7F3D0' : '#FDE68A'}`,
-        borderRadius: 12, padding: '14px 18px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 22 }}>{enfant.statut_inscription === 'inscrit' ? '✓' : '⏳'}</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: enfant.statut_inscription === 'inscrit' ? '#059669' : '#D97706' }}>
-              {enfant.statut_inscription === 'inscrit' ? 'Inscription validée' : 'En attente d\'inscription'}
+      {/* Statut d'inscription (banner avec actions selon le statut) */}
+      {(() => {
+        const st = enfant.statut_inscription
+        const palette: Record<string, { bg: string; border: string; fg: string; icone: string; label: string }> = {
+          inscrit: { bg: '#ECFDF5', border: '#A7F3D0', fg: '#059669', icone: '✓', label: 'Inscription validée' },
+          en_attente: { bg: '#FFFBEB', border: '#FDE68A', fg: '#D97706', icone: '⏳', label: 'En attente d\'inscription' },
+          sorti: { bg: '#FEF2F2', border: '#FECACA', fg: '#B91C1C', icone: '👋', label: 'Élève sorti de l\'établissement' },
+          refuse: { bg: '#F8FAFC', border: '#E2E8F0', fg: '#64748B', icone: '✗', label: 'Inscription refusée' },
+        }
+        const p = palette[st] || palette.en_attente
+        return (
+          <div style={{
+            background: p.bg, border: `1px solid ${p.border}`,
+            borderRadius: 12, padding: '14px 18px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 22 }}>{p.icone}</div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: p.fg }}>{p.label}</div>
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                  Année {enfant.annee_scolaire} · {enfant.classes?.nom || 'Sans classe'}
+                  {st === 'sorti' && enfant.date_sortie && <> · Sortie le {new Date(enfant.date_sortie).toLocaleDateString('fr-FR')}</>}
+                  {st === 'sorti' && enfant.motif_sortie && <> · {enfant.motif_sortie}</>}
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-              Année {enfant.annee_scolaire} · {enfant.classes?.nom || 'Sans classe'}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {st === 'en_attente' && (
+                <button onClick={validerInscription} disabled={saving}
+                  style={{ background: '#10B981', border: 'none', borderRadius: 9, padding: '10px 18px', fontSize: 13, color: '#fff', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', minHeight: 40 }}>
+                  {saving ? '…' : '✓ Valider l\'inscription'}
+                </button>
+              )}
+              {st === 'inscrit' && (
+                <button onClick={() => { setSortieForm({ date_sortie: new Date().toISOString().slice(0, 10), motif_sortie: '' }); setShowSortieModal(true) }} disabled={saving}
+                  style={{ background: '#fff', border: '1px solid #FCA5A5', borderRadius: 9, padding: '10px 18px', fontSize: 13, color: '#B91C1C', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', minHeight: 40 }}>
+                  👋 Sortie de l&apos;élève
+                </button>
+              )}
+              {st === 'sorti' && (
+                <button onClick={reintegrer} disabled={saving}
+                  style={{ background: '#10B981', border: 'none', borderRadius: 9, padding: '10px 18px', fontSize: 13, color: '#fff', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', minHeight: 40 }}>
+                  {saving ? '…' : '↩️ Réintégrer l\'élève'}
+                </button>
+              )}
             </div>
           </div>
-        </div>
-        {enfant.statut_inscription !== 'inscrit' && (
-          <button onClick={validerInscription} disabled={saving}
-            style={{ background: '#10B981', border: 'none', borderRadius: 9, padding: '10px 18px', fontSize: 13, color: '#fff', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', minHeight: 40 }}>
-            {saving ? '…' : '✓ Valider l\'inscription'}
-          </button>
-        )}
-      </div>
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* Infos élève */}
@@ -335,6 +423,39 @@ export default function EnfantDetailPage() {
         </div>
       )}
 
+      {/* Historique de scolarité */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
+          📜 Historique de scolarité
+        </div>
+        {historique.length === 0 ? (
+          <div style={{ padding: '16px 20px', fontSize: 12, color: '#94A3B8' }}>Aucun événement enregistré pour le moment.</div>
+        ) : historique.map((h, i) => {
+          const meta = HIST_META[h.type] || { label: h.type, icone: '•', color: '#64748B' }
+          return (
+            <div key={h.id} style={{ padding: '12px 20px', borderBottom: i < historique.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ fontSize: 16, lineHeight: '20px' }}>{meta.icone}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: meta.color }}>
+                  {meta.label}
+                  {(h.classe_avant_nom || h.classe_apres_nom) && (
+                    <span style={{ fontWeight: 400, color: '#475569' }}>
+                      {' — '}
+                      {h.classe_avant_nom || '—'}{h.classe_apres_nom ? ` → ${h.classe_apres_nom}` : ''}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                  {h.date_evenement ? new Date(h.date_evenement).toLocaleDateString('fr-FR') : ''}
+                  {h.motif ? ` · ${h.motif}` : ''}
+                  {h.notes ? ` · ${h.notes}` : ''}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
       {/* Personnes autorisées à récupérer l'enfant */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
@@ -354,6 +475,42 @@ export default function EnfantDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Modal Sortie de l'élève */}
+      {showSortieModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 460, padding: 26 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#1E293B' }}>👋 Sortie de l&apos;élève</h2>
+              <button onClick={() => setShowSortieModal(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: '#64748B' }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: '#64748B', marginBottom: 18 }}>
+              {enfant.prenom} {enfant.nom} sera marqué comme <strong>sorti</strong>. L&apos;élève reste consultable dans l&apos;historique et la sortie est tracée. Vous pourrez le réintégrer à tout moment.
+            </p>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Date de sortie</label>
+              <input type="date" style={inp} value={sortieForm.date_sortie}
+                onChange={e => setSortieForm(p => ({ ...p, date_sortie: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={lbl}>Motif de la sortie</label>
+              <input style={inp} value={sortieForm.motif_sortie}
+                placeholder="Déménagement, changement d'établissement, fin de scolarité…"
+                onChange={e => setSortieForm(p => ({ ...p, motif_sortie: e.target.value }))} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowSortieModal(false)} disabled={saving}
+                style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 9, padding: '9px 16px', fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button onClick={confirmerSortie} disabled={saving}
+                style={{ background: '#DC2626', border: 'none', borderRadius: 9, padding: '9px 18px', fontSize: 13, color: '#fff', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                {saving ? '…' : 'Confirmer la sortie'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

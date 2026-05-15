@@ -12,7 +12,7 @@ type Reglement = {
   id: string; facture_id: string; montant: number; date_reglement: string;
   mode_paiement: string; reference: string | null; notes: string | null;
 }
-type Famille = { id: string; nom: string; prenom: string | null; email: string | null }
+type Famille = { id: string; nom: string; prenom: string | null; email: string | null; numero: string | null }
 
 const MODES = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
 
@@ -39,7 +39,7 @@ export default function CompteFamillePage() {
     setLoading(true)
     const s = createClient()
     const [{ data: fam }, { data: facs }, { data: regs }] = await Promise.all([
-      s.from('familles').select('id, nom, prenom, email').eq('id', familleId).single(),
+      s.from('familles').select('id, nom, prenom, email, numero').eq('id', familleId).single(),
       s.from('factures_solde').select('*').eq('famille_id', familleId).order('date_emission', { ascending: false }),
       s.from('reglements').select('*').eq('famille_id', familleId).order('date_reglement', { ascending: false }),
     ])
@@ -92,6 +92,10 @@ export default function CompteFamillePage() {
   const totalRegle = factures.reduce((acc, f) => acc + Number(f.total_regle || 0), 0)
   const facturesOuvertes = factures.filter(f => Number(f.solde_restant) > 0 && f.statut !== 'annule' && f.statut !== 'brouillon')
 
+  // Code de compte auxiliaire client (plan comptable : 411 = Clients)
+  const auxBase = (famille.numero || famille.nom || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10)
+  const auxCode = '411' + (auxBase || 'CLIENT')
+
   const mouvements: { date: string; type: 'facture' | 'reglement'; libelle: string; debit: number; credit: number; id: string }[] = []
   for (const f of factures) {
     mouvements.push({
@@ -129,17 +133,23 @@ export default function CompteFamillePage() {
         }
       `}</style>
 
-      <div className="no-print" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+      <div className="no-print" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <button onClick={() => router.push('/' + ecole.slug + '/familles/' + familleId)}
             style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: 13, cursor: 'pointer', marginBottom: 6 }}>
             ← Retour fiche famille
           </button>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>
-            Compte famille — {famille.prenom || ''} {famille.nom}
+            Compte client (411) — {famille.prenom || ''} {famille.nom}
           </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', background: '#EEF2FF', color: '#4338CA', borderRadius: 6, padding: '3px 9px' }}>
+              {auxCode}
+            </span>
+            <span style={{ fontSize: 12, color: '#94A3B8' }}>Compte auxiliaire client · grand livre débit / crédit</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => window.print()} style={btnSec}>Imprimer relevé</button>
           <button onClick={() => setShowModal(true)} style={btnPrim} disabled={facturesOuvertes.length === 0}>
             + Nouveau règlement
@@ -147,10 +157,22 @@ export default function CompteFamillePage() {
         </div>
       </div>
 
+      {/* Bascule vue administrative / vue comptable */}
+      <div className="no-print" style={{ display: 'inline-flex', background: '#F1F5F9', borderRadius: 9, padding: 3, marginBottom: 18 }}>
+        <button onClick={() => router.push('/' + ecole.slug + '/familles/' + familleId + '?tab=facturation')}
+          style={{ background: 'transparent', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer' }}>
+          Vue administrative
+        </button>
+        <button disabled
+          style={{ background: '#fff', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, color: '#1E293B', cursor: 'default', boxShadow: '0 1px 3px rgba(15,23,42,0.08)' }}>
+          Vue comptable (411)
+        </button>
+      </div>
+
       <div className="print-only" style={{ display: 'none', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>État de compte — {ecole.nom}</h1>
+        <h1 style={{ fontSize: 18, margin: 0 }}>Compte client (411) — {ecole.nom}</h1>
         <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>
-          {famille.prenom || ''} {famille.nom} · Édité le {new Date().toLocaleDateString('fr-FR')}
+          {famille.prenom || ''} {famille.nom} · {auxCode} · Édité le {new Date().toLocaleDateString('fr-FR')}
         </p>
       </div>
 
@@ -250,6 +272,15 @@ export default function CompteFamillePage() {
                   })
                 })()}
               </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC' }}>
+                  <td style={{ ...td, fontWeight: 700 }} colSpan={2}>Totaux</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#1E293B' }}>{totalFacture.toFixed(2)} €</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#065F46' }}>{totalRegle.toFixed(2)} €</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: soldeTotal > 0 ? '#991B1B' : '#065F46' }}>{soldeTotal.toFixed(2)} €</td>
+                  <td className="no-print" style={td}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

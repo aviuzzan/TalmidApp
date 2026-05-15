@@ -271,6 +271,7 @@ export default function FamilleDetailPage() {
         <ActionsMenu items={[
           { label: '📁 Documents',         href: `/${ecole.slug}/familles/${id}/documents` },
           ...(canFacturation ? [
+            { label: '📒 Compte client (411)', href: `/${ecole.slug}/familles/${id}/compte` },
             { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
             { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
             { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
@@ -355,9 +356,16 @@ export default function FamilleDetailPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ background: e.statut_inscription === 'inscrit' ? '#ECFDF5' : '#FFFBEB', color: e.statut_inscription === 'inscrit' ? '#059669' : '#D97706', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>
-                  {e.statut_inscription === 'inscrit' ? '✓ Inscrit' : '⏳ En attente'}
-                </span>
+                {(() => {
+                  const stMap: Record<string, { bg: string; fg: string; label: string }> = {
+                    inscrit: { bg: '#ECFDF5', fg: '#059669', label: '✓ Inscrit' },
+                    en_attente: { bg: '#FFFBEB', fg: '#D97706', label: '⏳ En attente' },
+                    sorti: { bg: '#FEF2F2', fg: '#B91C1C', label: '👋 Sorti' },
+                    refuse: { bg: '#F1F5F9', fg: '#64748B', label: '✗ Refusé' },
+                  }
+                  const s = stMap[e.statut_inscription] || stMap.en_attente
+                  return <span style={{ background: s.bg, color: s.fg, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{s.label}</span>
+                })()}
                 <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => openEditEnfant(e)}>✏️</button>
                 <button className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => deleteEnfant(e.id)}>🗑️</button>
               </div>
@@ -537,7 +545,7 @@ export default function FamilleDetailPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>{lbl('Classe', true)}<select style={inp} value={enfantForm.classe} onChange={e => setE('classe', e.target.value)} required><option value="">-- Sélectionner --</option>{classes.map((c: any) => <option key={c.id} value={c.nom}>{c.nom}</option>)}</select></div>
                   <div>{lbl('Régime', true)}<select style={inp} value={enfantForm.regime} onChange={e => setE('regime', e.target.value)}><option value="demi_pension">🍽 Demi-pension</option><option value="externe">🏠 Externe</option><option value="interne">🛏 Interne</option></select></div>
-                  <div>{lbl('Statut')}<select style={inp} value={enfantForm.statut_inscription} onChange={e => setE('statut_inscription', e.target.value)}><option value="en_attente">⏳ En attente</option><option value="inscrit">✓ Inscrit</option><option value="refuse">✗ Refusé</option></select></div>
+                  <div>{lbl('Statut')}<select style={inp} value={enfantForm.statut_inscription} onChange={e => setE('statut_inscription', e.target.value)}><option value="en_attente">⏳ En attente</option><option value="inscrit">✓ Inscrit</option><option value="sorti">👋 Sorti</option><option value="refuse">✗ Refusé</option></select></div>
                   <div>{lbl('Année scolaire')}<select style={inp} value={enfantForm.annee_scolaire} onChange={e => setE('annee_scolaire', e.target.value)}><option value="2025-2026">2025-2026</option><option value="2026-2027">2026-2027</option></select></div>
                   <div>{lbl('Date d\'entrée', true)}<input style={inp} type="date" value={enfantForm.date_entree} onChange={e => setE('date_entree', e.target.value)} required /></div>
                   <div>{lbl('Date de sortie')}<input style={inp} type="date" value={enfantForm.date_sortie} onChange={e => setE('date_sortie', e.target.value)} /></div>

@@ -12,6 +12,7 @@ export default function EnfantsPage() {
   const [search, setSearch] = useState('')
   const [filtreClasse, setFiltreClasse] = useState('')
   const [classes, setClasses] = useState<any[]>([])
+  const [showSortis, setShowSortis] = useState(false)
 
   useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
 
@@ -37,8 +38,11 @@ export default function EnfantsPage() {
       e.nom?.toLowerCase().includes(q) ||
       e.familles?.nom?.toLowerCase().includes(q)
     const matchClasse = !filtreClasse || e.classe_id === filtreClasse
-    return matchSearch && matchClasse
+    const matchStatut = showSortis || e.statut_inscription !== 'sorti'
+    return matchSearch && matchClasse && matchStatut
   })
+
+  const nbSortis = enfants.filter(e => e.statut_inscription === 'sorti').length
 
   const inp = {
     background: '#fff', border: '1px solid #E2E8F0', borderRadius: 9,
@@ -76,6 +80,10 @@ export default function EnfantsPage() {
             <option key={c.id} value={c.id}>{c.nom}</option>
           ))}
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#64748B', whiteSpace: 'nowrap', cursor: 'pointer', padding: '0 4px' }}>
+          <input type="checkbox" checked={showSortis} onChange={e => setShowSortis(e.target.checked)} />
+          Inclure les élèves sortis{nbSortis > 0 ? ` (${nbSortis})` : ''}
+        </label>
       </div>
 
       {/* Tableau */}
@@ -118,8 +126,11 @@ export default function EnfantsPage() {
                         {e.prenom?.[0]?.toUpperCase()}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {e.prenom} {e.nom}
+                          {e.statut_inscription === 'sorti' && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 5, padding: '1px 6px' }}>SORTI</span>
+                          )}
                         </div>
                         <div style={{ fontSize: 11, color: '#94A3B8' }}>
                           {e.date_naissance
