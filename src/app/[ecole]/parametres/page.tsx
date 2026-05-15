@@ -227,6 +227,28 @@ function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string
     await createClient().from('reduction_questions_config').update({ actif: !actif }).eq('id', id); await load()
   }
 
+  async function renommerQuestion(id: string, label: string) {
+    const v = prompt('Nouveau libellé de la question :', label)
+    if (v === null || !v.trim()) return
+    await createClient().from('reduction_questions_config').update({ label: v.trim() }).eq('id', id); await load()
+  }
+
+  async function deplacerQuestion(q: any, dir: -1 | 1) {
+    const sameSec = questions.filter((x: any) => x.section === q.section).slice().sort((a: any, b: any) => (a.ordre ?? 0) - (b.ordre ?? 0))
+    const idx = sameSec.findIndex((x: any) => x.id === q.id)
+    const swap = sameSec[idx + dir]
+    if (!swap) return
+    const s = createClient()
+    await s.from('reduction_questions_config').update({ ordre: swap.ordre }).eq('id', q.id)
+    await s.from('reduction_questions_config').update({ ordre: q.ordre }).eq('id', swap.id)
+    await load()
+  }
+
+  async function supprimerQuestion(id: string) {
+    if (!confirm('Supprimer définitivement cette question ?')) return
+    await createClient().from('reduction_questions_config').delete().eq('id', id); await load()
+  }
+
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' as const }
   const SECTIONS = ['logement', 'revenus', 'allocations', 'autres']
 
@@ -283,6 +305,8 @@ function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string
               <option value="text">Texte</option>
               <option value="textarea">Paragraphe</option>
               <option value="select">Liste</option>
+              <option value="date">Date</option>
+              <option value="checkbox">Case à cocher</option>
             </select>
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>
@@ -307,9 +331,13 @@ function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string
                   <span style={{ flex: 1, fontSize: 13, color: '#1E293B' }}>{q.label}</span>
                   <span style={{ fontSize: 10, color: '#94A3B8' }}>{q.type}</span>
                   {q.obligatoire && <span style={{ fontSize: 10, color: '#EF4444', fontWeight: 600 }}>OBLIGATOIRE</span>}
+                  <button onClick={() => deplacerQuestion(q, -1)} title="Monter" style={{ fontSize: 11, color: '#64748B', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 7px', cursor: 'pointer' }}>↑</button>
+                  <button onClick={() => deplacerQuestion(q, 1)} title="Descendre" style={{ fontSize: 11, color: '#64748B', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 7px', cursor: 'pointer' }}>↓</button>
+                  <button onClick={() => renommerQuestion(q.id, q.label)} title="Renommer" style={{ fontSize: 11, color: '#64748B', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✏</button>
                   <button onClick={() => toggleQuestion(q.id, q.actif)} style={{ fontSize: 11, color: q.actif ? '#64748B' : '#10B981', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>
                     {q.actif ? 'Masquer' : 'Afficher'}
                   </button>
+                  <button onClick={() => supprimerQuestion(q.id)} title="Supprimer" style={{ fontSize: 13, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
                 </div>
               ))}
             </div>

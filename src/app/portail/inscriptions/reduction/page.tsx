@@ -80,6 +80,10 @@ export default function DemandeReductionPage() {
   // ── Proposition ──
   const [tarifPropose, setTarifPropose] = useState('')
   const [commentaire, setCommentaire] = useState('')
+  const [questionsConfig, setQuestionsConfig] = useState<any[]>([])
+  const qcfg = (cle: string) => questionsConfig.find((q: any) => q.cle === cle)
+  const qActif = (cle: string) => { const q = qcfg(cle); return q ? q.actif !== false : true }
+  const qL = (cle: string, fallback: string) => { const q = qcfg(cle); const t = q?.label || fallback; return t + (q?.obligatoire ? ' *' : '') }
 
   // ── Attestation ──
   const [attestationLieu, setAttestationLieu] = useState('')
@@ -104,7 +108,7 @@ export default function DemandeReductionPage() {
 
     const [
       { data: fam }, { data: enf }, { data: cls }, { data: sec },
-      { data: dem }, { data: docs },
+      { data: dem }, { data: docs }, { data: questions },
     ] = await Promise.all([
       s.from('familles').select('*').eq('id', profile.famille_id).single(),
       s.from('enfants').select('*, classes(id, nom, secteur_id, secteurs(nom))').eq('famille_id', profile.famille_id),
@@ -112,10 +116,12 @@ export default function DemandeReductionPage() {
       s.from('secteurs').select('id, nom').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
       s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
       s.from('reduction_documents_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).eq('actif', true).order('ordre'),
+      s.from('reduction_questions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).order('section').order('ordre'),
     ])
 
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? []); setSecteurs(sec ?? [])
     setDocsConfig(docs ?? [])
+    setQuestionsConfig(questions ?? [])
     if (fam) { setFamForm(fam); setSituation(fam.situation_maritale || 'marie') }
 
     if (dem) {
@@ -498,26 +504,26 @@ export default function DemandeReductionPage() {
       {/* ── 4. LOGEMENT ── */}
       <Section title="4. Logement *">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Type *</label>
+          {qActif('logement_type') && <div><label style={lbl}>{qL('logement_type', 'Type')}</label>
             <select style={inp} value={logType} onChange={e => { ks(); setLogType(e.target.value) }}>
               <option value="locataire">Locataire</option><option value="proprietaire">Propriétaire</option><option value="autre">Autre</option>
             </select>
-          </div>
-          <div><label style={lbl}>Nb de pièces *</label><input style={inp} type="number" value={logPieces} onChange={e => { ks(); setLogPieces(e.target.value) }} /></div>
-          <div><label style={lbl}>Loyer / remb. mensuel (€) *</label><input style={inp} type="number" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>
-          <div><label style={lbl}>Charges mensuelles (€) *</label><input style={inp} type="number" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>
-          <div><label style={lbl}>Occupé depuis</label><input style={inp} type="date" value={logDateOccupation} onChange={e => { ks(); setLogDateOccupation(e.target.value) }} /></div>
+          </div>}
+          {qActif('logement_nb_pieces') && <div><label style={lbl}>{qL('logement_nb_pieces', 'Nb de pièces')}</label><input style={inp} type="number" value={logPieces} onChange={e => { ks(); setLogPieces(e.target.value) }} /></div>}
+          {qActif('logement_loyer_mensuel') && <div><label style={lbl}>{qL('logement_loyer_mensuel', 'Loyer / remb. mensuel (€)')}</label><input style={inp} type="number" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>}
+          {qActif('logement_charges_mensuelles') && <div><label style={lbl}>{qL('logement_charges_mensuelles', 'Charges mensuelles (€)')}</label><input style={inp} type="number" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>}
+          {qActif('logement_date_occupation') && <div><label style={lbl}>{qL('logement_date_occupation', 'Occupé depuis')}</label><input style={inp} type="date" value={logDateOccupation} onChange={e => { ks(); setLogDateOccupation(e.target.value) }} /></div>}
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#475569' }}>
+        {qActif('logement_personne_handicapee') && <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#475569' }}>
           <input type="checkbox" checked={logHandicape} onChange={e => { ks(); setLogHandicape(e.target.checked) }} style={{ width: 16, height: 16, accentColor: '#2563EB' }} />
-          Personne handicapée vivant au foyer
-        </label>
+          {qcfg('logement_personne_handicapee')?.label || 'Personne handicapée vivant au foyer'}
+        </label>}
       </Section>
 
       {/* ── 5. REVENUS ── */}
       <Section title="5. Revenus du foyer *">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label style={lbl}>Quotient familial CAF (€) *</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>
+          {qActif('quotient_familial') && <div><label style={lbl}>{qL('quotient_familial', 'Quotient familial CAF (€)')}</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>}
         </div>
 
         <div>
@@ -543,13 +549,13 @@ export default function DemandeReductionPage() {
         <div style={{ background: '#F8FAFC', borderRadius: 10, padding: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 12 }}>Revenus d'artisan, commerçant ou profession libérale</div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
-            <div><label style={lbl}>Profession</label><input style={inp} value={artisanProfession} onChange={e => { ks(); setArtisanProfession(e.target.value) }} placeholder="Ex: Médecin, Artisan..." /></div>
-            <div><label style={lbl}>Régime</label>
+            {qActif('revenus_artisans_profession') && <div><label style={lbl}>{qL('revenus_artisans_profession', 'Profession')}</label><input style={inp} value={artisanProfession} onChange={e => { ks(); setArtisanProfession(e.target.value) }} placeholder="Ex: Médecin, Artisan..." /></div>}
+            {qActif('revenus_artisans_regime') && <div><label style={lbl}>{qL('revenus_artisans_regime', 'Régime')}</label>
               <select style={inp} value={artisanRegime} onChange={e => { ks(); setArtisanRegime(e.target.value) }}>
                 <option value="">Choisir</option><option value="reel">Régime réel</option><option value="forfaitaire">Forfaitaire</option>
               </select>
-            </div>
-            <div><label style={lbl}>Montant annuel (€)</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>
+            </div>}
+            {qActif('revenus_artisans_montant_annuel') && <div><label style={lbl}>{qL('revenus_artisans_montant_annuel', 'Montant annuel (€)')}</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>}
           </div>
         </div>
       </Section>
@@ -557,11 +563,11 @@ export default function DemandeReductionPage() {
       {/* ── 6. ALLOCATIONS ── */}
       <Section title="6. Allocations et autres revenus *">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div><label style={lbl}>Allocations familiales (€/mois) *</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>
-          <div><label style={lbl}>Allocation chômage (€/mois) *</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>
-          <div><label style={lbl}>APL / Aide logement (€/mois) *</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>
-          <div><label style={lbl}>Autres revenus divers (€/mois) *</label><input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>
-          <div><label style={lbl}>Montant mensuel des aides perçues *</label><input style={inp} type="number" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>
+          {qActif('alloc_familiales_mensuelles') && <div><label style={lbl}>{qL('alloc_familiales_mensuelles', 'Allocations familiales (€/mois)')}</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>}
+          {qActif('alloc_chomage_mensuelle') && <div><label style={lbl}>{qL('alloc_chomage_mensuelle', 'Allocation chômage (€/mois)')}</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>}
+          {qActif('apl_mensuelle') && <div><label style={lbl}>{qL('apl_mensuelle', 'APL / Aide logement (€/mois)')}</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>}
+          {qActif('autres_revenus_mensuels') && <div><label style={lbl}>{qL('autres_revenus_mensuels', 'Autres revenus divers (€/mois)')}</label><input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>}
+          {qActif('aides_mensuelles') && <div><label style={lbl}>{qL('aides_mensuelles', 'Montant mensuel des aides perçues')}</label><input style={inp} type="number" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>}
         </div>
 
         {/* Total auto-calculé */}
