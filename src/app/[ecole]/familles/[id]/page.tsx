@@ -270,6 +270,24 @@ export default function FamilleDetailPage() {
     load()
   }
 
+  async function annulerFacture() {
+    if (!facture) return
+    const ok = await confirm({
+      title: 'Annuler cette facture ?',
+      message: 'La facture passera au statut "Annulée" et sortira de tous les totaux (KPI Total facturé, Solde, attestation fiscale). Si elle a des règlements rattachés, ils restent visibles dans le compte client mais cessent d\'imputer cette facture.',
+      danger: true,
+      confirmLabel: 'Annuler la facture',
+    })
+    if (!ok) return
+    const { error: err } = await supabase
+      .from('factures')
+      .update({ statut: 'annule' })
+      .eq('id', facture.id)
+    if (err) { toast.error(err.message); return }
+    toast.success('Facture annulée')
+    load()
+  }
+
   async function deleteReglement(reglId: string) {
     const ok = await confirm({ title: 'Supprimer ce règlement ?', message: 'Le solde de la facture sera recalculé.', danger: true })
     if (!ok) return
@@ -520,11 +538,14 @@ export default function FamilleDetailPage() {
                       rel="noopener noreferrer"
                       style={{ padding: '5px 14px', fontSize: 12, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 8, cursor: 'pointer', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}
                     >📥 Télécharger PDF</a>
-                    {!facture.verrouillee ? (
+                    {facture.statut !== 'annule' && !facture.verrouillee ? (
                       <>
                         <button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button>
                         <button style={{ padding: '5px 14px', fontSize: 12, background: '#065F46', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} onClick={verrouillerFacture}>🔒 Verrouiller</button>
+                        <button style={{ padding: '5px 14px', fontSize: 12, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} onClick={annulerFacture}>✕ Annuler</button>
                       </>
+                    ) : facture.statut === 'annule' ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 6, padding: '2px 8px' }}>✕ Annulée</span>
                     ) : (
                       <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Lignes figées — passez par un avoir pour ajuster</span>
                     )}

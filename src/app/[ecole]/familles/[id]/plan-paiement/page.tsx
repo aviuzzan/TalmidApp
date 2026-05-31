@@ -236,8 +236,9 @@ export default function PlanPaiementPage() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 10,
                     background: p.statut === 'actif' ? '#ECFDF5' : p.statut === 'complete' ? '#EFF6FF' : '#F8FAFC',
-                    color: p.statut === 'actif' ? '#065F46' : p.statut === 'complete' ? '#1E40AF' : '#475569',
-                    textTransform: 'uppercase' }}>{p.statut}</span>
+                    color: p.statut === 'actif' ? '#065F46' : p.statut === 'complete' ? '#1E40AF' : '#475569' }}>
+                    {p.statut === 'actif' ? 'Actif' : p.statut === 'complete' ? 'Terminé' : p.statut === 'annule' ? 'Annulé' : (p.statut.charAt(0).toUpperCase() + p.statut.slice(1))}
+                  </span>
                   <button onClick={() => deletePlan(p.id)} style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>🗑</button>
                 </div>
               </div>

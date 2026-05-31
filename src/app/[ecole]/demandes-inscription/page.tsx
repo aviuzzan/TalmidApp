@@ -32,10 +32,10 @@ type Demande = {
 }
 
 const STATUTS: Record<string, { label: string; color: string; bg: string }> = {
-  envoye: { label: 'Lien envoye', color: '#1E40AF', bg: '#EFF6FF' },
-  en_attente: { label: 'A traiter', color: '#92400E', bg: '#FEF3C7' },
-  accepte: { label: 'Acceptee', color: '#065F46', bg: '#ECFDF5' },
-  refuse: { label: 'Refusee', color: '#991B1B', bg: '#FEF2F2' },
+  envoye: { label: 'Lien envoyé', color: '#1E40AF', bg: '#EFF6FF' },
+  en_attente: { label: 'À traiter', color: '#92400E', bg: '#FEF3C7' },
+  accepte: { label: 'Acceptée', color: '#065F46', bg: '#ECFDF5' },
+  refuse: { label: 'Refusée', color: '#991B1B', bg: '#FEF2F2' },
 }
 
 export default function DemandesInscriptionPage() {

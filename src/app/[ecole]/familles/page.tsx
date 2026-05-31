@@ -235,6 +235,19 @@ export default function FamillesPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div><label className="label">Prénom</label><input style={inp} value={form.parent2_prenom} onChange={e => set('parent2_prenom', e.target.value)} /></div>
                 <div><label className="label">Nom</label><input style={inp} value={form.parent2_nom} onChange={e => set('parent2_nom', e.target.value)} /></div>
+                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px', background: '#F0F9FF', borderRadius: 8 }}>
+                  <input type="checkbox" id="memeContact" checked={!!form.parent2_email && form.parent2_email === form.parent1_email && form.parent2_telephone === form.parent1_telephone}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        set('parent2_email', form.parent1_email)
+                        set('parent2_telephone', form.parent1_telephone)
+                      } else {
+                        set('parent2_email', '')
+                        set('parent2_telephone', '')
+                      }
+                    }} style={{ width: 16, height: 16 }} />
+                  <label htmlFor="memeContact" style={{ fontSize: 13, color: '#0369A1', cursor: 'pointer' }}>Même e-mail et téléphone que Parent 1</label>
+                </div>
                 <div><label className="label">Email</label><input style={inp} type="email" value={form.parent2_email} onChange={e => set('parent2_email', e.target.value)} /></div>
                 <div><label className="label">Téléphone</label><input style={inp} value={form.parent2_telephone} onChange={e => set('parent2_telephone', e.target.value)} /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label className="label">Emploi / Profession</label><input style={inp} value={form.parent2_emploi} onChange={e => set('parent2_emploi', e.target.value)} /></div>
