@@ -78,8 +78,10 @@ export default function PortailPage() {
     </div>
   )
 
-  const solde = data.facture ? Number(data.facture.solde_restant) : 0
-  const maPart = data.facture ? Number(data.facture.total_facture) * parent.partPct / 100 : 0
+  // Une facture annulee n'est ni due ni a regler — la famille ne doit rien
+  const factureActive = data.facture && data.facture.statut !== 'annule' ? data.facture : null
+  const solde = factureActive ? Number(factureActive.solde_restant) : 0
+  const maPart = factureActive ? Number(factureActive.total_facture) * parent.partPct / 100 : 0
   const regleMoi = (data.reglements || []).filter((r: any) => r.paye_par === parent.parentSlot).reduce((s: number, r: any) => s + Number(r.montant), 0)
   const monSolde = maPart - regleMoi
 
@@ -105,8 +107,8 @@ export default function PortailPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
           { icon: '🎓', label: 'Élèves inscrits', value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
-          { icon: '📄', label: parent.estSeparee ? 'Ma part' : `Facture ${anneeInscription.replace('-', '/')}`, value: data.facture ? `${(parent.estSeparee ? maPart : Number(data.facture.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
-          { icon: '💳', label: parent.estSeparee ? 'Mon solde' : 'Solde restant', value: data.facture ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '📄', label: parent.estSeparee ? 'Ma part' : `Facture ${anneeInscription.replace('-', '/')}`, value: factureActive ? `${(parent.estSeparee ? maPart : Number(factureActive.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '💳', label: parent.estSeparee ? 'Mon solde' : 'Solde restant', value: factureActive ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
         ].map(s => (
           <div key={s.label} onClick={s.action} style={{
             background: s.bg, borderRadius: 12, padding: '20px 24px', cursor: 'pointer',

@@ -244,9 +244,9 @@ function FactureTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         {[
-          { label: 'Total facturé', value: `${Number(facture.total_facture).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-          { label: 'Total réglé', value: `${Number(facture.total_regle).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-          { label: 'Reste à régler', value: `${Number(facture.solde_restant).toLocaleString('fr-FR')} €`, color: Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
+          { label: 'Total facturé', value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+          { label: 'Total réglé', value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
+          { label: 'Reste à régler', value: `${(facture.statut === 'annule' ? 0 : Number(facture.solde_restant)).toLocaleString('fr-FR')} €`, color: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
         ].map(s => (
           <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>

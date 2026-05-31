@@ -159,8 +159,10 @@ export default function FinancesPage() {
 
   const inp = { width: '100%', padding: '9px 12px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, color: '#1E293B', fontSize: 13, outline: 'none' }
 
-  const totalFacture = factures.reduce((s, f) => s + Number(f.total_facture), 0)
-  const totalRegle = factures.reduce((s, f) => s + Number(f.total_regle), 0)
+  // Les factures annulees ne comptent ni dans le facture ni dans le restant a encaisser
+  const facturesActives = factures.filter((f: any) => f.statut !== 'annule')
+  const totalFacture = facturesActives.reduce((s: number, f: any) => s + Number(f.total_facture), 0)
+  const totalRegle = facturesActives.reduce((s: number, f: any) => s + Number(f.total_regle), 0)
   const totalRestant = totalFacture - totalRegle
 
   return (

@@ -81,8 +81,10 @@ export default function PortailFacturesPage() {
 
   if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>Chargement...</div>
 
-  const maPart = facture ? Number(facture.total_facture) * parent.partPct / 100 : 0
-  const regleMoi = reglements.reduce((s, r) => s + Number(r.montant), 0)
+  // Si la facture est annulee, rien n'est du ni a regler
+  const isAnnulee = facture?.statut === 'annule'
+  const maPart = facture && !isAnnulee ? Number(facture.total_facture) * parent.partPct / 100 : 0
+  const regleMoi = isAnnulee ? 0 : reglements.reduce((s, r) => s + Number(r.montant), 0)
   const monSolde = maPart - regleMoi
 
   return (
@@ -115,9 +117,9 @@ export default function PortailFacturesPage() {
               { label: 'Réglé par moi', value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
               { label: 'Mon solde', value: `${monSolde.toLocaleString('fr-FR')} €`, color: monSolde > 0 ? '#DC2626' : '#059669', bg: monSolde > 0 ? '#FEF2F2' : '#ECFDF5' },
             ] : [
-              { label: 'Total facturé', value: `${Number(facture.total_facture).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-              { label: 'Total réglé', value: `${Number(facture.total_regle).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-              { label: 'Reste à régler', value: `${Number(facture.solde_restant).toLocaleString('fr-FR')} €`, color: Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
+              { label: 'Total facturé', value: `${(isAnnulee ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+              { label: 'Total réglé', value: `${(isAnnulee ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
+              { label: 'Reste à régler', value: `${(isAnnulee ? 0 : Number(facture.solde_restant)).toLocaleString('fr-FR')} €`, color: !isAnnulee && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: !isAnnulee && Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
             ]).map(s => (
               <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
