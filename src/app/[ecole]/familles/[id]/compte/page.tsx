@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { labelStatutFacture, labelModePaiement } from '@/lib/statuts'
 
 type Facture = {
   id: string; numero: string; date_emission: string; statut: string;
@@ -108,7 +109,7 @@ export default function CompteFamillePage() {
     const fac = factures.find(f => f.id === r.facture_id)
     mouvements.push({
       date: r.date_reglement, type: 'reglement',
-      libelle: 'Règlement ' + r.mode_paiement + (fac ? ' / ' + fac.numero : '') + (r.reference ? ' (' + r.reference + ')' : ''),
+      libelle: 'Règlement ' + labelModePaiement(r.mode_paiement) + (fac ? ' / ' + fac.numero : '') + (r.reference ? ' (' + r.reference + ')' : ''),
       debit: 0, credit: Number(r.montant || 0), id: r.id,
     })
   }
@@ -208,7 +209,7 @@ export default function CompteFamillePage() {
                       <td style={td}>{new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
                       <td style={td}>
                         <span style={{ background: c.bg, color: c.fg, padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-                          {f.statut}
+                          {labelStatutFacture(f.statut)}
                         </span>
                       </td>
                       <td style={{ ...td, textAlign: 'right' }}>{Number(f.total_facture).toFixed(2)} €</td>

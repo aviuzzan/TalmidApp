@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { labelStatutContrat, labelModePaiement } from '@/lib/statuts'
 
 type Exercice = { id: string; code: string; libelle: string | null }
 type Famille = { id: string; nom: string; numero: string | null; parent1_prenom: string | null; parent1_email: string | null; parent2_prenom: string | null; parent2_email: string | null }
@@ -219,8 +220,8 @@ export default function EngagementFamillePage() {
                   <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 600 }}>📜 Scolarité</td>
                     <td style={{ padding: '10px 12px', color: '#475569' }}>
-                      Contrat {contrat.statut === 'valide' ? 'validé' : contrat.statut}
-                      {contrat.mode_reglement ? ` · ${contrat.mode_reglement}` : ''}
+                      Contrat {labelStatutContrat(contrat.statut)}
+                      {contrat.mode_reglement ? ` · ${labelModePaiement(contrat.mode_reglement)}` : ''}
                       {contrat.nb_echeances ? ` · ${contrat.nb_echeances} échéances` : ''}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>{fmtMontant(montantContrat)}</td>

@@ -149,11 +149,16 @@ export default function FinancesPage() {
   function statutBadge(statut: string) {
     const map: any = {
       en_attente: ['#D97706', '#FFFBEB', 'En attente'],
-      partiel: ['#2563EB', '#EFF6FF', 'Partiel'],
-      solde: ['#059669', '#ECFDF5', 'Soldé'],
-      annule: ['#DC2626', '#FEF2F2', 'Annulé'],
+      partiel: ['#2563EB', '#EFF6FF', 'Partiellement réglée'],
+      paye: ['#059669', '#ECFDF5', 'Payée'],
+      payee: ['#059669', '#ECFDF5', 'Payée'],
+      solde: ['#059669', '#ECFDF5', 'Soldée'],
+      annule: ['#64748B', '#F1F5F9', 'Annulée'],
+      annulee: ['#64748B', '#F1F5F9', 'Annulée'],
+      brouillon: ['#475569', '#F1F5F9', 'Brouillon'],
+      verrouillee: ['#4338CA', '#EEF2FF', 'Verrouillée'],
     }
-    const [c, bg, label] = map[statut] ?? ['#64748B', '#F1F5F9', statut]
+    const [c, bg, label] = map[String(statut || '').toLowerCase()] ?? ['#64748B', '#F1F5F9', statut]
     return <span style={{ background: bg, color: c, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{label}</span>
   }
 

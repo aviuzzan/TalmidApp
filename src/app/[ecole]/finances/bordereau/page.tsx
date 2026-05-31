@@ -187,8 +187,8 @@ export default function BordereauPage() {
                     <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700 }}>{fmt(c.montant)}</td>
                     <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{c.date_echeance ? new Date(c.date_echeance).toLocaleDateString('fr-FR') : '—'}</td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: c.statut === 'prevu' ? '#475569' : '#065F46', background: c.statut === 'prevu' ? '#F1F5F9' : '#ECFDF5', padding: '3px 8px', borderRadius: 10, textTransform: 'uppercase' }}>
-                        {c.statut}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: c.statut === 'prevu' ? '#475569' : '#065F46', background: c.statut === 'prevu' ? '#F1F5F9' : '#ECFDF5', padding: '3px 8px', borderRadius: 10 }}>
+                        {c.statut === 'prevu' ? 'À encaisser' : c.statut === 'encaisse' ? 'Encaissé' : c.statut === 'rejete' ? 'Rejeté' : (c.statut.charAt(0).toUpperCase() + c.statut.slice(1))}
                       </span>
                     </td>
                     <td style={{ padding: '10px 12px', fontSize: 11, color: '#64748B', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.note || ''}>{c.note || '—'}</td>

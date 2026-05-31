@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { labelStatutFacture } from '@/lib/statuts'
 
 type Kpi = {
   ca_facture: number
@@ -288,8 +289,8 @@ export default function FinancesDashboardPage() {
                     <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{fmt(f.total)}</td>
                     <td style={{ padding: '10px', fontSize: 13, fontWeight: 600, color: f.solde > 0 ? '#F59E0B' : '#10B981' }}>{fmt(f.solde)}</td>
                     <td style={{ padding: '10px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: sc.fg, background: sc.bg, padding: '3px 9px', borderRadius: 10, textTransform: 'uppercase' }}>
-                        {f.statut}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: sc.fg, background: sc.bg, padding: '3px 9px', borderRadius: 10 }}>
+                        {labelStatutFacture(f.statut)}
                       </span>
                     </td>
                   </tr>
