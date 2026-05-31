@@ -29,6 +29,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'facturation', nom: 'Factures', description: 'Liste, création et suivi des factures', icone: '📄', href: 'finances' },
     { code: 'facturation', nom: 'Relances impayés', description: 'Rappels, relances et mises en demeure', icone: '🔔', href: 'finances/relances' },
     { code: 'facturation', nom: 'Bordereau chèques', description: 'Préparer une remise de chèques à la banque', icone: '🧾', href: 'finances/bordereau' },
+    { code: 'compta', nom: 'Rapprochement bancaire', description: 'Importer un relevé bancaire et rapprocher les recettes contre les impayés', icone: '🏦', href: 'finances/rapprochement' },
     { code: 'compta', nom: 'Compta analytique', description: 'Ventilation par centre de coût', icone: '📈', href: 'finances/analytique' },
     { code: 'compta', nom: 'Export SEPA', description: 'Générer un fichier de prélèvement bancaire', icone: '🏦', href: 'inscriptions/sepa' },
     { code: 'paye', nom: 'Paie enseignants', description: 'Bulletins de paie + déclaration DSN mensuelle', icone: '💵', href: 'paie' },
