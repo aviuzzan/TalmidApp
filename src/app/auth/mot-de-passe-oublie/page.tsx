@@ -47,7 +47,7 @@ export default function MotDePasseOubliePage() {
         ) : (
           <>
             <div style={{ fontSize: 32, marginBottom: 12 }}>{'🔑'}</div>
-            <h1 style={{ fontSize: 21, fontWeight: 700, color: '#1E293B', margin: 0 }}>Mot de passe oublie</h1>
+            <h1 style={{ fontSize: 21, fontWeight: 700, color: '#1E293B', margin: 0 }}>Mot de passe oublié</h1>
             <p style={{ color: '#64748B', fontSize: 13, marginTop: 8, marginBottom: 22 }}>
               Saisissez l&apos;adresse e-mail de votre compte. Nous vous enverrons un lien pour choisir un nouveau mot de passe.
             </p>

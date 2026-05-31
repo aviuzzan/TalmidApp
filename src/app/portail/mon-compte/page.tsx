@@ -29,7 +29,7 @@ export default function MonComptePage() {
   async function changerMotDePasse(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setOk('')
-    if (nouveau.length < 8) { setError('Le nouveau mot de passe doit contenir au moins 8 caracteres.'); return }
+    if (nouveau.length < 8) { setError('Le nouveau mot de passe doit contenir au moins 8 caractères.'); return }
     if (nouveau !== confirme) { setError('Les deux nouveaux mots de passe ne correspondent pas.'); return }
     if (!actuel) { setError('Veuillez saisir votre mot de passe actuel.'); return }
 
@@ -67,7 +67,7 @@ export default function MonComptePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Mon compte</h1>
-        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Gerez les informations de connexion de votre espace famille</p>
+        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Gérez les informations de connexion de votre espace famille</p>
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
@@ -92,7 +92,7 @@ export default function MonComptePage() {
           <div>
             <label style={lbl}>Nouveau mot de passe</label>
             <input required type="password" autoComplete="new-password" value={nouveau}
-              onChange={e => setNouveau(e.target.value)} style={inp} placeholder="8 caracteres minimum" />
+              onChange={e => setNouveau(e.target.value)} style={inp} placeholder="8 caractères minimum" />
           </div>
           <div>
             <label style={lbl}>Confirmer le nouveau mot de passe</label>
@@ -119,7 +119,7 @@ export default function MonComptePage() {
       </div>
 
       <div style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#1E40AF' }}>
-        Si vous avez oublie votre mot de passe, deconnectez-vous puis utilisez le lien &laquo; Mot de passe oublie &raquo; sur la page de connexion.
+        Si vous avez oublié votre mot de passe, déconnectez-vous puis utilisez le lien « Mot de passe oublié » sur la page de connexion.
       </div>
     </div>
   )

@@ -159,7 +159,8 @@ export default function FamillesPage() {
               <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucune famille trouvée</td></tr>
             ) : filtered.map((f, i) => (
               <tr key={f.id}
-                style={{ borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none', transition: 'background 0.1s' }}
+                onClick={() => router.push(`/${ecole.slug}/familles/${f.id}`)}
+                style={{ borderBottom: i < filtered.length - 1 ? '1px solid #F1F5F9' : 'none', transition: 'background 0.1s', cursor: 'pointer' }}
                 onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ padding: '13px 16px', fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{f.numero}</td>
@@ -168,15 +169,15 @@ export default function FamillesPage() {
                 <td style={{ padding: '13px 16px', color: '#475569', fontSize: 13 }}>{f.parent1_telephone}</td>
                 <td style={{ padding: '13px 16px' }}><Badge status={f.statut_dossier} /></td>
                 <td style={{ padding: '13px 16px' }}>
-                  <button onClick={() => router.push(`/${ecole.slug}/familles/${f.id}`)}
+                  <button onClick={(e) => { e.stopPropagation(); router.push(`/${ecole.slug}/familles/${f.id}`) }}
                     style={{ background: '#EFF6FF', color: '#2563EB', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Voir →
                   </button>
                 </td>
                 <td style={{ padding: '13px 16px' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => openEdit(f)}>✏️ Modifier</button>
-                    <button className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setDeleteTarget(f)}>🗑️</button>
+                    <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={(e) => { e.stopPropagation(); openEdit(f) }}>✏️ Édition rapide</button>
+                    <button className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }} onClick={(e) => { e.stopPropagation(); setDeleteTarget(f) }}>🗑️</button>
                   </div>
                 </td>
               </tr>

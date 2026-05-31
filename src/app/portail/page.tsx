@@ -98,7 +98,7 @@ export default function PortailPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
             Bonjour, famille {data.famille.nom} 👋
           </h1>
-          <p style={{ opacity: 0.8, fontSize: 14 }}>Année scolaire {anneeInscription.replace('-', ' / ')}</p>
+          <p style={{ opacity: 0.8, fontSize: 14 }}>Année scolaire {anneeInscription}</p>
         </div>
         <div style={{ fontSize: 48, opacity: 0.3 }}>🏫</div>
       </div>
@@ -107,7 +107,7 @@ export default function PortailPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
           { icon: '🎓', label: 'Élèves inscrits', value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
-          { icon: '📄', label: parent.estSeparee ? 'Ma part' : `Facture ${anneeInscription.replace('-', '/')}`, value: factureActive ? `${(parent.estSeparee ? maPart : Number(factureActive.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '📄', label: parent.estSeparee ? 'Ma part' : `Facture ${anneeInscription}`, value: factureActive ? `${(parent.estSeparee ? maPart : Number(factureActive.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
           { icon: '💳', label: parent.estSeparee ? 'Mon solde' : 'Solde restant', value: factureActive ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
         ].map(s => (
           <div key={s.label} onClick={s.action} style={{
@@ -130,7 +130,7 @@ export default function PortailPage() {
           { icon: '💰', title: 'Mes factures', desc: 'Voir vos factures et règlements', href: '/portail/factures' },
           { icon: '📝', key: 'insc', title: 'Inscriptions N+1', desc: 'Gérer les inscriptions 2026/2027', href: '/portail/inscriptions' },
           { icon: '📄', title: 'Documents', desc: 'Envoyer et consulter vos documents', href: '/portail/documents' },
-          { icon: '📞', title: 'Contact', desc: 'Coordonnees de l\'etablissement', href: '/portail/contact' },
+          { icon: '📞', title: 'Contact', desc: 'Coordonnées de l\'établissement', href: '/portail/contact' },
         ].map(item => {
           const bloque = (item as any).key === 'insc' && data && data.inscriptionsOuvertes === false
           return (

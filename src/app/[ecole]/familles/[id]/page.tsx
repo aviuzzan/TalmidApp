@@ -344,7 +344,9 @@ export default function FamilleDetailPage() {
           {enfants.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '48px 24px', color: '#94A3B8' }}>Aucun élève enregistré</div>
           ) : enfants.map(e => (
-            <div key={e.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={e.id} className="card"
+              onClick={() => router.push(`/${ecole.slug}/enfants/${e.id}`)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{e.genre === 'M' ? '👦' : e.genre === 'F' ? '👧' : '🧒'}</div>
                 <div>
@@ -367,8 +369,8 @@ export default function FamilleDetailPage() {
                   const s = stMap[e.statut_inscription] || stMap.en_attente
                   return <span style={{ background: s.bg, color: s.fg, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{s.label}</span>
                 })()}
-                <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => openEditEnfant(e)}>✏️</button>
-                <button className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => deleteEnfant(e.id)}>🗑️</button>
+                <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={(ev) => { ev.stopPropagation(); openEditEnfant(e) }} title="Édition rapide">✏️</button>
+                <button className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }} onClick={(ev) => { ev.stopPropagation(); deleteEnfant(e.id) }} title="Supprimer">🗑️</button>
               </div>
             </div>
           ))}
