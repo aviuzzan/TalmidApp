@@ -12,7 +12,7 @@ type Reglement = {
   id: string; facture_id: string; montant: number; date_reglement: string;
   mode_paiement: string; reference: string | null; notes: string | null;
 }
-type Famille = { id: string; nom: string; prenom: string | null; email: string | null; numero: string | null }
+type Famille = { id: string; nom: string; email: string | null; numero: string | null }
 
 const MODES = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
 
@@ -39,7 +39,7 @@ export default function CompteFamillePage() {
     setLoading(true)
     const s = createClient()
     const [{ data: fam }, { data: facs }, { data: regs }] = await Promise.all([
-      s.from('familles').select('id, nom, prenom, email, numero').eq('id', familleId).single(),
+      s.from('familles').select('id, nom, email, numero').eq('id', familleId).single(),
       s.from('factures_solde').select('*').eq('famille_id', familleId).order('date_emission', { ascending: false }),
       s.from('reglements').select('*').eq('famille_id', familleId).order('date_reglement', { ascending: false }),
     ])
@@ -140,7 +140,7 @@ export default function CompteFamillePage() {
             ← Retour fiche famille
           </button>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>
-            Compte client (411) — {famille.prenom || ''} {famille.nom}
+            Compte client (411) — {famille.nom}
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', background: '#EEF2FF', color: '#4338CA', borderRadius: 6, padding: '3px 9px' }}>
@@ -172,7 +172,7 @@ export default function CompteFamillePage() {
       <div className="print-only" style={{ display: 'none', marginBottom: 20 }}>
         <h1 style={{ fontSize: 18, margin: 0 }}>Compte client (411) — {ecole.nom}</h1>
         <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>
-          {famille.prenom || ''} {famille.nom} · {auxCode} · Édité le {new Date().toLocaleDateString('fr-FR')}
+          {famille.nom} · {auxCode} · Édité le {new Date().toLocaleDateString('fr-FR')}
         </p>
       </div>
 
