@@ -76,9 +76,8 @@ export async function POST(req: NextRequest) {
     const exLabel = (ex as any).libelle || (ex as any).code
     const ecoleNom = (ecole as any)?.nom || 'École'
 
-    function row(label: string, detail: string, montant: number) {
-      return `<tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600">${label}</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#475569">${detail}</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700">${fmt(montant)}</td></tr>`
-    }
+    const row = (label: string, detail: string, montant: number) =>
+      `<tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600">${label}</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#475569">${detail}</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700">${fmt(montant)}</td></tr>`
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#1E293B">
