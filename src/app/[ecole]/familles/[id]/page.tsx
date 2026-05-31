@@ -290,6 +290,7 @@ export default function FamilleDetailPage() {
           { label: '📁 Documents',         href: `/${ecole.slug}/familles/${id}/documents` },
           ...(canFacturation ? [
             { label: '📒 Compte client (411)', href: `/${ecole.slug}/familles/${id}/compte` },
+            { label: '📋 Engagement financier', href: `/${ecole.slug}/familles/${id}/engagement` },
             { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
             { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
             { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
