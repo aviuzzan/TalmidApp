@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
           </tr></thead>
           <tbody>
             ${contrat ? row('Scolarité', `Contrat ${(contrat as any).statut === 'valide' ? 'validé' : (contrat as any).statut} · ${(contrat as any).mode_reglement || '—'} · ${(contrat as any).nb_echeances || 1} échéances`, montantContrat) : ''}
-            ${montantAssurance > 0 ? row('Assurance scolaire', 'Souscrite via l\\'école', montantAssurance) : ''}
+            ${montantAssurance > 0 ? row("Assurance scolaire", "Souscrite via l'école", montantAssurance) : ''}
             ${totalFraisInsc > 0 ? row(isReinscription ? 'Réinscription' : 'Inscription', `${fraisParEnfant > 0 ? fmt(fraisParEnfant) + ' × ' + enfantIds.length + ' enfant(s)' : ''}${fraisFamille > 0 ? (fraisParEnfant > 0 ? ' + ' : '') + fmt(fraisFamille) + ' (famille)' : ''}`, totalFraisInsc) : ''}
             ${totalCantine > 0 ? row('Cantine', `${(cant ?? []).length} inscription(s)`, totalCantine) : ''}
             ${totalTransport > 0 ? row('Transport', `${(trsp ?? []).length} inscription(s)`, totalTransport) : ''}
