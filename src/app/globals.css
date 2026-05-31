@@ -403,6 +403,16 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
   }
 
   .portail-header-info { display: none !important; }
+}
+
+/* Tablette : laisser visible mais tronquer proprement le nom famille */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .portail-header-info {
+    max-width: 160px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
 
   .portail-nav {
 

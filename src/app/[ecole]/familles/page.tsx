@@ -231,15 +231,15 @@ export default function FamillesPage() {
                 <div><label className="label required">Ville</label><input style={inp} value={form.parent1_ville} onChange={e => set('parent1_ville', e.target.value)} required /></div>
               </div>
 
-              {sec('Parent 2 — Adresse optionnelle')}
+              {sec('Parent 2 (optionnel — famille monoparentale : laisser vide)')}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div><label className="label required">Prénom</label><input style={inp} value={form.parent2_prenom} onChange={e => set('parent2_prenom', e.target.value)} required /></div>
-                <div><label className="label required">Nom</label><input style={inp} value={form.parent2_nom} onChange={e => set('parent2_nom', e.target.value)} required /></div>
-                <div><label className="label required">Email</label><input style={inp} type="email" value={form.parent2_email} onChange={e => set('parent2_email', e.target.value)} required /></div>
-                <div><label className="label required">Téléphone</label><input style={inp} value={form.parent2_telephone} onChange={e => set('parent2_telephone', e.target.value)} required /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label className="label required">Emploi / Profession</label><input style={inp} value={form.parent2_emploi} onChange={e => set('parent2_emploi', e.target.value)} required /></div>
+                <div><label className="label">Prénom</label><input style={inp} value={form.parent2_prenom} onChange={e => set('parent2_prenom', e.target.value)} /></div>
+                <div><label className="label">Nom</label><input style={inp} value={form.parent2_nom} onChange={e => set('parent2_nom', e.target.value)} /></div>
+                <div><label className="label">Email</label><input style={inp} type="email" value={form.parent2_email} onChange={e => set('parent2_email', e.target.value)} /></div>
+                <div><label className="label">Téléphone</label><input style={inp} value={form.parent2_telephone} onChange={e => set('parent2_telephone', e.target.value)} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label className="label">Emploi / Profession</label><input style={inp} value={form.parent2_emploi} onChange={e => set('parent2_emploi', e.target.value)} /></div>
                 <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: '#F0F9FF', borderRadius: 8, fontSize: 12, color: '#0369A1' }}>
-                  ℹ️ Adresse uniquement si différente du parent 1 (parents séparés/divorcés)
+                  ℹ️ Famille monoparentale ? Laissez les champs Parent 2 vides. Les coordonnées d'adresse ci-dessous sont à remplir uniquement si elles diffèrent du parent 1 (parents séparés / divorcés).
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}><label className="label">Numéro et rue</label><input style={inp} value={form.parent2_adresse} onChange={e => set('parent2_adresse', e.target.value)} /></div>
                 <div><label className="label">Code postal</label><input style={inp} value={form.parent2_code_postal} onChange={e => set('parent2_code_postal', e.target.value)} /></div>
