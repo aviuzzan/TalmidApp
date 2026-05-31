@@ -36,6 +36,7 @@ export default function FamilleDetailPage() {
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
   const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
+  const [nPlus1, setNPlus1] = useState<{ exercice: { id: string; code: string; libelle?: string }; contrat: any | null; nbScolarites: number } | null>(null)
 
   const initialTab = searchParams.get('tab') === 'facturation' ? 'facturation' : 'infos'
   const [tab, setTab] = useState<'infos' | 'enfants' | 'facturation'>(initialTab as any)
@@ -89,7 +90,27 @@ export default function FamilleDetailPage() {
     setTransports(trp ?? []); setModesPaiement(modes ?? []); setTarifs(tar ?? [])
 
     const { data: exs } = await supabase.from('exercices').select('id, code, libelle').eq('ecole_id', ecole.id).order('code', { ascending: false })
-    setExercicesDispo((exs ?? []) as { id: string; code: string; libelle?: string }[])
+    const exList = (exs ?? []) as { id: string; code: string; libelle?: string }[]
+    setExercicesDispo(exList)
+
+    // Inscriptions N+1 : trouver l'exercice qui vient apres le courant de l'ecole
+    const { data: ecoleRow } = await supabase.from('ecoles').select('exercice_courant_id').eq('id', ecole.id).maybeSingle()
+    const courantId = (ecoleRow as any)?.exercice_courant_id
+    const courantIdx = courantId ? exList.findIndex(e => e.id === courantId) : -1
+    // exList est trie code DESC : index 0 = plus recent. N+1 = index courantIdx-1 si > 0, sinon prendre [0] si different du courant
+    const exNPlus1 = courantIdx > 0 ? exList[courantIdx - 1] : (exList[0] && exList[0].id !== courantId ? exList[0] : null)
+    if (exNPlus1) {
+      const enfIds = (enf ?? []).map((e: any) => e.id)
+      const [{ data: contratN }, { count: nbScol }] = await Promise.all([
+        supabase.from('contrats_scolarisation').select('id, statut, montant_total, mode_reglement, nb_echeances, exercice_id').eq('famille_id', id).eq('exercice_id', exNPlus1.id).maybeSingle(),
+        enfIds.length > 0
+          ? supabase.from('scolarites').select('id', { count: 'exact', head: true }).in('enfant_id', enfIds).eq('exercice_id', exNPlus1.id)
+          : Promise.resolve({ count: 0 } as any),
+      ])
+      setNPlus1({ exercice: exNPlus1, contrat: contratN, nbScolarites: nbScol ?? 0 })
+    } else {
+      setNPlus1(null)
+    }
 
     const { data: fact } = await supabase.from('factures_solde').select('*').eq('famille_id', id).eq('annee_scolaire', ANNEE).single()
     if (fact) {
@@ -307,6 +328,31 @@ export default function FamilleDetailPage() {
           </div>
           {famille.garde && <div style={{ fontSize: 12, color: '#7C2D12' }}>Garde : <strong>{GARDE_LABELS[famille.garde] || famille.garde}</strong></div>}
           <div style={{ fontSize: 12, color: '#7C2D12' }}>Autorité parentale : <strong>{AUTORITE_LABELS[famille.autorite_parentale] || famille.autorite_parentale}</strong></div>
+        </div>
+      )}
+
+      {/* Bandeau Inscriptions N+1 */}
+      {nPlus1 && (nPlus1.contrat || nPlus1.nbScolarites > 0) && (
+        <div style={{ background: nPlus1.contrat?.statut === 'valide' ? '#ECFDF5' : '#EFF6FF', border: '1px solid', borderColor: nPlus1.contrat?.statut === 'valide' ? '#A7F3D0' : '#BFDBFE', borderRadius: 12, padding: '12px 18px', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: nPlus1.contrat?.statut === 'valide' ? '#065F46' : '#1E40AF' }}>
+            📅 Inscription {nPlus1.exercice.libelle || nPlus1.exercice.code}
+          </div>
+          {nPlus1.contrat ? (
+            <div style={{ fontSize: 12, color: nPlus1.contrat?.statut === 'valide' ? '#065F46' : '#1E40AF' }}>
+              Contrat <strong>{nPlus1.contrat.statut === 'valide' ? 'validé' : nPlus1.contrat.statut === 'soumis' ? 'soumis (en attente)' : nPlus1.contrat.statut}</strong>
+              {nPlus1.contrat.montant_total ? ` · ${Number(nPlus1.contrat.montant_total).toLocaleString('fr-FR')} €` : ''}
+              {nPlus1.contrat.nb_echeances ? ` · ${nPlus1.contrat.nb_echeances} échéances` : ''}
+              {' · '}<strong>{nPlus1.nbScolarites}</strong> scolarité{nPlus1.nbScolarites > 1 ? 's' : ''} créée{nPlus1.nbScolarites > 1 ? 's' : ''}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: '#1E40AF' }}>
+              {nPlus1.nbScolarites} scolarité{nPlus1.nbScolarites > 1 ? 's' : ''} créée{nPlus1.nbScolarites > 1 ? 's' : ''} · aucun contrat
+            </div>
+          )}
+          <button
+            onClick={() => router.push(`/${ecole.slug}/inscriptions?famille=${id}`)}
+            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid currentColor', color: 'inherit', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+          >Voir détails →</button>
         </div>
       )}
 

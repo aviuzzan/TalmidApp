@@ -26,6 +26,7 @@ export default function CompteFamillePage() {
   const [famille, setFamille] = useState<Famille | null>(null)
   const [factures, setFactures] = useState<Facture[]>([])
   const [reglements, setReglements] = useState<Reglement[]>([])
+  const [pointes, setPointes] = useState<Set<string>>(new Set())
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState<any>({
     facture_id: '', montant: '', mode_paiement: 'Chèque',
@@ -47,6 +48,15 @@ export default function CompteFamillePage() {
     setFamille(fam)
     setFactures((facs ?? []) as Facture[])
     setReglements((regs ?? []) as Reglement[])
+
+    // Pointage : un reglement est "rapproche" s'il a un mouvement_bancaire qui pointe vers lui
+    const reglIds = ((regs ?? []) as Reglement[]).map(r => r.id)
+    if (reglIds.length > 0) {
+      const { data: mvts } = await s.from('mouvements_bancaires').select('reglement_id').in('reglement_id', reglIds).eq('statut', 'rapproche')
+      setPointes(new Set(((mvts ?? []) as any[]).map(m => m.reglement_id).filter(Boolean)))
+    } else {
+      setPointes(new Set())
+    }
     setLoading(false)
   }
 
@@ -107,9 +117,10 @@ export default function CompteFamillePage() {
   }
   for (const r of reglements) {
     const fac = factures.find(f => f.id === r.facture_id)
+    const isPointe = pointes.has(r.id)
     mouvements.push({
       date: r.date_reglement, type: 'reglement',
-      libelle: 'Règlement ' + labelModePaiement(r.mode_paiement) + (fac ? ' / ' + fac.numero : '') + (r.reference ? ' (' + r.reference + ')' : ''),
+      libelle: 'Règlement ' + labelModePaiement(r.mode_paiement) + (fac ? ' / ' + fac.numero : '') + (r.reference ? ' (' + r.reference + ')' : '') + (isPointe ? ' ✓ pointé' : ''),
       debit: 0, credit: Number(r.montant || 0), id: r.id,
     })
   }

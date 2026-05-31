@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { labelStatutFacture } from '@/lib/statuts'
 
 type Avoir = {
   id: string
@@ -247,7 +248,7 @@ export default function AvoirsFamillePage() {
                 <select style={inp} value={imputForm.factureId} onChange={e => setImputForm({ ...imputForm, factureId: e.target.value })}>
                   <option value="">— Imputation libre —</option>
                   {factures.filter(f => f.statut !== 'annule' && f.statut !== 'paye').map(f => (
-                    <option key={f.id} value={f.id}>{f.numero} ({f.annee_scolaire}) · {f.statut}</option>
+                    <option key={f.id} value={f.id}>{f.numero} ({f.annee_scolaire}) · {labelStatutFacture(f.statut)}</option>
                   ))}
                 </select>
               </div>

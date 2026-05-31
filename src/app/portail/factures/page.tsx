@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
+import { labelModePaiement } from '@/lib/statuts'
 
 export default function PortailFacturesPage() {
   const { anneeInscription } = useAnneeInscription()
@@ -138,10 +139,13 @@ export default function PortailFacturesPage() {
               const map: any = {
                 en_attente: { label: '⏳ En attente de paiement', color: '#D97706', bg: '#FFFBEB' },
                 partiel: { label: '◑ Partiellement réglée', color: '#2563EB', bg: '#EFF6FF' },
+                paye: { label: '✓ Payée', color: '#059669', bg: '#ECFDF5' },
+                payee: { label: '✓ Payée', color: '#059669', bg: '#ECFDF5' },
                 solde: { label: '✓ Soldée', color: '#059669', bg: '#ECFDF5' },
-                annule: { label: '✕ Annulée', color: '#DC2626', bg: '#FEF2F2' },
+                annule: { label: '✕ Annulée', color: '#64748B', bg: '#F1F5F9' },
+                annulee: { label: '✕ Annulée', color: '#64748B', bg: '#F1F5F9' },
               }
-              const s = map[facture.statut] || { label: facture.statut, color: '#64748B', bg: '#F1F5F9' }
+              const s = map[String(facture.statut || '').toLowerCase()] || { label: facture.statut, color: '#64748B', bg: '#F1F5F9' }
               return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 600 }}>{s.label}</span>
             })()}
           </div>
@@ -255,7 +259,7 @@ export default function PortailFacturesPage() {
                     <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
                       <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
                       <td style={{ padding: '12px 16px' }}>
-                        <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{r.mode_paiement}</span>
+                        <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span>
                       </td>
                       <td style={{ padding: '12px 16px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
                       <td style={{ padding: '12px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
