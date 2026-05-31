@@ -461,14 +461,28 @@ export default function FamilleDetailPage() {
                       </span>
                     )}
                   </h3>
-                  {!facture.verrouillee ? (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button>
-                      <button style={{ padding: '5px 14px', fontSize: 12, background: '#065F46', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} onClick={verrouillerFacture}>🔒 Verrouiller</button>
-                    </div>
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Lignes figées — passez par un avoir pour ajuster</span>
-                  )}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <a
+                      href={`/factures/${facture.id}/print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ padding: '5px 14px', fontSize: 12, background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}
+                    >🖨️ Imprimer</a>
+                    <a
+                      href={`/factures/${facture.id}/print?auto=true`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ padding: '5px 14px', fontSize: 12, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 8, cursor: 'pointer', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}
+                    >📥 Télécharger PDF</a>
+                    {!facture.verrouillee ? (
+                      <>
+                        <button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button>
+                        <button style={{ padding: '5px 14px', fontSize: 12, background: '#065F46', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} onClick={verrouillerFacture}>🔒 Verrouiller</button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Lignes figées — passez par un avoir pour ajuster</span>
+                    )}
+                  </div>
                 </div>
                 {lignes.length === 0 ? <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Aucune ligne</div> : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
