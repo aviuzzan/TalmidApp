@@ -232,6 +232,23 @@ export default function FamilleDetailPage() {
     setShowReglementForm(false); setReglementForm(emptyReglement); load(); setSaving(false)
   }
 
+  async function verrouillerFacture() {
+    if (!facture) return
+    const ok = await confirm({
+      title: 'Verrouiller cette facture ?',
+      message: 'Une fois verrouillée, ses lignes ne pourront plus être modifiées ni supprimées. Le total devient figé. Pour ajuster, il faudra passer par un avoir.',
+    })
+    if (!ok) return
+    const { data: { session } } = await supabase.auth.getSession()
+    const { error: err } = await supabase
+      .from('factures')
+      .update({ verrouillee: true, verrouillee_le: new Date().toISOString(), verrouillee_par: session?.user.id ?? null })
+      .eq('id', facture.id)
+    if (err) { toast.error(err.message); return }
+    toast.success('Facture verrouillée')
+    load()
+  }
+
   async function deleteReglement(reglId: string) {
     const ok = await confirm({ title: 'Supprimer ce règlement ?', message: 'Le solde de la facture sera recalculé.', danger: true })
     if (!ok) return
@@ -434,9 +451,23 @@ export default function FamilleDetailPage() {
               )}
 
               <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 600 }}>📋 Détail par élève</h3>
-                  <button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    📋 Détail par élève
+                    {facture.verrouillee && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#065F46', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '2px 8px' }}>
+                        🔒 Verrouillée{facture.verrouillee_le ? ' le ' + new Date(facture.verrouillee_le).toLocaleDateString('fr-FR') : ''}
+                      </span>
+                    )}
+                  </h3>
+                  {!facture.verrouillee ? (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn-secondary" style={{ padding: '5px 14px', fontSize: 12 }} onClick={() => { setLigneForm(emptyLigne); setShowLigneForm(true) }}>+ Ajouter</button>
+                      <button style={{ padding: '5px 14px', fontSize: 12, background: '#065F46', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} onClick={verrouillerFacture}>🔒 Verrouiller</button>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Lignes figées — passez par un avoir pour ajuster</span>
+                  )}
                 </div>
                 {lignes.length === 0 ? <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Aucune ligne</div> : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -448,7 +479,7 @@ export default function FamilleDetailPage() {
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>{l.enfants?.prenom} {l.enfants?.nom}</td>
                         <td style={{ padding: '10px 12px', color: '#475569', fontSize: 13 }}>{l.description}{l.deductible === false && <span style={{ marginLeft: 8, background: '#FEF3C7', color: '#92400E', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6 }}>non déductible</span>}</td>
                         <td style={{ padding: '10px 12px', fontWeight: 700 }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
-                        <td style={{ padding: '10px 12px' }}><button onClick={() => deleteLigne(l.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button></td>
+                        <td style={{ padding: '10px 12px' }}>{!facture.verrouillee && <button onClick={() => deleteLigne(l.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button>}</td>
                       </tr>
                     ))}</tbody>
                   </table>
