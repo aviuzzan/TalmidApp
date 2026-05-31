@@ -41,6 +41,29 @@ export default function ContratAdminDetailPage() {
       .eq('id', contratId)
     if (error) { alert('Erreur : ' + error.message); setValidating(false); return }
 
+    // Créer / mettre à jour la scolarité de chaque enfant pour l'exercice cible
+    // (modèle AGATE : la scolarité par année est la source de vérité)
+    try {
+      if (contrat.exercice_id) {
+        const { data: classesEcole } = await s.from('classes').select('id, nom').eq('ecole_id', ecole.id)
+        const findClasseId = (nom: string | null | undefined) =>
+          nom ? (classesEcole || []).find((c: any) => c.nom.trim().toLowerCase() === nom.trim().toLowerCase())?.id ?? null : null
+        const rows = ((contrat.contrat_enfants || []) as any[])
+          .map((ce: any) => ({
+            enfant_id: ce.enfant_id,
+            exercice_id: contrat.exercice_id,
+            ecole_id: ecole.id,
+            classe_id: findClasseId(ce.classe_prevue),
+            statut_inscription: 'inscrit',
+            annee_scolaire: contrat.annee_scolaire,
+          }))
+          .filter((r: any) => r.enfant_id && r.exercice_id)
+        if (rows.length > 0) {
+          await s.from('scolarites').upsert(rows, { onConflict: 'enfant_id,exercice_id' })
+        }
+      }
+    } catch (e) { console.warn('Création scolarités N+1 échouée :', e) }
+
     // Notifier la famille
     try {
       await fetch('/api/notify-famille', {
