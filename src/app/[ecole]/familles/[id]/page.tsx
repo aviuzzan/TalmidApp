@@ -38,6 +38,7 @@ export default function FamilleDetailPage() {
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
   const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
   const [nPlus1, setNPlus1] = useState<{ exercice: { id: string; code: string; libelle?: string }; contrat: any | null; nbScolarites: number } | null>(null)
+  const [tranches, setTranches] = useState<{ id: string; code: string; libelle: string }[]>([])
 
   const initialTab = searchParams.get('tab') === 'facturation' ? 'facturation' : 'infos'
   const [tab, setTab] = useState<'infos' | 'enfants' | 'facturation'>(initialTab as any)
@@ -93,6 +94,9 @@ export default function FamilleDetailPage() {
     const { data: exs } = await supabase.from('exercices').select('id, code, libelle').eq('ecole_id', ecole.id).order('code', { ascending: false })
     const exList = (exs ?? []) as { id: string; code: string; libelle?: string }[]
     setExercicesDispo(exList)
+
+    const { data: tr } = await supabase.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecole.id).order('ordre')
+    setTranches((tr ?? []) as { id: string; code: string; libelle: string }[])
 
     // Inscriptions N+1 : trouver l'exercice qui vient apres le courant de l'ecole
     const { data: ecoleRow } = await supabase.from('ecoles').select('exercice_courant_id').eq('id', ecole.id).maybeSingle()
@@ -318,9 +322,25 @@ export default function FamilleDetailPage() {
         <button onClick={() => router.push(`/${ecole.slug}/familles`)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Retour</button>
         <div style={{ flex: 1, minWidth: 200 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>{famille.nom}</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{famille.numero}</span>
             {famille.situation_maritale && <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{SITUATIONS[famille.situation_maritale]}</span>}
+            {tranches.length > 0 && (
+              <select
+                value={famille.tranche_id || ''}
+                onChange={async e => {
+                  const newVal = e.target.value || null
+                  const { error } = await supabase.from('familles').update({ tranche_id: newVal }).eq('id', id)
+                  if (error) { toast.error(error.message); return }
+                  toast.success(newVal ? `Code de facturation appliqué` : 'Code retiré')
+                  setFamille((p: any) => ({ ...p, tranche_id: newVal }))
+                }}
+                title="Code de facturation famille (determine quel tarif sera applique)"
+                style={{ background: famille.tranche_id ? '#FEF3C7' : '#F1F5F9', color: famille.tranche_id ? '#92400E' : '#64748B', border: '1px solid', borderColor: famille.tranche_id ? '#FDE68A' : '#E2E8F0', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                <option value="">🏷️ — Code —</option>
+                {tranches.map(t => <option key={t.id} value={t.id}>🏷️ {t.code}{t.libelle ? ' — ' + t.libelle : ''}</option>)}
+              </select>
+            )}
           </div>
         </div>
         {canAdministratif && exercicesDispo.length > 0 && (

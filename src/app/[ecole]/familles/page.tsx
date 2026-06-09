@@ -25,6 +25,7 @@ export default function FamillesPage() {
   const ecole = useEcole()
   const [familles, setFamilles] = useState<any[]>([])
   const [modes, setModes] = useState<any[]>([])
+  const [tranchesList, setTranchesList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -47,11 +48,12 @@ export default function FamillesPage() {
   const load = useCallback(async () => {
     if (!ecole?.id) return
     const supabase = createClient()
-    const [{ data: fam }, { data: mds }] = await Promise.all([
+    const [{ data: fam }, { data: mds }, { data: trs }] = await Promise.all([
       supabase.from('familles').select('*').eq('ecole_id', ecole.id).order('date_creation', { ascending: false }),
       supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
+      supabase.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecole.id).order('ordre'),
     ])
-    setFamilles(fam ?? []); setModes(mds ?? []); setLoading(false)
+    setFamilles(fam ?? []); setModes(mds ?? []); setTranchesList(trs ?? []); setLoading(false)
   }, [ecole?.id])
 
   useEffect(() => { load() }, [load])
@@ -147,16 +149,16 @@ export default function FamillesPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ background: '#F8FAFC' }}>
             <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-              {['N°', 'Famille', 'Parent 1', 'Téléphone', 'Statut', 'Élèves', 'Actions'].map(h => (
+              {['N°', 'Famille', 'Code', 'Parent 1', 'Téléphone', 'Statut', 'Élèves', 'Actions'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
+              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucune famille trouvée</td></tr>
+              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucune famille trouvée</td></tr>
             ) : filtered.map((f, i) => (
               <tr key={f.id}
                 onClick={() => router.push(`/${ecole.slug}/familles/${f.id}`)}
@@ -165,6 +167,13 @@ export default function FamillesPage() {
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ padding: '13px 16px', fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{f.numero}</td>
                 <td style={{ padding: '13px 16px', fontWeight: 600, color: '#1E293B' }}>{f.nom}</td>
+                <td style={{ padding: '13px 16px' }}>
+                  {(() => {
+                    const t = tranchesList.find((x: any) => x.id === f.tranche_id)
+                    return t ? <span style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>🏷️ {t.code}</span>
+                      : <span style={{ color: '#CBD5E1', fontSize: 12 }}>—</span>
+                  })()}
+                </td>
                 <td style={{ padding: '13px 16px', color: '#475569', fontSize: 13 }}>{f.parent1_prenom} {f.parent1_nom}</td>
                 <td style={{ padding: '13px 16px', color: '#475569', fontSize: 13 }}>{f.parent1_telephone}</td>
                 <td style={{ padding: '13px 16px' }}><Badge status={f.statut_dossier} /></td>
