@@ -685,17 +685,26 @@ function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
   useEffect(() => {
     const s = createClient()
+    // Sans jointure tranches_facturation (cause un freeze quand la table n'a pas de match). On joint cote front via tranchesMap.
     Promise.all([
       s.from('secteurs').select('id, nom').eq('ecole_id', ecoleId).eq('actif', true).order('ordre'),
-      s.from('tarifs_secteur').select('*, secteurs(nom), tranches_facturation(code, libelle)').eq('ecole_id', ecoleId).eq('annee_scolaire', annee).order('ordre'),
-      s.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecoleId).eq('actif', true).order('ordre'),
-    ]).then(([{ data: sec }, { data: tar }, { data: tra }]) => { setSecteurs(sec ?? []); setTarifs(tar ?? []); setTranches(tra ?? []) })
+      s.from('tarifs_secteur').select('*, secteurs(nom)').eq('ecole_id', ecoleId).eq('annee_scolaire', annee).order('ordre'),
+      s.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecoleId).order('ordre'),
+    ]).then(([{ data: sec }, { data: tar }, { data: tra }]) => {
+      const tranchesMap = new Map<string, any>()
+      ;((tra ?? []) as any[]).forEach(t => tranchesMap.set(t.id, t))
+      const tarifsEnriched = ((tar ?? []) as any[]).map(t => ({ ...t, tranches_facturation: t.tranche_id ? tranchesMap.get(t.tranche_id) : null }))
+      setSecteurs(sec ?? []); setTarifs(tarifsEnriched); setTranches(tra ?? [])
+    })
   }, [ecoleId, annee])
   async function ajouter() {
     if (!newT.nom_poste || !newT.montant) return
     await createClient().from('tarifs_secteur').insert({ ecole_id: ecoleId, annee_scolaire: annee, secteur_id: newT.secteur_id || null, tranche_id: newT.tranche_id || null, nom_poste: newT.nom_poste, montant: parseFloat(newT.montant), obligatoire: newT.obligatoire, code_comptable: newT.code_comptable || null, ordre: tarifs.length })
-    const { data } = await createClient().from('tarifs_secteur').select('*, secteurs(nom), tranches_facturation(code, libelle)').eq('ecole_id', ecoleId).eq('annee_scolaire', annee).order('ordre')
-    setTarifs(data ?? []); setNewT({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '' })
+    const { data } = await createClient().from('tarifs_secteur').select('*, secteurs(nom)').eq('ecole_id', ecoleId).eq('annee_scolaire', annee).order('ordre')
+    const tranchesMap = new Map<string, any>()
+    tranches.forEach((t: any) => tranchesMap.set(t.id, t))
+    const enriched = ((data ?? []) as any[]).map(t => ({ ...t, tranches_facturation: t.tranche_id ? tranchesMap.get(t.tranche_id) : null }))
+    setTarifs(enriched); setNewT({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '' })
   }
   async function supprimer(id: string) { await createClient().from('tarifs_secteur').delete().eq('id', id); setTarifs(p => p.filter(t => t.id !== id)) }
   return (

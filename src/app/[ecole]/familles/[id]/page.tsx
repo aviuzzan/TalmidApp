@@ -8,6 +8,7 @@ import { getAnneeCouranteSync } from '@/lib/annee-courante'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import BoutonReinscription from '@/components/BoutonReinscription'
+import { labelModePaiement, labelStatutFacture } from '@/lib/statuts'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -407,7 +408,7 @@ export default function FamilleDetailPage() {
           {canFacturation && (
             <div className="card">
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>💰 Financier</h3>
-              {[['Mode de paiement', famille.mode_paiement ?? '—'], ['Répartition', famille.part_pere != null ? `Parent 1: ${famille.part_pere}% / Parent 2: ${famille.part_mere}%` : '—']].map(([l, v]) => (
+              {[['Mode de paiement', famille.mode_paiement ? labelModePaiement(famille.mode_paiement) : '—'], ['Répartition', famille.part_pere != null ? `Parent 1: ${famille.part_pere}% / Parent 2: ${famille.part_mere}%` : '—']].map(([l, v]) => (
                 <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #F1F5F9', fontSize: 13 }}>
                   <span style={{ color: '#64748B' }}>{l}</span><span style={{ fontWeight: 500 }}>{v}</span>
                 </div>
@@ -582,7 +583,7 @@ export default function FamilleDetailPage() {
                       <tr key={r.id} style={{ borderBottom: i < reglements.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                         <td style={{ padding: '10px 12px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
                         {estSeparee && <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{r.paye_par === 'parent1' ? 'Parent 1' : r.paye_par === 'parent2' ? 'Parent 2' : '—'}</td>}
-                        <td style={{ padding: '10px 12px' }}><span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{r.mode_paiement}</span></td>
+                        <td style={{ padding: '10px 12px' }}><span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span></td>
                         <td style={{ padding: '10px 12px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
                         <td style={{ padding: '10px 12px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
                         <td style={{ padding: '10px 12px' }}><button onClick={() => deleteReglement(r.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button></td>
