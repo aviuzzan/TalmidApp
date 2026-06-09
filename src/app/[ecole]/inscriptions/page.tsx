@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { formatStatut } from '@/lib/inscriptions'
 import { getExerciceInscription } from '@/lib/annee-inscription'
+import { labelModePaiement } from '@/lib/statuts'
 
 type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'cheques'
 
@@ -515,7 +516,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{c.familles?.nom}</div>
                   <div style={{ fontSize: 11, color: '#94A3B8' }}>
                     {c.contrat_enfants?.map((e: any) => e.enfants?.prenom).join(', ')}
-                    {' · '}{c.mode_reglement} · {c.montant_total ? `${c.montant_total.toLocaleString('fr-FR')}€` : '—'}
+                    {' · '}{labelModePaiement(c.mode_reglement)} · {c.montant_total ? `${c.montant_total.toLocaleString('fr-FR')}€` : '—'}
                   </div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 600, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 20 }}>{st.label}</span>

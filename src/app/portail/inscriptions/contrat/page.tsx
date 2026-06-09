@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
+import { labelModePaiement } from '@/lib/statuts'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -392,7 +393,7 @@ export default function ContratPage() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
             <span style={{ color: '#64748B' }}>Règlement</span>
-            <span style={{ fontWeight: 600 }}>{contrat.mode_reglement} — {contrat.nb_echeances} échéance(s)</span>
+            <span style={{ fontWeight: 600 }}>{labelModePaiement(contrat.mode_reglement)} — {contrat.nb_echeances} échéance(s)</span>
           </div>
         </div>
       </div>

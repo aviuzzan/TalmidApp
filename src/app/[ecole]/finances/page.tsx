@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { labelModePaiement } from '@/lib/statuts'
 
 type Tab = 'tarifs' | 'factures' | 'paiements'
 const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
@@ -368,7 +369,7 @@ export default function FinancesPage() {
                       <td style={{ padding: '13px 16px', fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{r.factures?.numero}</td>
                       <td style={{ padding: '13px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
                       <td style={{ padding: '13px 16px' }}>
-                        <span style={{ background: '#F1F5F9', color: '#475569', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{r.mode_paiement}</span>
+                        <span style={{ background: '#F1F5F9', color: '#475569', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span>
                       </td>
                       <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B' }}>{r.reference || '—'}</td>
                       <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.notes || ''}>{r.notes || '—'}</td>

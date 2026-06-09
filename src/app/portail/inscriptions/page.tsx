@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
+import { labelModePaiement } from '@/lib/statuts'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -335,7 +336,7 @@ function FactureTab() {
               {reglements.map(r => (
                 <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
                   <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
-                  <td style={{ padding: '12px 16px' }}><span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{r.mode_paiement}</span></td>
+                  <td style={{ padding: '12px 16px' }}><span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span></td>
                   <td style={{ padding: '12px 16px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
                   <td style={{ padding: '12px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
                 </tr>

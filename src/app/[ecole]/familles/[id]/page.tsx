@@ -624,7 +624,16 @@ export default function FamilleDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}><h2 style={{ fontSize: 17, fontWeight: 700 }}>➕ Ajouter une ligne</h2><button onClick={() => setShowLigneForm(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: '#64748B' }}>✕</button></div>
             <form onSubmit={saveLigne} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>{lbl('Élève', true)}<select style={inp} value={ligneForm.enfant_id} onChange={e => onEnfantChange(e.target.value)} required><option value="">-- Sélectionner --</option>{enfants.map(e => <option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}</select></div>
-              <div>{lbl('Tarif')}<select style={inp} value={ligneForm.tarif_id} onChange={e => onTarifChange(e.target.value)}><option value="">-- Sélectionner --</option>{tarifs.map(t => <option key={t.id} value={t.id}>{t.nom} — {Number(t.montant).toLocaleString('fr-FR')} €</option>)}</select></div>
+              <div>{lbl('Tarif')}<select style={inp} value={ligneForm.tarif_id} onChange={e => onTarifChange(e.target.value)}><option value="">-- Sélectionner --</option>{
+                // Filtre par tranche de la famille : si famille a un code, on ne propose que les tarifs de ce code ou les tarifs universels (tranche_id NULL)
+                (famille?.tranche_id
+                  ? tarifs.filter((t: any) => !t.tranche_id || t.tranche_id === famille.tranche_id)
+                  : tarifs
+                ).map(t => {
+                  const trancheLabel = (t as any).tranche_id ? tranches.find(tr => tr.id === (t as any).tranche_id)?.code : null
+                  return <option key={t.id} value={t.id}>{t.nom}{trancheLabel ? ` [${trancheLabel}]` : ''} — {Number(t.montant).toLocaleString('fr-FR')} €</option>
+                })
+              }</select></div>
               <div>{lbl('Description', true)}<input style={inp} value={ligneForm.description} onChange={e => setLigneForm(p => ({ ...p, description: e.target.value }))} required /></div>
               <div>{lbl('Montant (€)', true)}<input style={inp} type="number" min="0" step="0.01" value={ligneForm.montant} onChange={e => setLigneForm(p => ({ ...p, montant: e.target.value }))} required /></div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
