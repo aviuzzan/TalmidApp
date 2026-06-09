@@ -103,6 +103,14 @@ export async function POST(req: NextRequest) {
       await sb.from('contrat_enfants').insert(rows)
     }
 
+    try {
+      await sb.from('admin_logs').insert({
+        admin_id: user.id,
+        ecole_id: famille.ecole_id,
+        action: 'reinscription_famille',
+        details: { famille_id: familleId, exercice_cible: exerciceCible, contrat_id: nouveauContrat.id, nb_enfants: enfantsIdsCible.length },
+      })
+    } catch {}
     return NextResponse.json({
       success: true,
       contratId: nouveauContrat.id,

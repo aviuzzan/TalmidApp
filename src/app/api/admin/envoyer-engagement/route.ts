@@ -122,6 +122,15 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       return NextResponse.json({ ok: false, error: res.error || 'Erreur envoi' }, { status: 500 })
     }
+    // Audit log (non bloquant)
+    try {
+      await sb.from('admin_logs').insert({
+        admin_id: null,
+        ecole_id: ecoleId,
+        action: 'envoi_engagement',
+        details: { famille_id: familleId, exercice_id: exerciceId, destinataires: destinataires.length },
+      })
+    } catch {}
     return NextResponse.json({ ok: true, sent: destinataires.length, canal: res.canal })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Erreur' }, { status: 500 })

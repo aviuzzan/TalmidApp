@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE, formatStatut } from '@/lib/inscriptions'
+import { logAction } from '@/lib/audit-log'
 
 const AVIS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   favorable:   { label: 'Favorable',   color: '#10B981', bg: 'rgba(16,185,129,0.1)',  icon: '✓' },
@@ -75,6 +76,13 @@ export default function DossierReductionPage() {
     setSaving(true)
     const s = createClient(); const { data: { session } } = await s.auth.getSession()
     await s.from('demandes_reduction').update({ statut, tarif_accorde: statut === 'accepte' ? parseFloat(tarifDecide) : null, note_interne: noteInterne, tarif_accorde_par: tarifAccordePar, date_commission: dateCommission, decide_par: session?.user.id, decide_le: new Date().toISOString() }).eq('id', demandeId)
+    await logAction(s, ecole.id, statut === 'accepte' ? 'ddr_accordee' : 'ddr_refusee', {
+      demande_id: demandeId,
+      famille_id: demande?.famille_id,
+      tarif_accorde: statut === 'accepte' ? parseFloat(tarifDecide) : null,
+      decideur: tarifAccordePar || null,
+      date_commission: dateCommission,
+    })
     await load(); setSaving(false)
   }
 

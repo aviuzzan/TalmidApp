@@ -128,6 +128,14 @@ export async function POST(req: NextRequest) {
       emailError = res.error
     }
 
+    try {
+      await supabaseAdmin.from('admin_logs').insert({
+        admin_id: caller.id,
+        ecole_id: ecoleId,
+        action: 'envoi_lien_inscription',
+        details: { email, demande_id: demandeId, exercice_id: exerciceId, email_sent: emailSent },
+      })
+    } catch {}
     return NextResponse.json({
       success: true,
       demandeId,
