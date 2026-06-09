@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { downloadCSV, formatDateCSV, formatMontantCSV } from '@/lib/csv-export'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { logAction } from '@/lib/audit-log'
 
 type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
 
