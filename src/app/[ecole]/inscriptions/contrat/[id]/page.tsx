@@ -268,4 +268,12 @@ export default function ContratAdminDetailPage() {
       {contrat.signature_url && (
         <div style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: '0 0 14px' }}>Signature parent</h3>
-          <img src={contrat.signature_url} alt="signature" style={{ maxWidth: 360, height: 'auto', border: '1px solid #E2E8
+          <img src={contrat.signature_url} alt="signature" style={{ maxWidth: 360, height: 'auto', border: '1px solid #E2E8F0', borderRadius: 8 }} />
+          {contrat.signature_date && (
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>Signé le {new Date(contrat.signature_date).toLocaleDateString('fr-FR')}</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

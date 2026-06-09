@@ -705,4 +705,59 @@ export default function FamilleDetailPage() {
                   <div>{lbl('Date d\'entrée', true)}<input style={inp} type="date" value={enfantForm.date_entree} onChange={e => setE('date_entree', e.target.value)} required /></div>
                   <div>{lbl('Date de sortie')}<input style={inp} type="date" value={enfantForm.date_sortie} onChange={e => setE('date_sortie', e.target.value)} /></div>
                   <div>{lbl('Établissement d\'origine')}<input style={inp} value={enfantForm.etablissement_origine} onChange={e => setE('etablissement_origine', e.target.value)} /></div>
-                  <div>{lbl('Transport')}<select style={inp} value={enfantForm.transport} onChange={e => setE('transport', e.target.value)}><option value="">Au
+                  <div>{lbl('Transport')}<select style={inp} value={enfantForm.transport} onChange={e => setE('transport', e.target.value)}><option value="">Aucun</option>{transports.map((t: any) => <option key={t.id} value={t.nom}>{t.nom}</option>)}</select></div>
+                </div>
+              </div>
+              {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#DC2626', fontSize: 13 }}>{error}</div>}
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid #E2E8F0' }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowEnfantForm(false)}>Annuler</button>
+                <button type="submit" className="btn-primary" disabled={saving}>{saving ? '...' : editEnfantId ? '✓ Mettre à jour' : '✓ Enregistrer'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Menu Actions compact (dropdown) ──
+function ActionsMenu({ items, onNav }: { items: { label: string; href: string }[]; onNav: (href: string) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={{
+          background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8,
+          padding: '8px 14px', cursor: 'pointer',
+          fontSize: 13, fontWeight: 600, color: '#1E293B',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+        Actions <span style={{ fontSize: 10, color: '#64748B' }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 50,
+          background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10,
+          boxShadow: '0 4px 12px rgba(15,23,42,0.08)',
+          minWidth: 200, overflow: 'hidden',
+        }}>
+          {items.map(it => (
+            <button key={it.href} onClick={() => { onNav(it.href); setOpen(false) }}
+              style={{
+                display: 'block', width: '100%',
+                background: 'transparent', border: 'none',
+                padding: '10px 14px',
+                fontSize: 13, color: '#1E293B', textAlign: 'left',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
