@@ -31,17 +31,17 @@ export default function TableauBordDirectionPage() {
   const router = useRouter()
   const ecole = useEcole()
   const annee = useAnneeScolaireActive()
-  const { exerciceActif } = useExercice()
+  const { exerciceSelectionne } = useExercice() as any
   const [kpi, setKpi] = useState<KPI | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!ecole?.id || !exerciceActif) return
+    if (!ecole?.id || !exerciceSelectionne) return
     ;(async () => {
       setLoading(true)
       const s = createClient()
       const il30Joursj = new Date(Date.now() - 30 * 86400 * 1000).toISOString().slice(0, 10)
-      const exerciceId = exerciceActif.id
+      const exerciceId = exerciceSelectionne.id
 
       const [
         // effectifs N
@@ -109,7 +109,7 @@ export default function TableauBordDirectionPage() {
       })
       setLoading(false)
     })()
-  }, [ecole?.id, exerciceActif])
+  }, [ecole?.id, exerciceSelectionne])
 
   function exportCSV() {
     if (!kpi) return
