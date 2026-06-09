@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import BoutonReinscription from '@/components/BoutonReinscription'
 import { labelModePaiement, labelStatutFacture } from '@/lib/statuts'
+import { logAction } from '@/lib/audit-log'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -271,6 +272,7 @@ export default function FamilleDetailPage() {
       .update({ verrouillee: true, verrouillee_le: new Date().toISOString(), verrouillee_par: session?.user.id ?? null })
       .eq('id', facture.id)
     if (err) { toast.error(err.message); return }
+    await logAction(supabase, ecole.id, 'facture_verrouillee', { facture_id: facture.id, famille_id: id, numero: facture.numero })
     toast.success('Facture verrouillée')
     load()
   }
@@ -289,6 +291,7 @@ export default function FamilleDetailPage() {
       .update({ statut: 'annule' })
       .eq('id', facture.id)
     if (err) { toast.error(err.message); return }
+    await logAction(supabase, ecole.id, 'facture_annulee', { facture_id: facture.id, famille_id: id, numero: facture.numero, total: facture.total_facture })
     toast.success('Facture annulée')
     load()
   }

@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { formatStatut } from '@/lib/inscriptions'
+import { logAction } from '@/lib/audit-log'
 
 export default function ContratAdminDetailPage() {
   const router = useRouter()
@@ -72,6 +73,14 @@ export default function ContratAdminDetailPage() {
         body: JSON.stringify({ ecole_id: ecole.id, famille_id: contrat.famille_id, type: 'contrat_valide' }),
       })
     } catch {}
+
+    // Audit log
+    await logAction(s, ecole.id, 'contrat_valide', {
+      contrat_id: contratId,
+      famille_id: contrat.famille_id,
+      exercice_id: contrat.exercice_id,
+      montant_total: contrat.montant_total,
+    })
 
     setContrat({ ...contrat, statut: 'valide' })
     setValidating(false)
