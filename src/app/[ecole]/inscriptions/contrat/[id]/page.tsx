@@ -142,6 +142,11 @@ export default function ContratAdminDetailPage() {
       })
     } catch {}
 
+    await logAction(s, ecole.id, 'contrat_annule', {
+      contrat_id: contratId,
+      famille_id: contrat.famille_id,
+      motif: motif.trim(),
+    })
     setContrat({ ...contrat, statut: 'annule', motif_annulation: motif.trim() })
     setAnnulating(false)
     alert('Contrat annulé. La famille a été notifiée par email.')
@@ -263,12 +268,4 @@ export default function ContratAdminDetailPage() {
       {contrat.signature_url && (
         <div style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: '0 0 14px' }}>Signature parent</h3>
-          <img src={contrat.signature_url} alt="signature" style={{ maxWidth: 360, height: 'auto', border: '1px solid #E2E8F0', borderRadius: 8 }} />
-          {contrat.signature_date && (
-            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>Signé le {new Date(contrat.signature_date).toLocaleDateString('fr-FR')}</div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+          <img src={contrat.signature_url} alt="signature" style={{ maxWidth: 360, height: 'auto', border: '1px solid #E2E8

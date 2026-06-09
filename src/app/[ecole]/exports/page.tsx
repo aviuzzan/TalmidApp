@@ -18,6 +18,7 @@ export default function ExportsPage() {
 
   async function exportFamilles() {
     setLoading('familles'); setMsg('')
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'familles' })
     const s = createClient()
     const { data } = await s.from('familles')
       .select('numero, nom, situation_maritale, parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, created_at')
@@ -40,6 +41,7 @@ export default function ExportsPage() {
 
   async function exportEleves() {
     setLoading('eleves'); setMsg('')
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'eleves' })
     const s = createClient()
     const { data } = await s.from('enfants')
       .select('prenom, nom, date_naissance, classe_id, transport, instruction_religieuse, etude_garderie, statut_inscription, annee_scolaire, familles(numero, nom), classes(nom)')
@@ -66,6 +68,7 @@ export default function ExportsPage() {
 
   async function exportFactures() {
     setLoading('factures'); setMsg('')
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'factures' })
     const s = createClient()
     const { data } = await s.from('factures_solde')
       .select('numero, date_emission, annee_scolaire, statut, total_facture, total_regle, solde_restant, familles(numero, nom)')
@@ -93,6 +96,7 @@ export default function ExportsPage() {
 
   async function exportReglements() {
     setLoading('reglements'); setMsg('')
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'reglements' })
     const s = createClient()
     const { data } = await s.from('reglements')
       .select('date_reglement, montant, mode, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
@@ -119,6 +123,7 @@ export default function ExportsPage() {
 
   async function exportFEC() {
     setLoading('fec'); setMsg('')
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'fec' })
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     // Périodes FEC : début + fin de l'exercice (par défaut 1er sept → 31 août année suivante)
@@ -151,6 +156,7 @@ export default function ExportsPage() {
 
   async function exportCheques() {
     setLoading('cheques'); setMsg('')
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'cheques' })
     const s = createClient()
     const { data } = await s.from('cheques_prevus')
       .select('numero_cheque, montant, date_echeance, statut, encaisse_le, mode_paiement, note, familles(numero, nom, parent1_prenom, parent1_nom)')

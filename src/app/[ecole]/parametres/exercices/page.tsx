@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import {
+import { logAction } from '@/lib/audit-log'
   Exercice,
   statutLabel,
   statutColor,
@@ -94,8 +95,10 @@ export default function ExercicesPage() {
   async function handleCloturer(ex: Exercice) {
     if (!confirm(`Clôturer l'exercice ${ex.code} ? Cette action verrouille l'exercice — les écritures et factures ne pourront plus être modifiées. À utiliser uniquement après contrôle complet.`)) return
     const res = await cloturerExercice(supabase, ex.id)
-    if (res.ok) { setInfo(`✓ Exercice ${ex.code} clôturé`); await reload() }
-    else setError(res.error || 'Erreur clôture')
+    if (res.ok) {
+      await logAction(supabase, ecole.id, 'exercice_cloture', { exercice_id: ex.id, code: ex.code })
+      setInfo(`✓ Exercice ${ex.code} clôturé`); await reload()
+    } else setError(res.error || 'Erreur clôture')
   }
 
   return (

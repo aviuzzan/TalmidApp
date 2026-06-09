@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { getScolaritesEnfant } from '@/lib/scolarite'
+import { logAction } from '@/lib/audit-log'
 
 export default function EnfantDetailPage() {
   const router = useRouter()
@@ -120,6 +121,11 @@ export default function EnfantDetailPage() {
         created_by: session?.user.id ?? null,
       })
     }
+    await logAction(s, enfant.ecole_id, 'eleve_sortie', {
+      enfant_id: enfantId,
+      date_sortie: dateEvt,
+      motif: sortieForm.motif_sortie || null,
+    })
     setShowSortieModal(false)
     await load()
     setSaving(false)
@@ -140,6 +146,7 @@ export default function EnfantDetailPage() {
         motif: 'Réintégration de l’élève',
         created_by: session?.user.id ?? null,
       })
+      await logAction(s, enfant.ecole_id, 'eleve_reintegre', { enfant_id: enfantId })
     }
     await load()
     setSaving(false)
