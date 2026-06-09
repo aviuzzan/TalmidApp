@@ -64,7 +64,15 @@ export default function LandingPage() {
 
   async function handleContact(e: React.FormEvent) {
     e.preventDefault()
-    // TODO: send to Brevo/Supabase
+    try {
+      await fetch('/api/contact-landing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, school }),
+      })
+    } catch (err) {
+      console.warn('Contact landing send error:', err)
+    }
     setSubmitted(true)
   }
 

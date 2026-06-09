@@ -9,6 +9,7 @@ type ModuleEntry = { nom: string; href: string; module: string }
 
 const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   administration: [
+    { nom: '📊 Tableau de bord direction', href: 'direction', module: 'administratif' },
     { nom: 'Familles', href: 'familles', module: 'administratif' },
     { nom: 'Élèves', href: 'enfants', module: 'administratif' },
     { nom: 'Passages de classe', href: 'passages-de-classe', module: 'administratif' },
@@ -57,6 +58,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Infos & identifiants', href: 'parametres/ecole-infos', module: 'parametres' },
     { nom: 'Intégrations', href: 'parametres/integrations', module: 'parametres' },
     { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
+    { nom: '📋 Journal d\'audit', href: 'parametres/audit', module: 'parametres' },
     { nom: 'Exports CSV', href: 'exports', module: 'parametres' },
     { nom: 'Importer des donnees', href: 'import', module: 'parametres' },
   ],
