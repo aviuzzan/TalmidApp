@@ -7,6 +7,8 @@ import { ANNEE_COURANTE } from '@/lib/inscriptions'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import TranchesTab from '@/components/parametres/TranchesTab'
+import SecteursTab from '@/components/parametres/SecteursTab'
+import ClassesTab from '@/components/parametres/ClassesTab'
 
 type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'tranches' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'documents_inscription' | 'services' | 'comptes_acces' | 'integrations' | 'relances'
 type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
@@ -461,7 +463,8 @@ function ConfigPaiementTab({ ecoleId }: { ecoleId: string }) {
 }
 
 // ── SECTEURS (établissements / secteurs : nom, code, préfixe de facture) ──
-function SecteursTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore — fonction inline conservée pour reference, l'usage est l'import standalone
+function _SecteursTabOld({ ecoleId }: { ecoleId: string }) {
   const toast = useToast()
   const confirmDialog = useConfirm()
   const [secteurs, setSecteurs] = useState<any[]>([])
@@ -817,7 +820,8 @@ function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
 }
 
 // ── CLASSES ──
-function ClassesTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore — fonction inline conservée pour reference, l'usage est l'import standalone
+function _ClassesTabOld({ ecoleId }: { ecoleId: string }) {
   const [classes, setClasses] = useState<any[]>([])
   const [secteurs, setSecteurs] = useState<any[]>([])
   const [newNom, setNewNom] = useState('')
