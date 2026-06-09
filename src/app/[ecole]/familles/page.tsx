@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useI18n } from '@/lib/i18n'
 
 const SITUATIONS = [
   { value: 'marie', label: 'Marié(e)' }, { value: 'celibataire', label: 'Célibataire' },
@@ -21,6 +22,7 @@ function Badge({ status }: { status: string }) {
 }
 
 export default function FamillesPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const ecole = useEcole()
   const [familles, setFamilles] = useState<any[]>([])
@@ -131,11 +133,11 @@ export default function FamillesPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>Familles</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.familles.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13 }}>{familles.length} famille{familles.length > 1 ? 's' : ''}</p>
         </div>
         <button className="btn-primary" onClick={() => { setForm(empty); setEditId(null); setShowForm(true); setError('') }}>
-          + Nouvelle famille
+          {t('pages.familles.new', '+ Nouvelle famille')}
         </button>
       </div>
 

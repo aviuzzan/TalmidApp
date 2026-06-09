@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
 import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import AlertesUrgentes from '@/components/ui/AlertesUrgentes'
+import { useI18n } from '@/lib/i18n'
 
 type Stats = {
   familles: number
@@ -20,6 +21,7 @@ type Stats = {
 }
 
 export default function DashboardPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const ecole = useEcole()
   const [loading, setLoading] = useState(true)
@@ -129,7 +131,7 @@ export default function DashboardPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Tableau de bord</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.dashboard.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2, textTransform: 'capitalize' }}>
             {ecole.nom} · {today} · {userName}
           </p>
