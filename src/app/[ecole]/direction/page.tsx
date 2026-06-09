@@ -57,9 +57,9 @@ export default function TableauBordDirectionPage() {
         { count: ddr },
       ] = await Promise.all([
         s.from('familles').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
-        s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).neq('statut_dossier', 'sorti'),
+        s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
         s.from('factures_solde').select('total_facture, total_regle, solde_restant, statut, date_emission, familles!inner(ecole_id)').eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
-        s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).eq('statut_dossier', 'sorti'),
+        s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).eq('statut_inscription', 'sorti'),
         s.from('exercices').select('id, code').eq('ecole_id', ecole.id).order('code', { ascending: false }),
         s.from('demandes_reduction').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('exercice_id', exerciceId).eq('statut', 'accordee'),
       ])
