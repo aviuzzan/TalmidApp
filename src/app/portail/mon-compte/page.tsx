@@ -16,15 +16,58 @@ export default function MonComptePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+  const [familleId, setFamilleId] = useState<string | null>(null)
 
   useEffect(() => {
     (async () => {
       const s = createClient()
       const { data: { session } } = await s.auth.getSession()
       setEmail(session?.user?.email || '')
+      if (session?.user?.id) {
+        const { data: profile } = await s.from('profiles').select('famille_id').eq('id', session.user.id).single()
+        setFamilleId(profile?.famille_id ?? null)
+      }
       setLoading(false)
     })()
   }, [])
+
+  async function exporterMesDonnees() {
+    if (!familleId) return
+    setExporting(true); setExportError('')
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    if (!session) { setExportError('Session expirée'); setExporting(false); return }
+    try {
+      const r = await fetch('/api/admin/exporter-famille', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ familleId }),
+      })
+      if (!r.ok) {
+        const j = await r.json()
+        setExportError(j.error || 'Erreur export')
+        setExporting(false)
+        return
+      }
+      const blob = await r.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `mes-donnees-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setExportError(e?.message || 'Erreur réseau')
+    }
+    setExporting(false)
+  }
 
   async function changerMotDePasse(e: React.FormEvent) {
     e.preventDefault()
@@ -120,6 +163,37 @@ export default function MonComptePage() {
 
       <div style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#1E40AF' }}>
         Si vous avez oublié votre mot de passe, déconnectez-vous puis utilisez le lien « Mot de passe oublié » sur la page de connexion.
+      </div>
+
+      {/* RGPD - Portabilité (Article 20) */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>
+          🛡️ Mes données personnelles
+        </div>
+        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, margin: '0 0 14px' }}>
+          Conformément à l&apos;article 20 du RGPD (droit à la portabilité), vous pouvez télécharger
+          l&apos;ensemble des données vous concernant ainsi que celles de votre famille au format JSON.
+        </p>
+        <button
+          onClick={exporterMesDonnees}
+          disabled={exporting || !familleId}
+          style={{
+            padding: '10px 18px', background: '#2563EB', color: '#fff', border: 'none',
+            borderRadius: 8, fontSize: 13, fontWeight: 600,
+            cursor: exporting || !familleId ? 'wait' : 'pointer',
+            opacity: exporting || !familleId ? 0.6 : 1,
+          }}>
+          {exporting ? 'Génération...' : '↓ Télécharger mes données'}
+        </button>
+        {exportError && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, color: '#DC2626', fontSize: 12 }}>
+            {exportError}
+          </div>
+        )}
+        <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 14, marginBottom: 0, lineHeight: 1.5 }}>
+          Pour faire valoir vos autres droits (rectification, suppression, opposition), contactez
+          l&apos;administration de l&apos;établissement.
+        </p>
       </div>
     </div>
   )

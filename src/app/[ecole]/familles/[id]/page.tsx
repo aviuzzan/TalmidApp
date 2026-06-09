@@ -365,6 +365,7 @@ export default function FamilleDetailPage() {
             { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
             { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
           ] : []),
+          { label: '🛡️ RGPD — Export / Anonymisation', href: `/${ecole.slug}/familles/${id}/rgpd` },
         ]} onNav={(h) => router.push(h)} />
       </div>
 
