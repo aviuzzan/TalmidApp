@@ -1,0 +1,62 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# scripts locaux non publies (push, restore, repair, diag, gen, clean...)
+push-*.bat
+restore-*.bat
+repair*.bat
+diag-*.bat
+clean-*.bat
+gen-*.py
+*.local.bat
+
+# audits / notes de travail
+AUDIT-*.md
+NOTES-*.md
+*.notes.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
