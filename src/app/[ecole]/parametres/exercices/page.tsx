@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
-import {
 import { logAction } from '@/lib/audit-log'
+import {
   Exercice,
   statutLabel,
   statutColor,
