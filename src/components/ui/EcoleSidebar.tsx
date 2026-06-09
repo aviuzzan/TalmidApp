@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau } from '@/lib/permissions'
+import { useI18n } from '@/lib/i18n'
 
 type ModuleEntry = { nom: string; href: string; module: string }
 
@@ -87,6 +88,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   const pathname = usePathname()
   const ecole = useEcole()
   const slug = ecole.slug
+  const { t } = useI18n()
   const [isOpen, setIsOpen] = useState(false)
   const [perms, setPerms] = useState<Record<string, Niveau>>({})
   const [isAdminPrincipal, setIsAdminPrincipal] = useState(false)
@@ -202,7 +204,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
               minHeight: 44,
             }}>
             <span style={{ fontSize: 16 }}>◈</span>
-            Tableau de bord
+            {t('sidebar.dashboard', 'Tableau de bord')}
           </button>
 
           <div style={{
@@ -233,7 +235,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                     minHeight: 40,
                   }}>
                   <span style={{ fontSize: 16 }}>{cat.icone}</span>
-                  <span style={{ flex: 1 }}>{cat.nom}</span>
+                  <span style={{ flex: 1 }}>{t('sidebar.' + cat.code, cat.nom)}</span>
                   {!accessible && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>🔒</span>}
                 </button>
 
