@@ -9,6 +9,19 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import TranchesTab from '@/components/parametres/TranchesTab'
 import SecteursTab from '@/components/parametres/SecteursTab'
 import ClassesTab from '@/components/parametres/ClassesTab'
+import ConfigReductionTab from '@/components/parametres/ConfigReductionTab'
+import ConfigPaiementTab from '@/components/parametres/ConfigPaiementTab'
+import TarifsTab from '@/components/parametres/TarifsTab'
+import ReductionsFNTab from '@/components/parametres/ReductionsFNTab'
+import ModesReglementTab from '@/components/parametres/ModesReglementTab'
+import CommissionTab from '@/components/parametres/CommissionTab'
+import SEPATab from '@/components/parametres/SEPATab'
+import NotificationsTab from '@/components/parametres/NotificationsTab'
+import FraisInscriptionTab from '@/components/parametres/FraisInscriptionTab'
+import DocumentsEcoleTab from '@/components/parametres/DocumentsEcoleTab'
+import ServicesTab from '@/components/parametres/ServicesTab'
+import ComptesAccesTab from '@/components/parametres/ComptesAccesTab'
+import DocumentsInscriptionTab from '@/components/parametres/DocumentsInscriptionTab'
 
 type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'tranches' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'documents_inscription' | 'services' | 'comptes_acces' | 'integrations' | 'relances'
 type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
@@ -187,7 +200,8 @@ export default function ParametresPage() {
 }
 
 // ── CONFIG DOSSIER RÉDUCTION ──
-function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _ConfigReductionTabOld({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [docs, setDocs] = useState<any[]>([])
   const [questions, setQuestions] = useState<any[]>([])
   const [newDoc, setNewDoc] = useState({ label: '', obligatoire: true })
@@ -354,7 +368,8 @@ function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string
 }
 
 // ── CONFIG PAIEMENT ──
-function ConfigPaiementTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _ConfigPaiementTabOld({ ecoleId }: { ecoleId: string }) {
   const toast = useToast()
   const [config, setConfig] = useState<any>(null)
   const [dates, setDates] = useState<any[]>([])
@@ -682,7 +697,8 @@ function _TranchesTabOld({ ecoleId }: { ecoleId: string }) {
   )
 }
 
-function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _TarifsTabOld({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [secteurs, setSecteurs] = useState<any[]>([])
   const [tranches, setTranches] = useState<any[]>([])
   const [tarifs, setTarifs] = useState<any[]>([])
@@ -752,7 +768,8 @@ function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
 }
 
 // ── RÉDUCTIONS FAMILLE NOMBREUSE ──
-function ReductionsFNTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _ReductionsFNTabOld({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [reductions, setReductions] = useState<any[]>([])
   const [newItem, setNewItem] = useState({ nb_enfants: '', montant_reduction: '' })
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
@@ -783,7 +800,8 @@ function ReductionsFNTab({ ecoleId, annee }: { ecoleId: string; annee: string })
 }
 
 // ── MODES RÈGLEMENT ──
-function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _ModesReglementTabOld({ ecoleId }: { ecoleId: string }) {
   const [modes, setModes] = useState<any[]>([])
   const TYPES = [
     { value: 'cheque', label: 'Chèque', desc: 'Chèques remis à la comptabilité' },
@@ -865,7 +883,8 @@ function _ClassesTabOld({ ecoleId }: { ecoleId: string }) {
 }
 
 // ── COMMISSION ──
-function CommissionTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _CommissionTabOld({ ecoleId }: { ecoleId: string }) {
   const toast = useToast()
   const confirmDialog = useConfirm()
   const [membres, setMembres] = useState<any[]>([])
@@ -931,7 +950,8 @@ function CommissionTab({ ecoleId }: { ecoleId: string }) {
 }
 
 // ── SEPA / BANQUE ──
-function SEPATab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _SEPATabOld({ ecoleId }: { ecoleId: string }) {
   const [form, setForm] = useState<any>({ iban_ecole: '', bic_ecole: '', ics_sepa: '', nom_creancier: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1042,7 +1062,8 @@ function SEPATab({ ecoleId }: { ecoleId: string }) {
 }
 
 // ── NOTIFICATIONS ──
-function NotificationsTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _NotificationsTabOld({ ecoleId }: { ecoleId: string }) {
   const toast = useToast()
   const [emails, setEmails] = useState<string[]>([])
   const [newEmail, setNewEmail] = useState('')
@@ -1235,7 +1256,8 @@ function NotificationsTab({ ecoleId }: { ecoleId: string }) {
 
 
 // ── FRAIS INSCRIPTION / RÉINSCRIPTION ──
-function FraisInscriptionTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _FraisInscriptionTabOld({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [form, setForm] = useState<any>({ inscription_par_enfant: '', inscription_par_famille: '', reinscription_par_enfant: '', reinscription_par_famille: '' })
   const [recordId, setRecordId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1352,7 +1374,8 @@ function FraisInscriptionTab({ ecoleId, annee }: { ecoleId: string; annee: strin
 }
 
 // ── DOCUMENTS ÉCOLE PUBLICS (circulaire, liste affaires, etc.) ──
-function DocumentsEcoleTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _DocumentsEcoleTabOld({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const toast = useToast()
   const confirmDialog = useConfirm()
   const [docs, setDocs] = useState<any[]>([])
@@ -1499,7 +1522,8 @@ function DocumentsEcoleTab({ ecoleId, annee }: { ecoleId: string; annee: string 
   )
 }
 // ── SERVICES & MESSAGERIE ──
-function ServicesTab({ ecoleId }: { ecoleId: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _ServicesTabOld({ ecoleId }: { ecoleId: string }) {
   const [services, setServices] = useState<any[]>([])
   const [agents, setAgents] = useState<any[]>([])
   const [assignments, setAssignments] = useState<Record<string, string[]>>({})
@@ -1630,7 +1654,8 @@ function ServicesTab({ ecoleId }: { ecoleId: string }) {
 }
 
 // ── COMPTES & ACCÈS ──
-function ComptesAccesTab({ ecoleSlug }: { ecoleSlug: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _ComptesAccesTabOld({ ecoleSlug }: { ecoleSlug: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
@@ -1670,7 +1695,8 @@ function ComptesAccesTab({ ecoleSlug }: { ecoleSlug: string }) {
 
 
 // ── DOCUMENTS À FOURNIR (INSCRIPTION NOUVEL ENFANT) ──
-function DocumentsInscriptionTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+// @ts-ignore - inline conservé pour rollback (refacto vers components/parametres/)
+function _DocumentsInscriptionTabOld({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [docs, setDocs] = useState<any[]>([])
   const [newDoc, setNewDoc] = useState({ label: '', description: '', obligatoire: true })
   const [saving, setSaving] = useState(false)
