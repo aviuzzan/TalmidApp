@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
+import { useI18n } from '@/lib/i18n'
 
 export default function EnfantsPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const ecole = useEcole()
   const { exerciceSelectionne } = useExercice()
@@ -64,7 +66,7 @@ export default function EnfantsPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Élèves</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.enfants.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
             {filtered.length} élève(s) ·{' '}
             <span style={{ fontWeight: 600, color: '#2563EB' }}>Année {exerciceSelectionne?.code || '…'}</span>

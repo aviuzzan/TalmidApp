@@ -6,10 +6,12 @@ import { useEcole } from '@/lib/ecole-context'
 import { formatStatut } from '@/lib/inscriptions'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { labelModePaiement } from '@/lib/statuts'
+import { useI18n } from '@/lib/i18n'
 
 type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'cheques'
 
 export default function InscriptionsAdminPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const ecole = useEcole()
   const [onglet, setOnglet] = useState<Onglet>('tableau_bord')
@@ -77,7 +79,7 @@ export default function InscriptionsAdminPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Inscriptions N+1</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.inscriptions.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Gestion des inscriptions {annee}</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

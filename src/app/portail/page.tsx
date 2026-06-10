@@ -5,8 +5,10 @@ import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import PushPrompt from '@/components/PushPrompt'
+import { useI18n } from '@/lib/i18n'
 
 export default function PortailPage() {
+  const { t } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const parent = useParentCtx()
   const router = useRouter()
@@ -98,7 +100,7 @@ export default function PortailPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
             Bonjour, famille {data.famille.nom} 👋
           </h1>
-          <p style={{ opacity: 0.8, fontSize: 14 }}>Année scolaire {anneeInscription}</p>
+          <p style={{ opacity: 0.8, fontSize: 14 }}>{t('portail.school_year')} {anneeInscription}</p>
         </div>
         <div style={{ fontSize: 48, opacity: 0.3 }}>🏫</div>
       </div>

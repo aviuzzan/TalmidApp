@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useI18n } from '@/lib/i18n'
 
 /**
  * Demandes d'inscription : l'admin envoie un lien a un parent prospect,
@@ -39,6 +40,7 @@ const STATUTS: Record<string, { label: string; color: string; bg: string }> = {
 }
 
 export default function DemandesInscriptionPage() {
+  const { t } = useI18n()
   const ecole = useEcole()
   const [loading, setLoading] = useState(true)
   const [demandes, setDemandes] = useState<Demande[]>([])
@@ -150,7 +152,7 @@ export default function DemandesInscriptionPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demandes de nouvelles inscriptions</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.demandes.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Envoyez un lien a une nouvelle famille et traitez les demandes recues</p>
         </div>
         <button onClick={() => { setShowEnvoi(true); setEnvoiMsg(''); setEnvoiErr('') }} className="btn-primary">+ Envoyer un lien d&apos;inscription</button>

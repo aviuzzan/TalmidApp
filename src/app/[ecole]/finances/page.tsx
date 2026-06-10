@@ -6,11 +6,13 @@ import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { labelModePaiement } from '@/lib/statuts'
+import { useI18n } from '@/lib/i18n'
 
 type Tab = 'tarifs' | 'factures' | 'paiements'
 const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
 
 export default function FinancesPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const ecole = useEcole()
   const toast = useToast()
@@ -176,7 +178,7 @@ export default function FinancesPage() {
       {/* Header — uniquement titre + sélecteur année (PAS de boutons d'action ici) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>Finances</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.finances.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & Règlements — {ANNEE}</p>
         </div>
         <select value={ANNEE} onChange={e => changeAnnee(e.target.value)}
