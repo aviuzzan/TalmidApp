@@ -62,6 +62,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: '📋 Journal d\'audit', href: 'parametres/audit', module: 'parametres' },
     { nom: 'Exports CSV', href: 'exports', module: 'parametres' },
     { nom: 'Importer des donnees', href: 'import', module: 'parametres' },
+    { nom: '🎓 Aide & démarrage', href: 'aide', module: 'parametres' },
   ],
 }
 
