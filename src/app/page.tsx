@@ -162,7 +162,12 @@ export default function LandingPage() {
           <span style={{ margin: '0 8px', color: '#CBD5E1' }}>·</span>
           <span>Plateforme de gestion scolaire</span>
         </div>
-        <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 14, fontSize: 12, flexWrap: 'wrap' }}>
+          <a href="/mentions-legales" style={{ color: '#64748B', textDecoration: 'none' }}>Mentions légales</a>
+          <a href="/confidentialite" style={{ color: '#64748B', textDecoration: 'none' }}>Confidentialité</a>
+          <a href="/cgu" style={{ color: '#64748B', textDecoration: 'none' }}>CGU</a>
+        </div>
+        <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 12 }}>
           © {new Date().getFullYear()} TalmidApp. Tous droits réservés.
         </div>
       </footer>
