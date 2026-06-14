@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       famille_id: familleId,
       exercice_id: ex.id,
       annee_scolaire: exerciceCible,
-      mode_reglement: contratBase?.mode_reglement || 'cheques',
+      mode_reglement: contratBase?.mode_reglement || 'cheque',
       nb_echeances: contratBase?.nb_echeances || 10,
       assurance_ecole: contratBase?.assurance_ecole ?? true,
       droit_image: contratBase?.droit_image ?? null,
