@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (facture.famille_id !== profile.famille_id) {
       return NextResponse.json({ error: 'Facture non rattachée à votre famille' }, { status: 403 })
     }
-    if (facture.statut === 'solde' || facture.statut === 'annule') {
+    if (facture.statut === 'paye' || facture.statut === 'annule') {
       return NextResponse.json({ error: 'Facture déjà soldée ou annulée' }, { status: 400 })
     }
 

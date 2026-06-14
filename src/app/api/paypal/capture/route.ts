@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     await supabaseAdmin.from('paiements_en_ligne')
-      .update({ statut: 'paid', metadata: { ...(paiement.metadata || {}), paypal_capture_id: cap.id } })
+      .update({ statut: 'succeeded', metadata: { ...(paiement.metadata || {}), paypal_capture_id: cap.id } })
       .eq('id', paiement.id)
 
     return NextResponse.json({ success: true })

@@ -107,8 +107,8 @@ export async function POST(req: NextRequest) {
             const total = Number(sol.total_facture) || 0
             const regle = Number(sol.total_regle) || 0
             const restant = Number(sol.solde_restant) || 0
-            let statut: 'en_attente' | 'partiel' | 'solde' = 'en_attente'
-            if (restant <= 0.01 && total > 0) statut = 'solde'
+            let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
+            if (restant <= 0.01 && total > 0) statut = 'paye'
             else if (regle > 0) statut = 'partiel'
             await supabaseAdmin.from('factures').update({ statut }).eq('id', factureId)
           }
