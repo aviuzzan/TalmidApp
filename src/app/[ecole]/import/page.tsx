@@ -187,6 +187,7 @@ export default function ImportPage() {
     const s = createClient()
     const aImporter = parsed.filter(g => !g.existe)
     let okFam = 0, okEnf = 0, echecs = 0
+    const erreursDetail: string[] = []
 
     for (const g of aImporter) {
       const f = g.famille
@@ -216,7 +217,15 @@ export default function ImportPage() {
         telephone: f.parent1_telephone || null,
       }).select('id').single()
 
-      if (famErr || !nouvelleFam) { echecs++; continue }
+      if (famErr || !nouvelleFam) {
+        echecs++
+        if (erreursDetail.length < 10) {
+          erreursDetail.push(`Famille "${f.nom}" (${f.parent1_email}) : ${famErr?.message || 'pas de ligne retournée — vérifiez vos droits ou reconnectez-vous'}`)
+        }
+        // eslint-disable-next-line no-console
+        console.error('Import famille échouée', { famille: f, error: famErr })
+        continue
+      }
       okFam++
 
       for (const e of g.enfants) {
@@ -241,7 +250,14 @@ export default function ImportPage() {
           exercice_id: exercice?.id || null,
           statut_inscription: 'inscrit',
         })
-        if (enfErr) echecs++
+        if (enfErr) {
+          echecs++
+          if (erreursDetail.length < 10) {
+            erreursDetail.push(`Élève "${e.prenom} ${e.nom}" (famille ${f.nom}) : ${enfErr.message}`)
+          }
+          // eslint-disable-next-line no-console
+          console.error('Import enfant échoué', { enfant: e, error: enfErr })
+        }
         else okEnf++
       }
     }
@@ -250,6 +266,7 @@ export default function ImportPage() {
     setResultat(`Import termine : ${okFam} famille(s) et ${okEnf} eleve(s) ajoute(s) sur l'annee ${exercice?.code || ''}.` +
       (echecs > 0 ? ` ${echecs} ligne(s) en echec.` : '') +
       (parsed.length - aImporter.length > 0 ? ` ${parsed.length - aImporter.length} famille(s) deja presente(s), ignoree(s).` : ''))
+    setErreurs(erreursDetail)
     setParsed(null)
   }
 
