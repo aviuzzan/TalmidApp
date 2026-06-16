@@ -90,6 +90,22 @@ function parseBool(s: string): boolean {
   return /^(oui|yes|true|1|x)$/i.test((s || '').trim())
 }
 
+// Normalise la situation maritale vers une des valeurs autorisées par la BDD
+// (marie, celibataire, divorce, veuf, separe, non_connu). Retourne null si vide
+// ou non reconnu (sécurité : ne bloque pas l'import sur une faute de saisie).
+function normaliserSituation(s: string): string | null {
+  const v = (s || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // retire les diacritiques
+  if (!v) return null
+  if (v === 'marie' || v === 'mariee') return 'marie'
+  if (v.startsWith('celib')) return 'celibataire'
+  if (v.startsWith('divorc')) return 'divorce'
+  if (v.startsWith('sepa')) return 'separe'
+  if (v.startsWith('veuf') || v.startsWith('veuve')) return 'veuf'
+  if (v === 'non_connu' || v === 'inconnu' || v === 'nc' || v === 'autre') return 'non_connu'
+  return null
+}
+
 type ParsedFamille = {
   key: string
   famille: Record<string, any>
@@ -196,7 +212,7 @@ export default function ImportPage() {
         nom: f.nom,
         statut_dossier: 'complet',
         date_creation: new Date().toISOString(),
-        situation_maritale: f.situation_maritale || null,
+        situation_maritale: normaliserSituation(f.situation_maritale),
         parent1_prenom: f.parent1_prenom || null,
         parent1_nom: f.parent1_nom || null,
         parent1_email: f.parent1_email || null,
@@ -332,35 +348,4 @@ export default function ImportPage() {
           <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden', maxHeight: 320, overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead><tr style={{ background: '#F8FAFC' }}>
-                {['Famille', 'Parent 1', 'Email', 'Eleves'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700, color: '#64748B' }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {parsed.map((g, i) => (
-                  <tr key={g.key} style={{ borderTop: '1px solid #F1F5F9', opacity: g.existe ? 0.5 : 1 }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 600 }}>{g.famille.nom}{g.existe ? ' (deja la)' : ''}</td>
-                    <td style={{ padding: '8px 12px' }}>{[g.famille.parent1_prenom, g.famille.parent1_nom].filter(Boolean).join(' ') || '-'}</td>
-                    <td style={{ padding: '8px 12px', color: '#64748B' }}>{g.famille.parent1_email}</td>
-                    <td style={{ padding: '8px 12px' }}>{g.enfants.map(e => `${e.prenom} ${e.nom}`).join(', ')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={lancerImport} disabled={importing || nbFamilles - nbExistantes === 0} className="btn-primary">
-              {importing ? 'Import en cours...' : `Importer ${nbFamilles - nbExistantes} famille(s)`}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {resultat && (
-        <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 12, padding: '14px 18px', color: '#065F46', fontSize: 13 }}>
-          {resultat}
-        </div>
-      )}
-    </div>
-  )
-}
+                {['Famille', 'Parent
