@@ -94,7 +94,7 @@ export default function SetPasswordPage() {
       router.replace('/admin/dashboard')
     } else if (role === 'admin') {
       // chercher le slug de l'école
-      let slug = 'hederloubavitch'
+      let slug: string | null = null
       if (profile?.ecole_id) {
         const { data: ecole } = await s
           .from('ecoles')
@@ -103,7 +103,11 @@ export default function SetPasswordPage() {
           .single()
         if (ecole?.slug) slug = ecole.slug
       }
-      router.replace(`/${slug}/dashboard`)
+      if (slug) {
+        router.replace(`/${slug}/dashboard`)
+      } else {
+        router.replace('/admin/ecoles')
+      }
     } else if (role === 'teacher') {
       router.replace('/portail/prof')
     } else {

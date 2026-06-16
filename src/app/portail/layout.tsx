@@ -39,8 +39,12 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           .select('ecoles(slug)')
           .eq('id', session.user.id)
           .single()
-        const slug = (adminProfile as any)?.ecoles?.slug || 'hederloubavitch'
-        router.push(`/${slug}/dashboard`)
+        const slug = (adminProfile as any)?.ecoles?.slug
+        if (slug) {
+          router.push(`/${slug}/dashboard`)
+        } else {
+          router.push('/admin/ecoles')
+        }
         return
       }
 

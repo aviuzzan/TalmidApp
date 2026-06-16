@@ -78,9 +78,13 @@ export default function LoginPage() {
           .select('slug')
           .eq('id', ecoleProfile.ecole_id)
           .single()
-        router.push(`/${ecole?.slug ?? 'hederloubavitch'}/dashboard`)
+        if (ecole?.slug) {
+          router.push(`/${ecole.slug}/dashboard`)
+        } else {
+          router.push('/admin/ecoles')
+        }
       } else {
-        router.push('/hederloubavitch/dashboard')
+        router.push('/admin/ecoles')
       }
     } else if (profile?.role === 'teacher') {
       router.push('/portail/prof')

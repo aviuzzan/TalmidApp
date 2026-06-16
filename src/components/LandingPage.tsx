@@ -271,7 +271,7 @@ export default function LandingPage() {
               <div key={c} style={{ width: 12, height: 12, borderRadius: '50%', background: c }} />
             ))}
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 6, height: 24, marginLeft: 8, display: 'flex', alignItems: 'center', paddingLeft: 12 }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>talmidapp.fr/hederloubavitch</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>talmidapp.fr/votre-ecole</span>
             </div>
           </div>
 
