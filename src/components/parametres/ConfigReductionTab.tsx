@@ -6,7 +6,7 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
   const [docs, setDocs] = useState<any[]>([])
   const [questions, setQuestions] = useState<any[]>([])
   const [newDoc, setNewDoc] = useState({ label: '', obligatoire: true })
-  const [newQ, setNewQ] = useState({ section: 'revenus', label: '', type: 'number', obligatoire: true, cle: '' })
+  const [newQ, setNewQ] = useState({ section: 'revenus', label: '', type: 'number', obligatoire: true, cle: '', optionsText: '' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { load() }, [ecoleId, annee])
@@ -37,10 +37,37 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
 
   async function ajouterQuestion() {
     if (!newQ.label.trim()) return
+    // Validation : si liste / case à cocher, exiger au moins 2 options
+    if ((newQ.type === 'select' || newQ.type === 'checkbox') && parseOptions(newQ.optionsText).length < 2) {
+      alert('Pour une liste ou des cases à cocher, ajoutez au moins 2 options (une par ligne).')
+      return
+    }
     setSaving(true)
     const cle = newQ.cle || newQ.label.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40)
-    await createClient().from('reduction_questions_config').insert({ ecole_id: ecoleId, annee_scolaire: annee, ...newQ, cle, ordre: questions.length })
-    setNewQ({ section: 'revenus', label: '', type: 'number', obligatoire: true, cle: '' }); await load(); setSaving(false)
+    const { optionsText, ...rest } = newQ
+    const options = (newQ.type === 'select' || newQ.type === 'checkbox') ? parseOptions(optionsText) : null
+    await createClient().from('reduction_questions_config').insert({
+      ecole_id: ecoleId, annee_scolaire: annee, ...rest, cle, options, ordre: questions.length,
+    })
+    setNewQ({ section: 'revenus', label: '', type: 'number', obligatoire: true, cle: '', optionsText: '' })
+    await load(); setSaving(false)
+  }
+
+  function parseOptions(text: string): string[] {
+    return text.split('\n').map(s => s.trim()).filter(Boolean)
+  }
+
+  async function editerOptions(q: any) {
+    const current = Array.isArray(q.options) ? q.options.join('\n') : ''
+    const v = prompt('Options (une par ligne) :', current)
+    if (v === null) return
+    const opts = parseOptions(v)
+    if (opts.length < 2) {
+      alert('Au moins 2 options sont nécessaires.')
+      return
+    }
+    await createClient().from('reduction_questions_config').update({ options: opts }).eq('id', q.id)
+    await load()
   }
 
   async function toggleQuestion(id: string, actif: boolean) {
@@ -139,6 +166,22 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
           </button>
         </div>
 
+        {(newQ.type === 'select' || newQ.type === 'checkbox') && (
+          <div style={{ marginBottom: 14, padding: 12, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8 }}>
+            <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Options ({newQ.type === 'select' ? 'liste déroulante' : 'cases à cocher'})
+            </div>
+            <textarea
+              value={newQ.optionsText}
+              onChange={e => setNewQ(p => ({ ...p, optionsText: e.target.value }))}
+              placeholder={'Une option par ligne, ex :\nOui\nNon\nNe se prononce pas'}
+              rows={4}
+              style={{ ...inp, width: '100%', fontFamily: 'inherit', resize: 'vertical' }}
+            />
+            <div style={{ fontSize: 10, color: '#92400E', marginTop: 4 }}>Une option par ligne. Minimum 2.</div>
+          </div>
+        )}
+
         {SECTIONS.map(section => {
           const qs = questions.filter(q => q.section === section)
           if (qs.length === 0) return null
@@ -148,12 +191,24 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
               {qs.map(q => (
                 <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 14px', marginBottom: 6, opacity: q.actif ? 1 : 0.5 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: q.actif ? '#10B981' : '#CBD5E1', flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontSize: 13, color: '#1E293B' }}>{q.label}</span>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 13, color: '#1E293B' }}>{q.label}</span>
+                    {Array.isArray(q.options) && q.options.length > 0 && (
+                      <span style={{ fontSize: 10, color: '#64748B', fontStyle: 'italic' }}>
+                        {q.options.length} option{q.options.length > 1 ? 's' : ''} : {q.options.slice(0, 3).join(', ')}{q.options.length > 3 ? '…' : ''}
+                      </span>
+                    )}
+                  </div>
                   <span style={{ fontSize: 10, color: '#94A3B8' }}>{q.type}</span>
                   {q.obligatoire && <span style={{ fontSize: 10, color: '#EF4444', fontWeight: 600 }}>OBLIGATOIRE</span>}
                   <button onClick={() => deplacerQuestion(q, -1)} title="Monter" style={{ fontSize: 11, color: '#64748B', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 7px', cursor: 'pointer' }}>↑</button>
                   <button onClick={() => deplacerQuestion(q, 1)} title="Descendre" style={{ fontSize: 11, color: '#64748B', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 7px', cursor: 'pointer' }}>↓</button>
                   <button onClick={() => renommerQuestion(q.id, q.label)} title="Renommer" style={{ fontSize: 11, color: '#64748B', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>✏</button>
+                  {(q.type === 'select' || q.type === 'checkbox') && (
+                    <button onClick={() => editerOptions(q)} title="Éditer les options" style={{ fontSize: 11, color: '#7C3AED', background: 'none', border: '1px solid #E9D5FF', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>
+                      Options
+                    </button>
+                  )}
                   <button onClick={() => toggleQuestion(q.id, q.actif)} style={{ fontSize: 11, color: q.actif ? '#64748B' : '#10B981', background: 'none', border: '1px solid #E2E8F0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>
                     {q.actif ? 'Masquer' : 'Afficher'}
                   </button>

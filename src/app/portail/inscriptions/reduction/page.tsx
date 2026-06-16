@@ -16,6 +16,71 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </div>
 )
 
+// Rendu d'une question custom (configurable par l'admin dans Paramètres > Demande de réduction).
+// Défini au niveau module pour la même raison que Section (éviter le remount).
+const CUSTOM_INP: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' }
+const CUSTOM_LBL: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }
+function CustomQuestionField({ q, value, onChange }: { q: any; value: any; onChange: (v: any) => void }) {
+  const labelWithReq = q.label + (q.obligatoire ? ' *' : '')
+  const opts: string[] = Array.isArray(q.options) ? q.options : []
+  if (q.type === 'select') {
+    return (
+      <div>
+        <label style={CUSTOM_LBL}>{labelWithReq}</label>
+        <select style={CUSTOM_INP} value={value ?? ''} onChange={e => onChange(e.target.value)}>
+          <option value="">— Choisir —</option>
+          {opts.map((o: string) => <option key={o} value={o}>{o}</option>)}
+        </select>
+        {q.aide && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{q.aide}</div>}
+      </div>
+    )
+  }
+  if (q.type === 'checkbox') {
+    // Si options : groupe de cases à cocher (multi). Sinon : case unique oui/non.
+    if (opts.length > 0) {
+      const selected: string[] = Array.isArray(value) ? value : []
+      const toggle = (o: string) => onChange(selected.includes(o) ? selected.filter(x => x !== o) : [...selected, o])
+      return (
+        <div>
+          <label style={CUSTOM_LBL}>{labelWithReq}</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {opts.map((o: string) => (
+              <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} style={{ width: 15, height: 15, accentColor: '#2563EB' }} />
+                {o}
+              </label>
+            ))}
+          </div>
+          {q.aide && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{q.aide}</div>}
+        </div>
+      )
+    }
+    return (
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#475569' }}>
+        <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#2563EB' }} />
+        {labelWithReq}
+      </label>
+    )
+  }
+  if (q.type === 'textarea') {
+    return (
+      <div>
+        <label style={CUSTOM_LBL}>{labelWithReq}</label>
+        <textarea style={{ ...CUSTOM_INP, resize: 'vertical', minHeight: 70 }} rows={3} value={value ?? ''} onChange={e => onChange(e.target.value)} />
+        {q.aide && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{q.aide}</div>}
+      </div>
+    )
+  }
+  // number / text / date
+  return (
+    <div>
+      <label style={CUSTOM_LBL}>{labelWithReq}</label>
+      <input style={CUSTOM_INP} type={q.type === 'number' ? 'number' : q.type === 'date' ? 'date' : 'text'} value={value ?? ''} onChange={e => onChange(e.target.value)} />
+      {q.aide && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{q.aide}</div>}
+    </div>
+  )
+}
+
 export default function DemandeReductionPage() {
   const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
@@ -81,9 +146,23 @@ export default function DemandeReductionPage() {
   const [tarifPropose, setTarifPropose] = useState('')
   const [commentaire, setCommentaire] = useState('')
   const [questionsConfig, setQuestionsConfig] = useState<any[]>([])
+  const [reponsesCustom, setReponsesCustom] = useState<Record<string, any>>({})
   const qcfg = (cle: string) => questionsConfig.find((q: any) => q.cle === cle)
   const qActif = (cle: string) => { const q = qcfg(cle); return q ? q.actif !== false : true }
   const qL = (cle: string, fallback: string) => { const q = qcfg(cle); const t = q?.label || fallback; return t + (q?.obligatoire ? ' *' : '') }
+
+  // Clés "système" gérées par les blocs prédéfinis (logement/revenus/allocations) — on ne les
+  // re-render PAS dans la section custom pour éviter les doublons.
+  const CLES_SYSTEME = new Set<string>([
+    'logement_type', 'logement_nb_pieces', 'logement_loyer_mensuel', 'logement_charges_mensuelles',
+    'logement_date_occupation', 'logement_personne_handicapee',
+    'quotient_familial', 'salaire_mensuel_net', 'revenus_artisans_profession',
+    'revenus_artisans_regime', 'revenus_artisans_montant_annuel',
+    'alloc_familiales_mensuelles', 'alloc_chomage_mensuelle', 'apl_mensuelle',
+    'autres_revenus_mensuels', 'aides_mensuelles',
+  ])
+  const questionsCustomActives = (section: string) =>
+    questionsConfig.filter((q: any) => q.section === section && q.actif !== false && !CLES_SYSTEME.has(q.cle))
 
   // ── Attestation ──
   const [attestationLieu, setAttestationLieu] = useState('')
@@ -150,6 +229,7 @@ export default function DemandeReductionPage() {
       if (dem.enfants_dossier?.length) setEnfantsDossier(dem.enfants_dossier)
       if (dem.enfants_autres_etablissements?.length) setEnfantsAutres(dem.enfants_autres_etablissements)
       if (dem.personnes_charge?.length) setPersonnesCharge(dem.personnes_charge)
+      if (dem.reponses_custom && typeof dem.reponses_custom === 'object') setReponsesCustom(dem.reponses_custom)
 
       const { data: revs } = await s.from('demandes_reduction_revenus').select('*').eq('demande_id', dem.id)
       if (revs?.length) setRevenus(revs.map((r: any) => ({ ...r, salaire_mensuel_net: r.salaire_mensuel_net?.toString() || '' })))
@@ -288,6 +368,20 @@ export default function DemandeReductionPage() {
     if (!attestationLieu) { alert('Renseignez le lieu de l\'attestation'); return }
     if (!signatureData) { alert('Veuillez signer l\'attestation'); return }
 
+    // Validation des questions custom obligatoires
+    const customManquantes = questionsConfig
+      .filter((q: any) => q.actif !== false && q.obligatoire && !CLES_SYSTEME.has(q.cle))
+      .filter((q: any) => {
+        const v = reponsesCustom[q.cle]
+        if (q.type === 'checkbox' && Array.isArray(q.options) && q.options.length > 0) return !Array.isArray(v) || v.length === 0
+        if (q.type === 'checkbox') return v !== true
+        return v === undefined || v === null || String(v).trim() === ''
+      })
+    if (customManquantes.length > 0) {
+      alert('Veuillez compléter les questions obligatoires :\n• ' + customManquantes.map((q: any) => q.label).join('\n• '))
+      return
+    }
+
     setSaving(true)
     const s = createClient()
 
@@ -336,6 +430,7 @@ export default function DemandeReductionPage() {
       attestation_lieu: attestationLieu,
       attestation_date: new Date().toISOString().split('T')[0],
       signature_date: new Date().toISOString(),
+      reponses_custom: reponsesCustom,
     }
 
     let demandeId = demande?.id
@@ -518,6 +613,14 @@ export default function DemandeReductionPage() {
           <input type="checkbox" checked={logHandicape} onChange={e => { ks(); setLogHandicape(e.target.checked) }} style={{ width: 16, height: 16, accentColor: '#2563EB' }} />
           {qcfg('logement_personne_handicapee')?.label || 'Personne handicapée vivant au foyer'}
         </label>}
+        {questionsCustomActives('logement').length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 4 }}>
+            {questionsCustomActives('logement').map((q: any) => (
+              <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
+                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* ── 5. REVENUS ── */}
@@ -558,6 +661,14 @@ export default function DemandeReductionPage() {
             {qActif('revenus_artisans_montant_annuel') && <div><label style={lbl}>{qL('revenus_artisans_montant_annuel', 'Montant annuel (€)')}</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>}
           </div>
         </div>
+        {questionsCustomActives('revenus').length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {questionsCustomActives('revenus').map((q: any) => (
+              <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
+                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* ── 6. ALLOCATIONS ── */}
@@ -575,7 +686,27 @@ export default function DemandeReductionPage() {
           <span style={{ fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>Total revenus mensuels</span>
           <span style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>{totalRev.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €</span>
         </div>
+        {questionsCustomActives('allocations').length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {questionsCustomActives('allocations').map((q: any) => (
+              <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
+                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+            ))}
+          </div>
+        )}
       </Section>
+
+      {/* ── Section custom 'autres' — uniquement si l'admin a configuré des questions dedans ── */}
+      {questionsCustomActives('autres').length > 0 && (
+        <Section title="Autres informations">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {questionsCustomActives('autres').map((q: any) => (
+              <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
+                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ── 7. AUTRES ENFANTS / CHARGES ── */}
       <Section title="7. Enfants scolarisés dans d'autres établissements">

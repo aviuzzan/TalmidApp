@@ -22,6 +22,7 @@ export default function DossierReductionPage() {
   const [documents, setDocuments] = useState<any[]>([])
   const [membres, setMembres] = useState<any[]>([])
   const [avis, setAvis] = useState<any[]>([])
+  const [questionsConfig, setQuestionsConfig] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isIPad, setIsIPad] = useState(false)
 
@@ -48,6 +49,10 @@ export default function DossierReductionPage() {
     ])
     setDemande(dem); setFamille(dem?.familles); setRevenus(revs ?? [])
     setDocuments(docs ?? []); setMembres(mems ?? []); setAvis(av ?? [])
+    if (dem) {
+      const { data: qcfg } = await s.from('reduction_questions_config').select('cle, label').eq('ecole_id', ecole.id).eq('annee_scolaire', dem.annee_scolaire)
+      setQuestionsConfig(qcfg ?? [])
+    }
     if (dem) {
       setTarifDecide(dem.tarif_accorde?.toString() || '')
       setNoteInterne(dem.note_interne || '')
@@ -252,6 +257,26 @@ export default function DossierReductionPage() {
                     {p.prenom} {p.nom} ({p.age} ans) — {p.lien_parente}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Réponses aux questions custom configurées par l'école */}
+            {demande.reponses_custom && Object.keys(demande.reponses_custom).length > 0 && (
+              <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 10 }}>Réponses au questionnaire</div>
+                {Object.entries(demande.reponses_custom).map(([cle, val]: [string, any]) => {
+                  if (val === null || val === undefined || val === '' || (Array.isArray(val) && val.length === 0)) return null
+                  const display = Array.isArray(val) ? val.join(', ') : (typeof val === 'boolean' ? (val ? 'Oui' : 'Non') : String(val))
+                  // Label depuis la config si la requête a chargé questionsConfig — sinon clé brute
+                  const q = questionsConfig.find((x: any) => x.cle === cle)
+                  const label = q?.label || cle
+                  return (
+                    <div key={cle} style={{ fontSize: 12, padding: '6px 0', borderBottom: '1px solid #F8FAFC', display: 'flex', gap: 10 }}>
+                      <span style={{ color: '#64748B', minWidth: 200 }}>{label} :</span>
+                      <span style={{ color: '#1E293B', fontWeight: 500 }}>{display}</span>
+                    </div>
+                  )
+                })}
               </div>
             )}
 
