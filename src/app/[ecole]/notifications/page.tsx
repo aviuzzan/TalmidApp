@@ -14,6 +14,7 @@ const VARIABLES_DISPO = [
   { var: '{{total_regle}}', desc: 'Total réglé' },
   { var: '{{nb_enfants}}', desc: 'Nombre d\'enfants' },
   { var: '{{annee_scolaire}}', desc: 'Année scolaire' },
+  { var: '{{lien_magique}}', desc: 'Lien de configuration du mot de passe (template Bienvenue parent uniquement)' },
 ]
 
 export default function NotificationsPage() {
