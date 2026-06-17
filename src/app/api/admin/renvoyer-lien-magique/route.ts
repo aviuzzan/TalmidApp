@@ -38,10 +38,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Aucun compte trouvé avec cet email' }, { status: 404 })
     }
 
-    // 1. Générer un nouveau lien magique (recovery)
+    // 1. Générer un nouveau lien magique (recovery) avec redirection vers /auth/set-password
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
     const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
+      options: { redirectTo: baseUrl + '/auth/set-password?invited=1' },
     })
     const lienMagique = linkData?.properties?.action_link || ''
     if (linkErr || !lienMagique) {

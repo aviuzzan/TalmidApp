@@ -113,10 +113,12 @@ export async function POST(req: NextRequest) {
 
     if (doSendEmail) {
       try {
-        // 1. Générer le lien magique
+        // 1. Générer le lien magique (avec redirectTo pour atterrir sur /auth/set-password)
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'recovery', // l'utilisateur définit son mot de passe via le flow recovery
+          type: 'recovery',
           email,
+          options: { redirectTo: baseUrl + '/auth/set-password?invited=1' },
         })
         const lienMagique = linkData?.properties?.action_link || ''
         if (linkErr || !lienMagique) {
