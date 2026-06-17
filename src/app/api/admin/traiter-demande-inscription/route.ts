@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       const dest = demande.parent1_email || demande.email_invite
       if (dest && isEmailConfigured()) {
         const r = await sendEmail({
-          fromName: ecole?.nom || 'TalmidApp',
+          fromName: ecoleRec?.nom || 'TalmidApp',
           to: { email: dest },
           subject: 'Votre demande d\'inscription - ' + ecoleNom,
           html: buildRefusEmail(demande.parent1_prenom, ecoleNom, motif),
@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
         emailError = 'SMTP non configure'
       } else {
         const r = await sendEmail({
-          fromName: ecole?.nom || 'TalmidApp',
+          fromName: ecoleRec?.nom || 'TalmidApp',
           to: { email: loginEmail, name: (demande.parent1_prenom || '') + ' ' + (demande.parent1_nom || '') },
           subject: 'Votre inscription est acceptee - ' + ecoleNom,
           html: buildAccesEmail(demande.parent1_prenom, ecoleNom, inviteLink),

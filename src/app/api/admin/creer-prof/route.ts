@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
         emailError = 'SMTP non configuré'
       } else {
         const res = await sendEmail({
-          fromName: ecole?.nom || 'TalmidApp',
+          fromName: ecoleRec?.nom || 'TalmidApp',
           to: { email, name: prenom + ' ' + nom },
           subject: 'Bienvenue dans l\'équipe pédagogique de ' + ecoleNom,
           html: buildInviteEmail(prenom, ecoleNom, inviteLink),
