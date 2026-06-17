@@ -129,10 +129,18 @@ export default function ContratPage() {
 
     // Pré-sélectionner enfants
     if (enf?.length && !cont) {
+      // Tranche effective : tranche de la famille, sinon première tranche présente dans les tarifs
+      const trancheFamilleLoad = fam?.tranche_id
+        || Array.from(new Set((tar ?? []).map((t: any) => t.tranche_id).filter(Boolean)))[0]
+        || null
       setEnfantsContrat(enf.map((e: any) => {
         const cls2 = e.classes
         const secteurId = cls2?.secteur_id || ''
-        const tarifsApp = (tar ?? []).filter((t: any) => !t.secteur_id || t.secteur_id === secteurId)
+        const tarifsApp = (tar ?? []).filter((t: any) => {
+          const matchSecteur = !t.secteur_id || t.secteur_id === secteurId
+          const matchTranche = !t.tranche_id || t.tranche_id === trancheFamilleLoad
+          return matchSecteur && matchTranche
+        })
         const postesObl = e.classe_id ? tarifsApp.filter((t: any) => t.obligatoire).map((t: any) => ({ tarif_id: t.id, nom: t.nom_poste, montant: parseFloat(t.montant) || 0 })) : []
         return { enfant_id: e.id, classe_id: e.classe_id || '', classe_nom: cls2?.nom || '', postes: postesObl, sous_total: postesObl.reduce((s: number, p: any) => s + p.montant, 0) }
       }))
@@ -695,7 +703,7 @@ export default function ContratPage() {
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>Engagement et signature</div>
         <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', padding: '14px 18px', fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 16 }}>
-          Nous soussigné(e)s, <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, reconnaissons avoir pris connaissance des tarifs pour l'année scolaire {anneeInscription} et approuvons le règlement de l'établissement. Nous nous engageons à régler la somme de <strong>{totalAnnuel.toLocaleString('fr-FR')} €</strong> selon les modalités choisies.
+          Nous soussigné(e)s, <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, reconnaissons avoir pris connaissance des tarifs pour l'année scolaire {anneeInscription} et approuvons le règlement de l'établissement. {totalAnnuel > 0 ? <>Nous nous engageons à régler la somme de <strong>{totalAnnuel.toLocaleString('fr-FR')} €</strong> selon les modalités choisies.</> : <span style={{ color: '#92400E' }}>⚠️ Le total de scolarité n'est pas encore calculé. Sélectionnez une classe pour chaque enfant.</span>}
         </div>
 
         <label style={lbl}>Signature *</label>
