@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 
 type KPI = {
@@ -153,7 +152,6 @@ export default function TableauBordDirectionPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <ExerciceSelector />
           <button onClick={exportCSV} disabled={!kpi}
             style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: kpi ? 'pointer' : 'wait' }}>
             📥 Export CSV

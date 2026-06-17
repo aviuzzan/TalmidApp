@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
-import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import AlertesUrgentes from '@/components/ui/AlertesUrgentes'
 import { useI18n } from '@/lib/i18n'
 
@@ -136,7 +135,6 @@ export default function DashboardPage() {
             {ecole.nom} · {today} · {userName}
           </p>
         </div>
-        <ExerciceSelector />
       </div>
 
       <AlertesUrgentes ecoleId={ecole.id} ecoleSlug={ecole.slug} />

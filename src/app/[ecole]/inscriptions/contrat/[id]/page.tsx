@@ -46,14 +46,22 @@ export default function ContratAdminDetailPage() {
     // Créer / mettre à jour la scolarité de chaque enfant pour l'exercice cible
     // (modèle AGATE : la scolarité par année est la source de vérité)
     try {
-      if (contrat.exercice_id) {
+      // Si exercice_id manque sur le contrat, on le résout via annee_scolaire
+      let exId = contrat.exercice_id
+      if (!exId && contrat.annee_scolaire) {
+        const { data: ex } = await s.from('exercices').select('id').eq('ecole_id', ecole.id).eq('code', contrat.annee_scolaire).maybeSingle()
+        exId = ex?.id || null
+        // Backfill silencieux du contrat pour les prochaines opérations
+        if (exId) await s.from('contrats_scolarisation').update({ exercice_id: exId }).eq('id', contratId)
+      }
+      if (exId) {
         const { data: classesEcole } = await s.from('classes').select('id, nom').eq('ecole_id', ecole.id)
         const findClasseId = (nom: string | null | undefined) =>
           nom ? (classesEcole || []).find((c: any) => c.nom.trim().toLowerCase() === nom.trim().toLowerCase())?.id ?? null : null
         const rows = ((contrat.contrat_enfants || []) as any[])
           .map((ce: any) => ({
             enfant_id: ce.enfant_id,
-            exercice_id: contrat.exercice_id,
+            exercice_id: exId,
             ecole_id: ecole.id,
             classe_id: findClasseId(ce.classe_prevue),
             statut_inscription: 'inscrit',
