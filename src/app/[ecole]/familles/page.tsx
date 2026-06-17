@@ -35,6 +35,12 @@ export default function FamillesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  const [sortBy, setSortBy] = useState<'numero' | 'nom' | 'tranche' | 'parent1'>('nom')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  function toggleSort(col: 'numero' | 'nom' | 'tranche' | 'parent1') {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(col); setSortDir('asc') }
+  }
 
   const empty = {
     nom: '', statut_dossier: 'incomplet', situation_maritale: '',
@@ -60,11 +66,34 @@ export default function FamillesPage() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = familles.filter(f =>
-    f.nom?.toLowerCase().includes(search.toLowerCase()) ||
-    f.numero?.includes(search) ||
-    `${f.parent1_prenom} ${f.parent1_nom}`.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = familles
+    .filter(f =>
+      f.nom?.toLowerCase().includes(search.toLowerCase()) ||
+      f.numero?.includes(search) ||
+      `${f.parent1_prenom} ${f.parent1_nom}`.toLowerCase().includes(search.toLowerCase())
+    )
+    .slice()
+    .sort((a, b) => {
+      let va: string = '', vb: string = ''
+      if (sortBy === 'nom') { va = (a.nom || '').toLowerCase(); vb = (b.nom || '').toLowerCase() }
+      else if (sortBy === 'numero') {
+        // Tri numérique sur le numéro (qui peut être texte type "F-0012")
+        const na = parseInt((a.numero || '').replace(/\D/g, ''), 10) || 0
+        const nb = parseInt((b.numero || '').replace(/\D/g, ''), 10) || 0
+        return sortDir === 'asc' ? na - nb : nb - na
+      }
+      else if (sortBy === 'tranche') {
+        const ta = tranchesList.find((x: any) => x.id === a.tranche_id)?.code || ''
+        const tb = tranchesList.find((x: any) => x.id === b.tranche_id)?.code || ''
+        va = ta.toLowerCase(); vb = tb.toLowerCase()
+      }
+      else if (sortBy === 'parent1') {
+        va = `${a.parent1_nom || ''} ${a.parent1_prenom || ''}`.toLowerCase()
+        vb = `${b.parent1_nom || ''} ${b.parent1_prenom || ''}`.toLowerCase()
+      }
+      const cmp = va.localeCompare(vb)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
 
   function set(k: string, v: any) {
     setForm(p => {
@@ -151,9 +180,32 @@ export default function FamillesPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ background: '#F8FAFC' }}>
             <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-              {['N°', 'Famille', 'Code', 'Parent 1', 'Téléphone', 'Statut', 'Élèves', 'Actions'].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
-              ))}
+              {([
+                { label: 'N°', col: 'numero' as const },
+                { label: 'Famille', col: 'nom' as const },
+                { label: 'Code', col: 'tranche' as const },
+                { label: 'Parent 1', col: 'parent1' as const },
+                { label: 'Téléphone' },
+                { label: 'Statut' },
+                { label: 'Élèves' },
+                { label: 'Actions' },
+              ]).map(h => {
+                const isSortable = !!h.col
+                const isActive = isSortable && sortBy === h.col
+                return (
+                  <th key={h.label}
+                    onClick={isSortable ? () => toggleSort(h.col!) : undefined}
+                    style={{ textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: isActive ? '#2563EB' : '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase', cursor: isSortable ? 'pointer' : 'default', userSelect: 'none' }}
+                    title={isSortable ? `Trier par ${h.label}` : undefined}>
+                    {h.label}
+                    {isSortable && (
+                      <span style={{ marginLeft: 6, opacity: isActive ? 1 : 0.3, fontSize: 10 }}>
+                        {isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    )}
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
