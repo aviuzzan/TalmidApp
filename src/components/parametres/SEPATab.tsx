@@ -75,7 +75,7 @@ export default function SEPATab({ ecoleId }: { ecoleId: string }) {
 
       <div>
         <label style={lbl}>Nom du créancier *</label>
-        <input style={inp} value={form.nom_creancier} onChange={e => setForm((p: any) => ({ ...p, nom_creancier: e.target.value }))} placeholder="Ex : BETH LOUBAVITCH" />
+        <input style={inp} value={form.nom_creancier} onChange={e => setForm((p: any) => ({ ...p, nom_creancier: e.target.value }))} placeholder="Nom légal du créancier SEPA" />
         <div style={help}>Nom légal qui apparaît sur les prélèvements bancaires.</div>
       </div>
 

@@ -23,6 +23,7 @@ export default function ContratPage() {
 
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
+  const [ecoleInfo, setEcoleInfo] = useState<{ nom: string; nom_creancier?: string; ics_sepa?: string } | null>(null)
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -106,6 +107,10 @@ export default function ContratPage() {
     setPaiementConfig(payCfg); setDatesEncaissement(datesEnc ?? [])
     setReductions(redsf ?? []); setReductionAccordee(redAcc); setContrat(cont)
     setMandatExistant(mandat); setDdrStatut(ddr?.statut || null)
+
+    // Charger les infos de l'école pour les textes dynamiques (nom institution, SEPA)
+    const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa').eq('id', profile.ecole_id).single()
+    setEcoleInfo(ecData)
 
     if (fam) setFamForm(fam)
     if (mod?.length && !modeReglement) setModeReglement(mod[0].type)
@@ -626,8 +631,8 @@ export default function ContratPage() {
                         )}
                       </div>
                       <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.5, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '10px 12px' }}>
-                        <strong>Créancier :</strong> BETH LOUBAVITCH — ICS : FR70ZZZ408187<br />
-                        En signant ce contrat, vous autorisez le Beth Loubavitch à envoyer des instructions à votre banque pour débiter votre compte.
+                        <strong>Créancier :</strong> {ecoleInfo?.nom_creancier || ecoleInfo?.nom || 'l\'établissement'}{ecoleInfo?.ics_sepa ? ` — ICS : ${ecoleInfo.ics_sepa}` : ''}<br />
+                        En signant ce contrat, vous autorisez {ecoleInfo?.nom_creancier || ecoleInfo?.nom || 'l\'établissement'} à envoyer des instructions à votre banque pour débiter votre compte.
                       </div>
                     </div>
                   </div>
@@ -642,7 +647,7 @@ export default function ContratPage() {
       <Section title="5. Autorisations et observations">
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', fontSize: 13, color: '#1E293B' }}>
           <input type="checkbox" checked={autorisationImage} onChange={e => { ks(); setAutorisationImage(e.target.checked) }} style={{ marginTop: 2, flexShrink: 0, accentColor: '#2563EB' }} />
-          J'autorise la prise et l'utilisation d'images de mes enfants dans le cadre de la communication des institutions scolaires du Beth Loubavitch.
+          J'autorise la prise et l'utilisation d'images de mes enfants dans le cadre de la communication de {ecoleInfo?.nom || 'l\'institution scolaire'}.
         </label>
         <div>
           <label style={lbl}>Observations</label>

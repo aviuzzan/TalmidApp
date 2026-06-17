@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
     const totalAmount = chequesAvecMandat.reduce((s, c) => s + parseFloat(c.montant), 0)
     const msgId = `MSG-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
     const creationDateTime = new Date().toISOString().slice(0, 19)
-    const icsCreancier = ecole.ics_sepa || 'FR70ZZZ408187'
-    const nomCreancier = ecole.nom_creancier || 'BETH LOUBAVITCH'
+    const icsCreancier = ecole.ics_sepa || ''
+    const nomCreancier = ecole.nom_creancier || ecole.nom || 'ECOLE'
     const ibanCreancier = ecole.iban_ecole || ''
     const bicCreancier = ecole.bic_ecole || ''
 
