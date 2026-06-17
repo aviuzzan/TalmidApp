@@ -43,6 +43,8 @@ export default function PedagogiqueNouvelEnfantPage() {
   const [transport, setTransport] = useState(false)
   const [instructionReligieuse, setInstructionReligieuse] = useState(true)
   const [etudeGarderie, setEtudeGarderie] = useState(false)
+  const [optionsConfig, setOptionsConfig] = useState<any[]>([])
+  const [optionsChoisies, setOptionsChoisies] = useState<Record<string, boolean>>({})
 
   const [signesParticuliers, setSignesParticuliers] = useState('')
   const [medecinNom, setMedecinNom] = useState('')
@@ -66,12 +68,18 @@ export default function PedagogiqueNouvelEnfantPage() {
     if (!profile?.famille_id) { setLoading(false); return }
     setFamilleId(profile.famille_id); setEcoleId(profile.ecole_id)
 
-    const [{ data: sec }, { data: cls }, { data: docs }] = await Promise.all([
+    const [{ data: sec }, { data: cls }, { data: docs }, { data: opts }] = await Promise.all([
       s.from('secteurs').select('id, nom').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
       s.from('classes').select('id, nom, secteur_id').eq('ecole_id', profile.ecole_id).order('nom'),
       s.from('inscription_documents_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).eq('actif', true).order('ordre'),
+      s.from('options_enfant_config').select('id, code, label, ordre').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
     ])
     setSecteurs(sec ?? []); setClasses(cls ?? []); setDocsConfig(docs ?? [])
+    setOptionsConfig(opts ?? [])
+    // Initialiser les valeurs par défaut (par compat avec les anciens codes)
+    const defaults: Record<string, boolean> = {}
+    ;(opts ?? []).forEach((o: any) => { defaults[o.code] = o.code === 'instruction_religieuse' })
+    setOptionsChoisies(defaults)
     setLoading(false)
   }
 
@@ -125,6 +133,7 @@ export default function PedagogiqueNouvelEnfantPage() {
       deja_scolarise: dejaScolarise,
       etablissement_precedent: etablissementPrecedent || null,
       transport, instruction_religieuse: instructionReligieuse, etude_garderie: etudeGarderie,
+      options_choisies: optionsChoisies,
       signes_particuliers: signesParticuliers || null,
       medecin_nom: medecinNom || null,
       medecin_telephone: medecinTelephone || null,
@@ -260,15 +269,24 @@ export default function PedagogiqueNouvelEnfantPage() {
       {/* Options */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10, marginBottom: 8 }}>Options</div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
-          <input type="checkbox" checked={transport} onChange={e => setTransport(e.target.checked)} style={{ accentColor: '#2563EB' }} /> Transport scolaire
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
-          <input type="checkbox" checked={instructionReligieuse} onChange={e => setInstructionReligieuse(e.target.checked)} style={{ accentColor: '#2563EB' }} /> Instruction religieuse
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
-          <input type="checkbox" checked={etudeGarderie} onChange={e => setEtudeGarderie(e.target.checked)} style={{ accentColor: '#2563EB' }} /> Étude / garderie du soir
-        </label>
+        {optionsConfig.length === 0 && (
+          <div style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>Aucune option configurée.</div>
+        )}
+        {optionsConfig.map(o => {
+          const checked = !!optionsChoisies[o.code]
+          return (
+            <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+              <input type="checkbox" checked={checked} onChange={e => {
+                const v = e.target.checked
+                setOptionsChoisies(p => ({ ...p, [o.code]: v }))
+                // Compat colonnes legacy
+                if (o.code === 'transport') setTransport(v)
+                if (o.code === 'instruction_religieuse') setInstructionReligieuse(v)
+                if (o.code === 'etude_garderie') setEtudeGarderie(v)
+              }} style={{ accentColor: '#2563EB' }} /> {o.label}
+            </label>
+          )
+        })}
       </div>
 
       {/* Santé */}
