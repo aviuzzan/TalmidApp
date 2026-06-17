@@ -159,11 +159,19 @@ export async function POST(req: NextRequest) {
             const sujet = remplacer(tpl.sujet)
             const html = remplacer(tpl.contenu_html)
 
+            // Récupère le nom de l'école pour l'afficher comme expéditeur
+            const { data: ecole } = await supabaseAdmin
+              .from('ecoles')
+              .select('nom')
+              .eq('id', ecoleId)
+              .maybeSingle()
+
             // 4. Envoyer
             emailResult = await sendEmail({
               to: { email },
               subject: sujet,
               html,
+              fromName: ecole?.nom || 'TalmidApp',
             })
 
             // 5. Logger dans email_logs

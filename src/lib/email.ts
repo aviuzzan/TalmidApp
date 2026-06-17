@@ -28,6 +28,8 @@ export interface SendEmailParams {
   subject: string
   html: string
   replyTo?: string
+  /** Nom affiché de l'expéditeur. Si non fourni, fallback sur BREVO_SENDER_NAME / SMTP_FROM / 'TalmidApp'. */
+  fromName?: string
 }
 
 export interface SendEmailResult {
@@ -73,7 +75,8 @@ function toRecipients(to: EmailRecipient | EmailRecipient[]): EmailRecipient[] {
 async function sendViaBrevo(params: SendEmailParams): Promise<SendEmailResult> {
   const apiKey = process.env.BREVO_API_KEY!
   const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER!
-  const senderName = process.env.BREVO_SENDER_NAME
+  const senderName = params.fromName
+    || process.env.BREVO_SENDER_NAME
     || parseFrom(process.env.SMTP_FROM, senderEmail).name
     || 'TalmidApp'
 
@@ -137,7 +140,15 @@ async function sendViaSmtp(params: SendEmailParams): Promise<SendEmailResult> {
     return { ok: false, error: 'Configuration SMTP manquante (SMTP_HOST, SMTP_USER, SMTP_PASSWORD)' }
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER!
+  // SMTP_FROM peut être "Nom <email>" ou juste un email. Si fromName est fourni, on remplace le nom.
+  const smtpFromRaw = process.env.SMTP_FROM || process.env.SMTP_USER!
+  const fromParsed = parseFrom(smtpFromRaw, process.env.SMTP_USER!)
+  const fromEmail = fromParsed.email
+  const fromDisplayName = params.fromName || fromParsed.name
+  const from = fromDisplayName
+    ? `"${fromDisplayName.replace(/"/g, '')}" <${fromEmail}>`
+    : fromEmail
+
   const recipients = toRecipients(params.to)
   const formattedTo = recipients
     .map(r => (r.name ? `"${r.name.replace(/"/g, '')}" <${r.email}>` : r.email))
