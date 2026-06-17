@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
       subject: `[TalmidApp] Demande de contact — ${cleanSchool || cleanEmail}`,
       html,
       replyTo: cleanEmail,
+      fromName: 'TalmidApp',
     })
 
     if (!res.ok) {

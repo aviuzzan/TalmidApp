@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import ProgressBar from '@/components/ui/ProgressBar'
 
 export default function ComptesParentsPage() {
   const ecole = useEcole()
@@ -16,6 +17,7 @@ export default function ComptesParentsPage() {
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [inviteRunning, setInviteRunning] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [inviteProg, setInviteProg] = useState({ done: 0, total: 0, errors: 0 })
   const [renvoyantId, setRenvoyantId] = useState<string | null>(null)
   const [renvoiMsg, setRenvoiMsg] = useState<{ ok: boolean; msg: string } | null>(null)
   const [supprId, setSupprId] = useState<string | null>(null)
@@ -152,7 +154,8 @@ export default function ComptesParentsPage() {
     const sansCompteCount = familles.filter(f => f.comptes.length === 0).length
     if (sansCompteCount === 0) { setInviteMsg('Toutes les familles ont deja un compte parent.'); return }
     if (!confirm(`Creer un compte et envoyer l'email de bienvenue a ${sansCompteCount} famille(s) sans compte ?`)) return
-    setInviteRunning(true); setInviteMsg('Invitation en cours...')
+    setInviteRunning(true); setInviteMsg('')
+    setInviteProg({ done: 0, total: sansCompteCount, errors: 0 })
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     let totalInvited = 0
@@ -168,13 +171,14 @@ export default function ComptesParentsPage() {
         if (!res.ok) { allErrors.push(data.error || 'Erreur serveur'); break }
         totalInvited += data.invited || 0
         if (data.erreurs?.length) allErrors.push(...data.erreurs)
-        setInviteMsg(`${totalInvited} compte(s) cree(s)... ${data.restant} restant(s)`)
+        setInviteProg({ done: totalInvited, total: sansCompteCount, errors: allErrors.length })
         if (data.done) break
       }
     } catch (e: any) {
       allErrors.push('Erreur reseau : ' + (e?.message || ''))
     }
     setInviteRunning(false)
+    setInviteProg({ done: totalInvited, total: sansCompteCount, errors: allErrors.length })
     setInviteMsg(`${totalInvited} compte(s) cree(s) et email(s) de bienvenue envoye(s).` + (allErrors.length ? ` ${allErrors.length} echec(s) (voir console).` : ''))
     if (allErrors.length) console.warn('Invitations en echec :', allErrors)
     await load()
@@ -212,7 +216,16 @@ export default function ComptesParentsPage() {
           {inviteRunning ? 'Invitation en cours…' : '✉️ Inviter toutes les familles sans compte'}
         </button>
       </div>
-      {inviteMsg && (
+      {(inviteRunning || (inviteProg.total > 0 && inviteProg.done < inviteProg.total)) && (
+        <ProgressBar
+          current={inviteProg.done}
+          total={inviteProg.total}
+          label={inviteRunning ? '✉️ Invitation en cours…' : '✉️ Invitations'}
+          sublabel={`${inviteProg.done} compte(s) créé(s) sur ${inviteProg.total}`}
+          errors={inviteProg.errors}
+        />
+      )}
+      {inviteMsg && !inviteRunning && (
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', color: '#1E40AF', fontSize: 13 }}>
           {inviteMsg}
         </div>

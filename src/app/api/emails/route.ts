@@ -66,6 +66,16 @@ export async function POST(req: NextRequest) {
 
     const results = []
 
+    // Charger le nom de l'école pour le fromName (toutes les familles partagent normalement la même école)
+    let ecoleNom = 'TalmidApp'
+    try {
+      const { data: firstFam } = await supabase.from('familles').select('ecole_id').eq('id', famille_ids[0]).single()
+      if (firstFam?.ecole_id) {
+        const { data: ec } = await supabase.from('ecoles').select('nom').eq('id', firstFam.ecole_id).single()
+        if (ec?.nom) ecoleNom = ec.nom
+      }
+    } catch {}
+
     for (const familleId of famille_ids) {
       try {
         // Récupérer les données de la famille
@@ -92,6 +102,7 @@ export async function POST(req: NextRequest) {
           to,
           subject: sujetResolu,
           html: htmlResolu,
+          fromName: ecoleNom,
         })
 
         if (!result.ok) {

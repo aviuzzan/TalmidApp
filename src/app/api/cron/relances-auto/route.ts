@@ -137,6 +137,7 @@ async function handle(req: NextRequest) {
           to: { email: c.email, name: c.prenom },
           subject: sujet,
           html: toHtml(corps),
+          fromName: ecoleNom,
         })
         if (res.ok) { factureSent = true; emailsOk.push(c.email) }
         else result.errors.push({ facture: f.numero, error: res.error })

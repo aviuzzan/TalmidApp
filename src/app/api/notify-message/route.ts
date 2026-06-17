@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
           </div>
         </div>
       `
-      const res = await sendEmail({ to: { email: d.email, name: d.name }, subject, html })
+      const res = await sendEmail({ to: { email: d.email, name: d.name }, subject, html, fromName: ecoleNom })
       if (res.ok) sent++
     }
 
