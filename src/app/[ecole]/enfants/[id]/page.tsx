@@ -25,6 +25,7 @@ export default function EnfantDetailPage() {
   const [personnesAutorisees, setPersonnesAutorisees] = useState<any[]>([])
   const [historique, setHistorique] = useState<any[]>([])
   const [scolarites, setScolarites] = useState<any[]>([])
+  const [optionsConfig, setOptionsConfig] = useState<any[]>([])
   const [showSortieModal, setShowSortieModal] = useState(false)
   const [sortieForm, setSortieForm] = useState({ date_sortie: new Date().toISOString().slice(0, 10), motif_sortie: '' })
 
@@ -44,6 +45,14 @@ export default function EnfantDetailPage() {
       setEnfant(e)
       setFamille(e.familles)
       setForm({ ...e })
+      // Charger la config des options pour l'école de cet enfant
+      const { data: opts } = await s
+        .from('options_enfant_config')
+        .select('id, code, label, ordre')
+        .eq('ecole_id', e.ecole_id)
+        .eq('actif', true)
+        .order('ordre')
+      setOptionsConfig(opts ?? [])
     }
     setClasses(cls ?? [])
 
@@ -88,6 +97,7 @@ export default function EnfantDetailPage() {
       transport: form.transport,
       instruction_religieuse: form.instruction_religieuse,
       etude_garderie: form.etude_garderie,
+      options_choisies: form.options_choisies || {},
     }).eq('id', enfantId)
     await load()
     setEditMode(false)
@@ -314,20 +324,36 @@ export default function EnfantDetailPage() {
           <div>
             <label style={lbl}>Options</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                { key: 'transport', label: '🚌 Transport' },
-                { key: 'instruction_religieuse', label: '✡️ Instruction religieuse' },
-                { key: 'etude_garderie', label: '📚 Étude / Garderie' },
-              ].map(opt => (
-                <label key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1E293B', cursor: editMode ? 'pointer' : 'default' }}>
-                  <input type="checkbox"
-                    checked={editMode ? !!form[opt.key] : !!enfant[opt.key]}
-                    disabled={!editMode}
-                    onChange={e => editMode && setForm((p: any) => ({ ...p, [opt.key]: e.target.checked }))}
-                  />
-                  {opt.label}
-                </label>
-              ))}
+              {optionsConfig.length === 0 && (
+                <div style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>Aucune option configurée pour cette école.</div>
+              )}
+              {optionsConfig.map(opt => {
+                // Récupère la valeur : priorité aux colonnes legacy (transport/instruction_religieuse/etude_garderie), sinon options_choisies[code]
+                const legacyKeys = ['transport', 'instruction_religieuse', 'etude_garderie']
+                const source = editMode ? form : enfant
+                const checked = legacyKeys.includes(opt.code)
+                  ? !!source?.[opt.code]
+                  : !!source?.options_choisies?.[opt.code]
+                return (
+                  <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1E293B', cursor: editMode ? 'pointer' : 'default' }}>
+                    <input type="checkbox"
+                      checked={checked}
+                      disabled={!editMode}
+                      onChange={e => {
+                        if (!editMode) return
+                        const v = e.target.checked
+                        setForm((p: any) => {
+                          const next = { ...p }
+                          if (legacyKeys.includes(opt.code)) next[opt.code] = v
+                          next.options_choisies = { ...(p.options_choisies || {}), [opt.code]: v }
+                          return next
+                        })
+                      }}
+                    />
+                    {opt.label}
+                  </label>
+                )
+              })}
             </div>
           </div>
         </div>
