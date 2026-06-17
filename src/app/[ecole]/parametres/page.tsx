@@ -23,8 +23,9 @@ import ServicesTab from '@/components/parametres/ServicesTab'
 import ComptesAccesTab from '@/components/parametres/ComptesAccesTab'
 import DocumentsInscriptionTab from '@/components/parametres/DocumentsInscriptionTab'
 import OptionsEnfantTab from '@/components/parametres/OptionsEnfantTab'
+import AssuranceTab from '@/components/parametres/AssuranceTab'
 
-type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'tranches' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'documents_inscription' | 'services' | 'comptes_acces' | 'integrations' | 'relances' | 'options_enfant'
+type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'tranches' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'documents_inscription' | 'services' | 'comptes_acces' | 'integrations' | 'relances' | 'options_enfant' | 'assurance'
 type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
 
 const CATEGORIES: { id: Cat; label: string; icon: string; couleur: string; bg: string }[] = [
@@ -50,6 +51,7 @@ const TABS: { id: Tab; label: string; icon: string; cat: Cat }[] = [
   { id: 'commission',        label: 'Commission',           icon: '⚖️', cat: 'inscriptions' },
   { id: 'documents_ecole',   label: 'Documents N+1',        icon: '📂', cat: 'inscriptions' },
   { id: 'documents_inscription', label: 'Docs inscription',  icon: '📎', cat: 'inscriptions' },
+  { id: 'assurance',         label: 'Assurance scolaire',   icon: '🛡️', cat: 'inscriptions' },
   // ── Finances ──
   { id: 'modes_reglement',   label: 'Modes de règlement',   icon: '💳', cat: 'finances' },
   { id: 'config_paiement',   label: 'Config paiement',      icon: '⏰', cat: 'finances' },
@@ -188,6 +190,7 @@ export default function ParametresPage() {
         {tab === 'classes' && <ClassesTab ecoleId={ecole.id} />}
         {tab === 'config_reduction' && <ConfigReductionTab ecoleId={ecole.id} annee={annee} />}
         {tab === 'options_enfant' && <OptionsEnfantTab ecoleId={ecole.id} />}
+        {tab === 'assurance' && <AssuranceTab ecoleId={ecole.id} />}
         {tab === 'config_paiement' && <ConfigPaiementTab ecoleId={ecole.id} />}
         {tab === 'commission' && <CommissionTab ecoleId={ecole.id} />}
         {tab === 'sepa' && <SEPATab ecoleId={ecole.id} />}

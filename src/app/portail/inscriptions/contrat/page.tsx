@@ -23,7 +23,7 @@ export default function ContratPage() {
 
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
-  const [ecoleInfo, setEcoleInfo] = useState<{ nom: string; nom_creancier?: string; ics_sepa?: string } | null>(null)
+  const [ecoleInfo, setEcoleInfo] = useState<{ nom: string; nom_creancier?: string; ics_sepa?: string; assurance_proposee?: boolean; assurance_montant_annuel?: number } | null>(null)
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -108,9 +108,11 @@ export default function ContratPage() {
     setReductions(redsf ?? []); setReductionAccordee(redAcc); setContrat(cont)
     setMandatExistant(mandat); setDdrStatut(ddr?.statut || null)
 
-    // Charger les infos de l'école pour les textes dynamiques (nom institution, SEPA)
-    const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa').eq('id', profile.ecole_id).single()
+    // Charger les infos de l'école pour les textes dynamiques (nom institution, SEPA, assurance)
+    const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa, assurance_proposee, assurance_montant_annuel').eq('id', profile.ecole_id).single()
     setEcoleInfo(ecData)
+    // Si l'école ne propose pas d'assurance, le défaut est "fournit son propre justificatif"
+    if (ecData && ecData.assurance_proposee === false) setAssuranceEcole(false)
 
     if (fam) setFamForm(fam)
     if (mod?.length && !modeReglement) setModeReglement(mod[0].type)
@@ -141,9 +143,21 @@ export default function ContratPage() {
     setLoading(false)
   }
 
-  // Calculs tarifs
+  // Tranche effective de la famille : sa tranche_id si définie, sinon la tranche
+  // par défaut de l'école (la première par ordre, typiquement "Officiel").
+  const trancheEffective = (() => {
+    if (famille?.tranche_id) return famille.tranche_id
+    const tranchesUtilisees = Array.from(new Set(tarifs.map((t: any) => t.tranche_id).filter(Boolean)))
+    return tranchesUtilisees[0] || null
+  })()
+
+  // Calculs tarifs : filtre par secteur ET par tranche effective
   function getTarifsForSecteur(secteurId: string) {
-    return tarifs.filter((t: any) => !t.secteur_id || t.secteur_id === secteurId)
+    return tarifs.filter((t: any) => {
+      const matchSecteur = !t.secteur_id || t.secteur_id === secteurId
+      const matchTranche = !t.tranche_id || t.tranche_id === trancheEffective
+      return matchSecteur && matchTranche
+    })
   }
 
   function setEnfantClasse(enfantId: string, classeId: string) {
@@ -194,7 +208,8 @@ export default function ContratPage() {
   }
 
   const reductionFN = reductionAccordee ? 0 : getReductionFN()
-  const totalAssurance = assuranceEcole ? 12 * Math.max(1, nbEnfantsAvecClasse) : 0
+  const montantAssuranceAnnuel = (ecoleInfo?.assurance_montant_annuel != null ? Number(ecoleInfo.assurance_montant_annuel) : 12) || 12
+  const totalAssurance = (ecoleInfo?.assurance_proposee !== false && assuranceEcole) ? montantAssuranceAnnuel * Math.max(1, nbEnfantsAvecClasse) : 0
 
   // Si DDR validée : le tarif accordé couvre uniquement les postes 'inclus_dans_reduction'
   // (enseignement + demi-pension). Les options (transport, navette, etc.) restent à charge.
@@ -530,19 +545,21 @@ export default function ContratPage() {
         })}
       </Section>
 
-      {/* ── ASSURANCE ── */}
-      <Section title="3. Assurance scolaire">
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
-          <input type="radio" checked={assuranceEcole} onChange={() => { ks(); setAssuranceEcole(true) }} />
-          <div>Assurance proposée par l'établissement
-            <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>12 € × {Math.max(1, nbEnfantsAvecClasse)} = {totalAssurance} €</span>
-          </div>
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: !assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${!assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
-          <input type="radio" checked={!assuranceEcole} onChange={() => { ks(); setAssuranceEcole(false) }} />
-          Je fournis ma propre attestation d'assurance valide pour 2026/2027
-        </label>
-      </Section>
+      {/* ── ASSURANCE ── (masquée si l'école ne propose pas d'assurance) */}
+      {ecoleInfo?.assurance_proposee !== false && (
+        <Section title="3. Assurance scolaire">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
+            <input type="radio" checked={assuranceEcole} onChange={() => { ks(); setAssuranceEcole(true) }} />
+            <div>Assurance proposée par l'établissement
+              <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>{montantAssuranceAnnuel} € × {Math.max(1, nbEnfantsAvecClasse)} = {totalAssurance} €</span>
+            </div>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: !assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${!assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
+            <input type="radio" checked={!assuranceEcole} onChange={() => { ks(); setAssuranceEcole(false) }} />
+            Je fournis ma propre attestation d'assurance valide pour {anneeInscription}
+          </label>
+        </Section>
+      )}
 
       {/* ── TOTAL ── */}
       <div style={{ background: '#1E293B', borderRadius: 14, padding: 24, color: '#fff' }}>
