@@ -20,6 +20,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const [nonLus, setNonLus] = useState(0)
   const [inscriptionCtx, setInscriptionCtx] = useState<{ anneeInscription: string; exerciceInscriptionId: string | null }>({ anneeInscription: '', exerciceInscriptionId: null })
   const [parentCtx, setParentCtx] = useState<ParentCtx>({ parentSlot: 'parent1', estSeparee: false, estPrincipal: true, partPct: 100 })
+  const [modulesActifs, setModulesActifs] = useState<string[] | null>(null) // null = tous actifs
 
   useEffect(() => {
     async function check() {
@@ -51,6 +52,14 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
       if (profile?.ecole_id) {
         const insc = await getExerciceInscription(supabase, profile.ecole_id)
         setInscriptionCtx({ anneeInscription: insc.code, exerciceInscriptionId: insc.exercice_id })
+        const { data: ecoleConf } = await supabase
+          .from('ecoles')
+          .select('portail_modules_actifs')
+          .eq('id', profile.ecole_id)
+          .single()
+        if (ecoleConf && Array.isArray((ecoleConf as any).portail_modules_actifs)) {
+          setModulesActifs((ecoleConf as any).portail_modules_actifs)
+        }
       }
 
       if (!profile?.famille_id) {
@@ -110,14 +119,25 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
     </div>
   )
 
-  const navItems = [
-    { href: '/portail', icon: '🏠', label: t('portail.nav.home') },
-    { href: '/portail/enfants', icon: '🎓', label: t('portail.nav.children') },
-    { href: '/portail/demarches', icon: '📝', label: t('portail.nav.demarches', 'Démarches') },
-    { href: '/portail/factures', icon: '💰', label: t('portail.nav.finances', 'Finances') },
-    { href: '/portail/messages', icon: '💬', label: t('portail.nav.messaging') },
-    { href: '/portail/mon-compte', icon: '👤', label: t('portail.nav.account') },
+  // Modules requis pour chaque lien portail (null = toujours visible).
+  // Si l'école a déclaré une liste portail_modules_actifs, on filtre.
+  // Un lien est visible si :
+  //   - aucun module requis (null), OU
+  //   - modulesActifs est null (= tous actifs), OU
+  //   - au moins un des modules requis est dans modulesActifs.
+  const allNav = [
+    { href: '/portail', icon: '🏠', label: t('portail.nav.home'), modules: null },
+    { href: '/portail/enfants', icon: '🎓', label: t('portail.nav.children'), modules: ['pedagogie', 'administratif'] },
+    { href: '/portail/demarches', icon: '📝', label: t('portail.nav.demarches', 'Démarches'), modules: ['inscriptions'] },
+    { href: '/portail/factures', icon: '💰', label: t('portail.nav.finances', 'Finances'), modules: ['facturation'] },
+    { href: '/portail/messages', icon: '💬', label: t('portail.nav.messaging'), modules: ['messagerie'] },
+    { href: '/portail/mon-compte', icon: '👤', label: t('portail.nav.account'), modules: null },
   ]
+  const navItems = allNav.filter(item => {
+    if (!item.modules) return true
+    if (!modulesActifs) return true // null = tous actifs par défaut
+    return item.modules.some(m => modulesActifs.includes(m))
+  })
 
   return (
     <div dir={dir} style={{ minHeight: '100vh', background: '#F0F4FA', fontFamily: 'Inter, sans-serif' }}>

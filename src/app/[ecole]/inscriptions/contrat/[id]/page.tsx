@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { formatStatut } from '@/lib/inscriptions'
 import { logAction } from '@/lib/audit-log'
+import { creerFactureDepuisContrat } from '@/lib/facture-contrat'
 
 export default function ContratAdminDetailPage() {
   const router = useRouter()
@@ -82,9 +83,24 @@ export default function ContratAdminDetailPage() {
       montant_total: contrat.montant_total,
     })
 
+    // Générer la facture (idempotent : si elle existe déjà, ignore)
+    let factureMsg = ''
+    try {
+      const res = await creerFactureDepuisContrat(s, contrat, ecole.id, contrat.annee_scolaire)
+      if (res.ok) {
+        factureMsg = res.deja_existante
+          ? `\n(Facture ${res.numero} déjà existante)`
+          : `\n✓ Facture ${res.numero} générée`
+      } else {
+        factureMsg = `\n⚠ Erreur création facture : ${res.error || 'inconnue'}`
+      }
+    } catch (e: any) {
+      factureMsg = `\n⚠ Erreur facture : ${e?.message || 'inconnue'}`
+    }
+
     setContrat({ ...contrat, statut: 'valide' })
     setValidating(false)
-    alert('Contrat validé. La facture sera générée depuis la liste des contrats si pas déjà créée.')
+    alert('Contrat validé.' + factureMsg)
   }
 
   async function annuler() {

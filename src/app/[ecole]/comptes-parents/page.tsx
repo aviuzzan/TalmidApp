@@ -18,6 +18,27 @@ export default function ComptesParentsPage() {
   const [inviteMsg, setInviteMsg] = useState('')
   const [renvoyantId, setRenvoyantId] = useState<string | null>(null)
   const [renvoiMsg, setRenvoiMsg] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [supprId, setSupprId] = useState<string | null>(null)
+
+  async function supprimerCompte(famille: any) {
+    const compte = famille.comptes?.[0]
+    if (!compte) return
+    if (!confirm(`Supprimer le compte parent de ${famille.nom} ?\n\nLa famille et les données ne seront PAS supprimées, seulement l'accès portail. Le parent ne pourra plus se connecter avec ce compte.`)) return
+    setSupprId(famille.id); setRenvoiMsg(null)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    if (!session) { setRenvoiMsg({ ok: false, msg: 'Session expirée' }); setSupprId(null); return }
+    const res = await fetch('/api/admin/supprimer-compte-parent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ profileId: compte.id, ecoleId: ecole.id }),
+    })
+    const json = await res.json()
+    setRenvoiMsg({ ok: res.ok, msg: res.ok ? `✓ Compte supprimé pour ${famille.nom}` : `Erreur : ${json.error || 'inconnue'}` })
+    setSupprId(null)
+    await load()
+    setTimeout(() => setRenvoiMsg(null), 5000)
+  }
 
   async function renvoyerLien(famille: any) {
     if (!famille.parent1_email) {
@@ -278,6 +299,16 @@ export default function ComptesParentsPage() {
                               background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A',
                             }}>
                             {renvoyantId === f.id ? '...' : '📧 Renvoyer lien'}
+                          </button>
+                        )}
+                        {aCompte && (
+                          <button onClick={() => supprimerCompte(f)} disabled={supprId === f.id}
+                            title="Supprimer le compte portail (la famille reste)"
+                            style={{
+                              fontSize: 12, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 500,
+                              background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA',
+                            }}>
+                            {supprId === f.id ? '...' : '🗑 Supprimer compte'}
                           </button>
                         )}
                         <button onClick={() => openModal(f)}
