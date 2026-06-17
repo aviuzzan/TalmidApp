@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import EcoleSidebar from '@/components/ui/EcoleSidebar'
 import GlobalSearch from '@/components/ui/GlobalSearch'
+import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import { useEcole } from '@/lib/ecole-context'
 
 export default function EcoleAppLayout({ children }: { children: React.ReactNode }) {
@@ -53,8 +54,21 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#F0F4FA' }}>
       <EcoleSidebar userEmail={email} role={role} />
-      <main className="ecole-main" style={{ flex: 1, overflowY: 'auto', maxWidth: '100%' }}>
-        {children}
+      <main className="ecole-main" style={{ flex: 1, overflowY: 'auto', maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Barre header globale avec sélecteur d'exercice, présent partout */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 40,
+          background: 'rgba(240,244,250,0.94)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid #E2E8F0',
+          padding: '10px 28px',
+          display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12,
+        }}>
+          <ExerciceSelector />
+        </div>
+        <div style={{ flex: 1 }}>
+          {children}
+        </div>
       </main>
       <GlobalSearch />
     </div>
