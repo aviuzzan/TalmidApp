@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       const sentEmails: string[] = []
       for (const c of cibles) {
         const { html, sujet } = buildHtml(c.montantDu, c.prenom, c.nom)
-        const r = await sendEmail({ to: [{ email: c.email, name: `${c.prenom} ${c.nom}`.trim() || undefined }], subject: sujet, html })
+        const r = await sendEmail({ fromName: ecole?.nom || 'TalmidApp', to: [{ email: c.email, name: `${c.prenom} ${c.nom}`.trim() || undefined }], subject: sujet, html })
         if (r.ok) sentEmails.push(c.email)
       }
       if (sentEmails.length === 0) {
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
       dests.push({ email: famille.parent2_email, name: `${famille.parent2_prenom ?? ''} ${famille.parent2_nom ?? ''}`.trim() || undefined })
     }
 
-    const sendResult = await sendEmail({ to: dests, subject: sujet, html })
+    const sendResult = await sendEmail({ fromName: ecole?.nom || 'TalmidApp', to: dests, subject: sujet, html })
     if (!sendResult.ok) {
       return NextResponse.json({ error: 'Erreur envoi email : ' + sendResult.error }, { status: 500 })
     }

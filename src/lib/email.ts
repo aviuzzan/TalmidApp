@@ -75,10 +75,10 @@ function toRecipients(to: EmailRecipient | EmailRecipient[]): EmailRecipient[] {
 async function sendViaBrevo(params: SendEmailParams): Promise<SendEmailResult> {
   const apiKey = process.env.BREVO_API_KEY!
   const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER!
-  const senderName = params.fromName
-    || process.env.BREVO_SENDER_NAME
-    || parseFrom(process.env.SMTP_FROM, senderEmail).name
-    || 'TalmidApp'
+  // IMPORTANT : on ignore volontairement le name de SMTP_FROM (qui peut contenir
+  // une vieille valeur "Heder Loubavitch" héritée). Le caller DOIT passer fromName.
+  // Fallback : BREVO_SENDER_NAME puis "TalmidApp", JAMAIS le name SMTP_FROM.
+  const senderName = params.fromName || process.env.BREVO_SENDER_NAME || 'TalmidApp'
 
   const recipients = toRecipients(params.to)
   if (recipients.length === 0) return { ok: false, error: 'Aucun destinataire valide' }
@@ -140,14 +140,13 @@ async function sendViaSmtp(params: SendEmailParams): Promise<SendEmailResult> {
     return { ok: false, error: 'Configuration SMTP manquante (SMTP_HOST, SMTP_USER, SMTP_PASSWORD)' }
   }
 
-  // SMTP_FROM peut être "Nom <email>" ou juste un email. Si fromName est fourni, on remplace le nom.
+  // Email d'envoi = SMTP_FROM (juste l'email) ou SMTP_USER en fallback.
+  // Nom affiché : params.fromName, sinon TalmidApp. JAMAIS le name de SMTP_FROM
+  // (peut contenir une vieille valeur héritée comme "Heder Loubavitch").
   const smtpFromRaw = process.env.SMTP_FROM || process.env.SMTP_USER!
-  const fromParsed = parseFrom(smtpFromRaw, process.env.SMTP_USER!)
-  const fromEmail = fromParsed.email
-  const fromDisplayName = params.fromName || fromParsed.name
-  const from = fromDisplayName
-    ? `"${fromDisplayName.replace(/"/g, '')}" <${fromEmail}>`
-    : fromEmail
+  const fromEmail = parseFrom(smtpFromRaw, process.env.SMTP_USER!).email
+  const fromDisplayName = params.fromName || 'TalmidApp'
+  const from = `"${fromDisplayName.replace(/"/g, '')}" <${fromEmail}>`
 
   const recipients = toRecipients(params.to)
   const formattedTo = recipients

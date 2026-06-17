@@ -217,7 +217,8 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
             const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal)
             const isCatActive = cat.code === activeCategory
             const modules = MODULES_BY_CATEGORY[cat.code] || []
-            const visibleModules = modules.filter(moduleHasAccess)
+            // Toujours afficher tous les modules — on grise ceux sans accès
+            const visibleModules = modules
 
             return (
               <div key={cat.code}>
@@ -240,23 +241,29 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                   {!accessible && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>🔒</span>}
                 </button>
 
-                {isCatActive && accessible && visibleModules.length > 0 && (
+                {isCatActive && visibleModules.length > 0 && (
                   <div style={{ paddingLeft: 22, marginBottom: 6, marginTop: 2 }}>
                     {visibleModules.map(m => {
                       const fullPath = '/' + slug + '/' + m.href
                       const isModActive = pathname === fullPath
+                      const modAccessible = moduleHasAccess(m) && accessible
                       return (
-                        <button key={m.href} onClick={() => navigate(fullPath)}
+                        <button key={m.href}
+                          onClick={() => modAccessible && navigate(fullPath)}
+                          disabled={!modAccessible}
+                          title={!modAccessible ? 'Pas d\'accès à ce module' : undefined}
                           style={{
-                            display: 'block', width: '100%', textAlign: 'left',
+                            display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
                             padding: '7px 11px', borderRadius: 6,
-                            fontSize: 12, border: 'none', cursor: 'pointer',
+                            fontSize: 12, border: 'none',
+                            cursor: modAccessible ? 'pointer' : 'not-allowed',
                             marginBottom: 1,
                             background: isModActive ? 'rgba(96,165,250,0.18)' : 'transparent',
-                            color: isModActive ? '#fff' : 'rgba(255,255,255,0.55)',
+                            color: modAccessible ? (isModActive ? '#fff' : 'rgba(255,255,255,0.55)') : 'rgba(255,255,255,0.28)',
                             borderLeft: isModActive ? '2px solid #60A5FA' : '2px solid transparent',
                           }}>
-                          {m.nom}
+                          <span style={{ flex: 1 }}>{m.nom}</span>
+                          {!modAccessible && <span style={{ fontSize: 10 }}>🔒</span>}
                         </button>
                       )
                     })}

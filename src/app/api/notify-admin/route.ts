@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
       to: dests.map((email) => ({ email })),
       subject: sujet,
       html,
+      fromName: ecole?.nom || 'TalmidApp',
     })
 
     // Log dans email_logs (best-effort)

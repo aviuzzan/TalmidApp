@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
           })
           const inviteLink = linkData?.properties?.action_link
           if (inviteLink) {
-            await sendEmail({
+            await sendEmail({ fromName: ecole?.nom || 'TalmidApp',
               to: { email, name: `${c.prenom || ''} ${c.nom || ''}`.trim() },
               subject: 'Bienvenue sur le portail famille - ' + ecoleNom,
               html: buildBienvenueEmail(c.prenom, ecoleNom, inviteLink),

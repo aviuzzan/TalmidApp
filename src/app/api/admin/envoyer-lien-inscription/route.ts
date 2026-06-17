@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
       emailError = 'SMTP non configure'
     } else {
       const res = await sendEmail({
+        fromName: ecole?.nom || 'TalmidApp',
         to: { email },
         subject: 'Demande d\'inscription - ' + ecoleNom,
         html: buildLinkEmail(ecoleNom, link),

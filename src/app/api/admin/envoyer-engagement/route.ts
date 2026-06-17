@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
     `
 
     const res = await sendEmail({
+      fromName: ecole?.nom || 'TalmidApp',
       to: destinataires,
       subject: `Engagement financier ${exLabel} — Famille ${(famille as any).nom}`,
       html,

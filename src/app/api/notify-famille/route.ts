@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Type invalide' }, { status: 400 })
     }
 
-    const result = await sendEmail({ to: dests, subject, html })
+    const result = await sendEmail({ to: dests, subject, html, fromName: ecole?.nom || 'TalmidApp' })
 
     // Log best-effort
     try {
