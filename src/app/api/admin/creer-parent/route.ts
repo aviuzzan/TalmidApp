@@ -24,9 +24,14 @@ export async function POST(req: NextRequest) {
     const slot = parentSlot === 'parent2' ? 'parent2' : 'parent1'
     const doSendEmail = envoyerEmail !== false // par défaut true
 
-    if (!email || !password || !familleId || !ecoleId) {
-      return NextResponse.json({ error: 'Tous les champs sont obligatoires' }, { status: 400 })
+    if (!email || !familleId || !ecoleId) {
+      return NextResponse.json({ error: 'Email, famille et école sont obligatoires' }, { status: 400 })
     }
+
+    // Si aucun mot de passe fourni → on en génère un aléatoire (le parent le redéfinira via le lien magique)
+    const motDePasse = password && password.length >= 8
+      ? password
+      : Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b => b.toString(16).padStart(2, '0')).join('')
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,7 +75,7 @@ export async function POST(req: NextRequest) {
       // Créer le compte
       const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email,
-        password,
+        password: motDePasse,
         email_confirm: true,
       })
       if (createErr) {

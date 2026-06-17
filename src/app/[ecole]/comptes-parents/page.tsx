@@ -11,10 +11,9 @@ export default function ComptesParentsPage() {
 
   // Modal création
   const [modal, setModal] = useState<any>(null) // { famille }
-  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', parentSlot: 'parent1' })
+  const [form, setForm] = useState({ email: '', parentSlot: 'parent1' })
   const [creating, setCreating] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
-  const [showPwd, setShowPwd] = useState(false)
   const [inviteRunning, setInviteRunning] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
 
@@ -60,17 +59,14 @@ export default function ComptesParentsPage() {
     // Pré-remplir avec email parent1 si disponible
     setForm({
       email: famille.parent1_email || '',
-      password: '',
-      confirmPassword: '',
       parentSlot: 'parent1',
     })
     setResult(null)
   }
 
   async function creerCompte() {
-    if (!form.email || !form.password) { setResult({ ok: false, msg: 'Email et mot de passe requis' }); return }
-    if (form.password.length < 8) { setResult({ ok: false, msg: 'Mot de passe trop court (8 min)' }); return }
-    if (form.password !== form.confirmPassword) { setResult({ ok: false, msg: 'Mots de passe différents' }); return }
+    if (!form.email) { setResult({ ok: false, msg: 'Email requis' }); return }
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) { setResult({ ok: false, msg: 'Adresse email invalide' }); return }
 
     setCreating(true); setResult(null)
     const s = createClient()
@@ -85,7 +81,6 @@ export default function ComptesParentsPage() {
       },
       body: JSON.stringify({
         email: form.email,
-        password: form.password,
         familleId: modal.famille.id,
         ecoleId: ecole.id,
         parentSlot: form.parentSlot,
@@ -94,9 +89,14 @@ export default function ComptesParentsPage() {
 
     const json = await res.json()
     if (res.ok) {
-      setResult({ ok: true, msg: json.existed ? `Compte existant lié à ${modal.famille.nom} ✓` : `Compte créé pour ${form.email} ✓` })
+      const emailStatus = json.email?.envoye
+        ? ' Un email d\'activation a été envoyé au parent.'
+        : json.email?.erreur
+          ? ` ⚠️ Email d'activation non envoyé : ${json.email.erreur}`
+          : ''
+      setResult({ ok: true, msg: (json.existed ? `Compte existant lié à ${modal.famille.nom} ✓` : `Compte créé pour ${form.email} ✓`) + emailStatus })
       await load()
-      setTimeout(() => { setModal(null); setResult(null) }, 2000)
+      setTimeout(() => { setModal(null); setResult(null) }, 3500)
     } else {
       setResult({ ok: false, msg: json.error || 'Erreur' })
     }
@@ -307,31 +307,9 @@ export default function ComptesParentsPage() {
                 )}
               </div>
 
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Mot de passe
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input style={{ ...inp, paddingRight: 40 }} type={showPwd ? 'text' : 'password'}
-                    value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                    placeholder="8 caractères minimum" />
-                  <button type="button" onClick={() => setShowPwd(!showPwd)}
-                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 15 }}>
-                    {showPwd ? '🙈' : '👁'}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Confirmer le mot de passe
-                </label>
-                <input style={{
-                  ...inp,
-                  borderColor: form.confirmPassword && form.confirmPassword !== form.password ? '#FCA5A5' : '#E2E8F0',
-                }} type={showPwd ? 'text' : 'password'}
-                  value={form.confirmPassword} onChange={e => setForm(p => ({ ...p, confirmPassword: e.target.value }))}
-                  placeholder="Même mot de passe" />
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 9, padding: '12px 14px', fontSize: 12, color: '#1E40AF', lineHeight: 1.6 }}>
+                <strong>📧 Activation par email</strong><br/>
+                Le parent recevra un email avec un lien sécurisé pour activer son compte et choisir son propre mot de passe. Vous n'avez pas besoin de lui transmettre d'identifiants.
               </div>
 
               {result && (
