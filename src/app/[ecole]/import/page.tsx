@@ -199,6 +199,10 @@ export default function ImportPage() {
 
   async function lancerImport() {
     if (!parsed) return
+    if (!exercice?.id) {
+      alert('Aucune année scolaire sélectionnée. Choisissez d\'abord une année dans le sélecteur en haut de page.')
+      return
+    }
     setImporting(true); setResultat('')
     const s = createClient()
     const aImporter = parsed.filter(g => !g.existe)
@@ -246,7 +250,7 @@ export default function ImportPage() {
 
       for (const e of g.enfants) {
         const classeMatch = classes.find(c => (c.nom || '').toLowerCase() === (e.classe || '').toLowerCase())
-        const { error: enfErr } = await s.from('enfants').insert({
+        const { data: nouvelEnf, error: enfErr } = await s.from('enfants').insert({
           famille_id: nouvelleFam.id,
           ecole_id: ecole.id,
           prenom: e.prenom,
@@ -262,19 +266,32 @@ export default function ImportPage() {
           instruction_religieuse: parseBool(e.instruction_religieuse),
           etude_garderie: parseBool(e.etude_garderie),
           ine: e.ine || null,
-          annee_scolaire: exercice?.code || '',
-          exercice_id: exercice?.id || null,
+          annee_scolaire: exercice.code,
+          exercice_id: exercice.id,
           statut_inscription: 'inscrit',
-        })
-        if (enfErr) {
+        }).select('id').single()
+        if (enfErr || !nouvelEnf) {
           echecs++
           if (erreursDetail.length < 10) {
-            erreursDetail.push(`Élève "${e.prenom} ${e.nom}" (famille ${f.nom}) : ${enfErr.message}`)
+            erreursDetail.push(`Élève "${e.prenom} ${e.nom}" (famille ${f.nom}) : ${enfErr?.message || 'pas de ligne retournée'}`)
           }
           // eslint-disable-next-line no-console
           console.error('Import enfant échoué', { enfant: e, error: enfErr })
+          continue
         }
-        else okEnf++
+        // Créer la scolarité pour que l'enfant apparaisse dans la liste Élèves
+        const { error: scoErr } = await s.from('scolarites').insert({
+          enfant_id: nouvelEnf.id,
+          ecole_id: ecole.id,
+          exercice_id: exercice.id,
+          classe_id: classeMatch?.id || null,
+          statut_inscription: 'inscrit',
+        })
+        if (scoErr) {
+          // eslint-disable-next-line no-console
+          console.error('Création scolarité échouée', { enfant_id: nouvelEnf.id, error: scoErr })
+        }
+        okEnf++
       }
     }
 
