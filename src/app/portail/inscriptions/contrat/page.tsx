@@ -175,7 +175,15 @@ export default function ContratPage() {
 
   const getReductionFN = () => {
     if (nbEnfantsAvecClasse < 2) return 0
-    const applicable = reductions.filter((r: any) => parseInt(r.nb_enfants) <= nbEnfants)
+    const trancheFamille = famille?.tranche_id || null
+    const applicable = reductions.filter((r: any) => {
+      if (parseInt(r.nb_enfants) > nbEnfants) return false
+      // tranches_eligibles : null/[] = toutes ; sinon doit contenir la tranche de la famille
+      if (Array.isArray(r.tranches_eligibles) && r.tranches_eligibles.length > 0) {
+        if (!trancheFamille || !r.tranches_eligibles.includes(trancheFamille)) return false
+      }
+      return true
+    })
     if (!applicable.length) return 0
     return parseFloat(applicable[applicable.length - 1].montant_reduction) || 0
   }
