@@ -143,7 +143,7 @@ export default function NouvelleEcolePage() {
             <div>
               <label style={lbl}>NOM DE L'ÉCOLE *</label>
               <input style={inp} value={form.nom} onChange={e => set('nom', e.target.value)}
-                placeholder="Ex : Heder Loubavitch, École Beth Rivkah..." />
+                placeholder="Ex : École Beth Rivkah, Talmud Torah..." />
             </div>
 
             {/* Slug */}

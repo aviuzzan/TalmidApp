@@ -176,7 +176,7 @@ export async function deleteIntegration(ecoleId: string, provider: ProviderName)
 
 /**
  * Trouve l'école associée à un webhook entrant via slug en query string.
- * Ex : /api/stripe/webhook?ecole=heder → retourne l'école avec slug "heder".
+ * Ex : /api/stripe/webhook?ecole=mon-ecole → retourne l'école avec slug "mon-ecole".
  */
 export async function findEcoleBySlug(slug: string): Promise<{ id: string; nom: string; slug: string } | null> {
   const { data } = await admin()
