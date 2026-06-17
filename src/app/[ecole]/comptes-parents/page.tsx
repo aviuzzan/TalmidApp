@@ -16,6 +16,30 @@ export default function ComptesParentsPage() {
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [inviteRunning, setInviteRunning] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [renvoyantId, setRenvoyantId] = useState<string | null>(null)
+  const [renvoiMsg, setRenvoiMsg] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  async function renvoyerLien(famille: any) {
+    if (!famille.parent1_email) {
+      setRenvoiMsg({ ok: false, msg: `Pas d'email pour ${famille.nom}` })
+      setTimeout(() => setRenvoiMsg(null), 4000)
+      return
+    }
+    if (!confirm(`Renvoyer le lien d'activation à ${famille.parent1_email} ?`)) return
+    setRenvoyantId(famille.id); setRenvoiMsg(null)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    if (!session) { setRenvoiMsg({ ok: false, msg: 'Session expirée' }); setRenvoyantId(null); return }
+    const res = await fetch('/api/admin/renvoyer-lien-magique', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ email: famille.parent1_email, familleId: famille.id, ecoleId: ecole.id }),
+    })
+    const json = await res.json()
+    setRenvoiMsg({ ok: res.ok, msg: res.ok ? `✓ ${json.message}` : `Erreur : ${json.error || 'inconnue'}` })
+    setRenvoyantId(null)
+    setTimeout(() => setRenvoiMsg(null), 5000)
+  }
 
   useEffect(() => { load() }, [ecole.id])
 
@@ -173,6 +197,12 @@ export default function ComptesParentsPage() {
         </div>
       )}
 
+      {renvoiMsg && (
+        <div style={{ background: renvoiMsg.ok ? '#ECFDF5' : '#FEF2F2', border: `1px solid ${renvoiMsg.ok ? '#A7F3D0' : '#FECACA'}`, borderRadius: 10, padding: '10px 14px', color: renvoiMsg.ok ? '#065F46' : '#991B1B', fontSize: 13 }}>
+          {renvoiMsg.msg}
+        </div>
+      )}
+
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         {[
@@ -239,15 +269,27 @@ export default function ComptesParentsPage() {
                       )}
                     </td>
                     <td style={{ padding: '13px 16px' }}>
-                      <button onClick={() => openModal(f)}
-                        style={{
-                          fontSize: 12, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 500,
-                          background: aCompte ? '#F1F5F9' : '#2563EB',
-                          color: aCompte ? '#475569' : '#fff',
-                          border: aCompte ? '1px solid #E2E8F0' : 'none',
-                        }}>
-                        {aCompte ? '+ Ajouter compte' : 'Créer accès'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        {aCompte && (
+                          <button onClick={() => renvoyerLien(f)} disabled={renvoyantId === f.id}
+                            title="Renvoyer un email avec un nouveau lien d'activation"
+                            style={{
+                              fontSize: 12, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 500,
+                              background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A',
+                            }}>
+                            {renvoyantId === f.id ? '...' : '📧 Renvoyer lien'}
+                          </button>
+                        )}
+                        <button onClick={() => openModal(f)}
+                          style={{
+                            fontSize: 12, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 500,
+                            background: aCompte ? '#F1F5F9' : '#2563EB',
+                            color: aCompte ? '#475569' : '#fff',
+                            border: aCompte ? '1px solid #E2E8F0' : 'none',
+                          }}>
+                          {aCompte ? '+ Ajouter compte' : 'Créer accès'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
