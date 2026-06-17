@@ -591,6 +591,25 @@ export default function ContratPage() {
 
             {modeReglement === m.type && (
               <div style={{ marginTop: 14, marginLeft: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Infos configurées par l'école (ordre chèque, IBAN, instructions) */}
+                {m.config && (m.config.ordre_cheque || m.config.iban || m.config.conditions) && (
+                  <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14, fontSize: 12, color: '#92400E', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {m.config.ordre_cheque && (
+                      <div><strong>Chèques à l'ordre de :</strong> {m.config.ordre_cheque}</div>
+                    )}
+                    {m.config.iban && (
+                      <div>
+                        <strong>IBAN du bénéficiaire :</strong> <span style={{ fontFamily: 'monospace' }}>{m.config.iban}</span>
+                        {m.config.bic && <> · <strong>BIC :</strong> {m.config.bic}</>}
+                        {m.config.titulaire && <> · <strong>Titulaire :</strong> {m.config.titulaire}</>}
+                      </div>
+                    )}
+                    {m.config.conditions && (
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{m.config.conditions}</div>
+                    )}
+                  </div>
+                )}
+
                 {/* Nb échéances */}
                 <div>
                   <label style={lbl}>Nombre d'échéances *</label>
