@@ -802,7 +802,8 @@ export default function FamilleDetailPage() {
                     const { data: existing } = await supabase.from('demandes_reduction')
                       .select('id, statut').eq('famille_id', id).eq('exercice_id', trancheForm.exercice_id).maybeSingle()
                     if (existing) {
-                      if (!confirm(`Une demande existe deja pour ${ex?.code} (statut: ${existing.statut}). La remplacer ?`)) { setSavingTranche(false); return }
+                      const okReplace = await confirm({ title: `Demande déjà existante pour ${ex?.code}`, message: `Une demande existe déjà (statut : ${existing.statut}). La remplacer par la tranche choisie ?`, confirmLabel: 'Remplacer', danger: true })
+                      if (!okReplace) { setSavingTranche(false); return }
                       await supabase.from('demandes_reduction').delete().eq('id', existing.id)
                     }
                     const payload: any = {
