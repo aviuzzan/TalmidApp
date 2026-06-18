@@ -77,35 +77,60 @@ export async function POST(req: NextRequest) {
     }
 
     // Appel Gemini Flash 2.0
-    const apiKey = process.env.GOOGLE_AI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'GOOGLE_AI_API_KEY manquante dans Vercel' }, { status: 500 })
+    // Bascule Groq Llama : gratuit illimite, 30 RPM, OpenAI-compatible. Fallback Gemini si GROQ pas configure.
+    const groqKey = process.env.GROQ_API_KEY
+    const googleKey = process.env.GOOGLE_AI_API_KEY
+    if (!groqKey && !googleKey) {
+      return NextResponse.json({ error: 'Aucune cle LLM configuree (GROQ_API_KEY ou GOOGLE_AI_API_KEY)' }, { status: 500 })
     }
 
     const prompt = construirePromptSysteme(ctx)
-    // Modele configurable via BDD avec fallback. Format Google: <name>-latest pointe sur la derniere version.
-    const modele = config.modele && config.modele !== 'gemini-flash-2.0' ? config.modele : 'gemini-1.5-flash-latest'
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent?key=${apiKey}`
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          { role: 'user', parts: [{ text: question }] },
-        ],
-        systemInstruction: { parts: [{ text: prompt }] },
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 800,
+    // Modeles supportes :
+    //  - llama-3.3-70b-versatile : Groq, gratuit, FR excellent, 30 RPM, recommande
+    //  - llama-3.1-8b-instant : Groq, plus rapide, 30 RPM
+    //  - gemini-* : Google AI fallback
+    const modeleStock = config.modele && config.modele !== 'gemini-flash-2.0' ? config.modele : 'llama-3.3-70b-versatile'
+    const useGroq = modeleStock.startsWith('llama') || modeleStock.startsWith('mixtral') || modeleStock.startsWith('gemma')
+
+    let resp: Response
+    if (useGroq && groqKey) {
+      // Groq API (OpenAI compatible)
+      resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`,
         },
-      }),
-    })
+        body: JSON.stringify({
+          model: modeleStock,
+          messages: [
+            { role: 'system', content: prompt },
+            { role: 'user', content: question },
+          ],
+          temperature: 0.3,
+          max_tokens: 800,
+        }),
+      })
+    } else {
+      // Google Gemini fallback
+      if (!googleKey) {
+        return NextResponse.json({ error: 'Modele Groq demande mais GROQ_API_KEY manquante' }, { status: 500 })
+      }
+      resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modeleStock}:generateContent?key=${googleKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: question }] }],
+          systemInstruction: { parts: [{ text: prompt }] },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
+        }),
+      })
+    }
 
     if (!resp.ok) {
       const errTxt = await resp.text()
-      console.error('Gemini error', resp.status, errTxt)
-      // Extrait le message Google pour le debug cote client
+      console.error('LLM error', resp.status, errTxt)
       let detail = errTxt.slice(0, 300)
       try {
         const errJson = JSON.parse(errTxt)
@@ -115,9 +140,12 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await resp.json()
-    const reponse: string = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Je n ai pas pu generer de reponse.'
-    const tokensInput = data?.usageMetadata?.promptTokenCount ?? null
-    const tokensOutput = data?.usageMetadata?.candidatesTokenCount ?? null
+    // Format Groq (OpenAI) vs Gemini : on extrait des deux
+    const reponse: string = data?.choices?.[0]?.message?.content
+      || data?.candidates?.[0]?.content?.parts?.[0]?.text
+      || 'Je n ai pas pu generer de reponse.'
+    const tokensInput = data?.usage?.prompt_tokens ?? data?.usageMetadata?.promptTokenCount ?? null
+    const tokensOutput = data?.usage?.completion_tokens ?? data?.usageMetadata?.candidatesTokenCount ?? null
 
     // Sauvegarde
     const { data: conv } = await supa
