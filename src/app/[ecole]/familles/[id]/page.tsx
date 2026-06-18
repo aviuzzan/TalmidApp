@@ -4,6 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { loadPermissions, hasAtLeast, Niveau } from '@/lib/permissions'
+import { useAccesFinances } from '@/lib/acces-finances'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -53,7 +54,10 @@ export default function FamilleDetailPage() {
     if (bypass) return true
     return modules.some(m => (perms[m] || 'aucun') !== 'aucun')
   }
-  const canFacturation = canSee('facturation', 'compta')
+  // Verrou financier transversal : si pas d'accès finances, on coupe l'onglet Facturation
+  // peu importe les permissions modules.
+  const accesFinancesProfile = useAccesFinances().acces
+  const canFacturation = canSee('facturation', 'compta') && accesFinancesProfile
   const canAdministratif = canSee('administratif')
   const [showEnfantForm, setShowEnfantForm] = useState(false)
   const [showLigneForm, setShowLigneForm] = useState(false)

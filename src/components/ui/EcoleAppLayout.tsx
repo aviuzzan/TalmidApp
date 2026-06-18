@@ -6,6 +6,7 @@ import EcoleSidebar from '@/components/ui/EcoleSidebar'
 import GlobalSearch from '@/components/ui/GlobalSearch'
 import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import { useEcole } from '@/lib/ecole-context'
+import { AccesFinancesProvider } from '@/lib/acces-finances'
 
 export default function EcoleAppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -52,6 +53,7 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
   )
 
   return (
+    <AccesFinancesProvider>
     <div style={{ display: 'flex', minHeight: '100vh', background: '#F0F4FA' }}>
       <EcoleSidebar userEmail={email} role={role} />
       <main className="ecole-main" style={{ flex: 1, overflowY: 'auto', maxWidth: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -72,5 +74,6 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
       </main>
       <GlobalSearch />
     </div>
+    </AccesFinancesProvider>
   )
 }

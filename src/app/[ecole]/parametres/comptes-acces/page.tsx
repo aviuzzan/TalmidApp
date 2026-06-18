@@ -7,7 +7,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { Niveau, NIVEAUX, NIVEAU_LABEL, NIVEAU_COLOR, TEMPLATES, loadPermissions } from '@/lib/permissions'
 
 type Module = { code: string; nom: string; description: string | null; icone: string; ordre: number }
-type Admin = { id: string; prenom: string | null; nom: string | null; email: string; role: string; secteur_id: string | null }
+type Admin = { id: string; prenom: string | null; nom: string | null; email: string; role: string; secteur_id: string | null; acces_finances?: boolean }
 type Secteur = { id: string; nom: string }
 
 export default function ComptesAccesPage() {
@@ -48,7 +48,7 @@ export default function ComptesAccesPage() {
     setAuthorized(true)
 
     const { data: profs } = await s.from('profiles_with_email')
-      .select('id, prenom, nom, email, role, secteur_id')
+      .select('id, prenom, nom, email, role, secteur_id, acces_finances')
       .eq('ecole_id', ecole.id)
       .in('role', ['admin', 'super_admin'])
       .order('nom')
@@ -98,6 +98,21 @@ export default function ComptesAccesPage() {
       details: { module: moduleCode, ancien, nouveau: niveau },
     })
     setPerms(prev => ({ ...prev, [profileId]: { ...prev[profileId], [moduleCode]: niveau } }))
+    setSaving(false)
+  }
+
+  async function toggleAccesFinances(profileId: string, valeur: boolean) {
+    setSaving(true)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    const { error } = await s.from('profiles').update({ acces_finances: valeur }).eq('id', profileId)
+    if (error) { alert('Erreur : ' + error.message); setSaving(false); return }
+    await s.from('permissions_audit').insert({
+      acteur_id: session?.user.id, cible_profile_id: profileId, ecole_id: ecole.id,
+      action: 'toggle_acces_finances',
+      details: { nouveau: valeur },
+    }).then(() => {}, () => {})
+    setAdmins(prev => prev.map(a => a.id === profileId ? { ...a, acces_finances: valeur } : a))
     setSaving(false)
   }
 
@@ -298,6 +313,40 @@ export default function ComptesAccesPage() {
                       {isSuperAdmin ? 'Un super-admin voit tous les secteurs.' : 'Restreint cet agent à un établissement / secteur précis.'}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {/* Verrou financier transversal */}
+              {!isSuperAdmin && (
+                <div style={{ background: selectedAdmin.acces_finances === false ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${selectedAdmin.acces_finances === false ? '#FECACA' : '#BBF7D0'}`, borderRadius: 8, padding: 14, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 3 }}>
+                      💰 Accès aux données financières
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.4 }}>
+                      {selectedAdmin.acces_finances === false
+                        ? 'Ce compte ne voit AUCUN montant, solde, IBAN, facture ou KPI financier dans toute l\'app.'
+                        : 'Ce compte voit normalement les éléments financiers. Désactivez pour masquer tout ce qui touche à l\'argent (transversal).'}
+                    </div>
+                  </div>
+                  <label style={{ position: 'relative', display: 'inline-block', width: 50, height: 26, cursor: 'pointer', flexShrink: 0 }}>
+                    <input type="checkbox"
+                      checked={selectedAdmin.acces_finances !== false}
+                      onChange={e => toggleAccesFinances(selectedAdmin.id, e.target.checked)}
+                      disabled={saving}
+                      style={{ opacity: 0, width: 0, height: 0 }} />
+                    <span style={{
+                      position: 'absolute', inset: 0,
+                      background: selectedAdmin.acces_finances === false ? '#CBD5E1' : '#10B981',
+                      borderRadius: 26, transition: 'background 0.2s',
+                    }}>
+                      <span style={{
+                        position: 'absolute', top: 3, left: selectedAdmin.acces_finances === false ? 3 : 27,
+                        width: 20, height: 20, background: '#fff', borderRadius: '50%',
+                        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </span>
+                  </label>
                 </div>
               )}
 

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau } from '@/lib/permissions'
 import { useI18n } from '@/lib/i18n'
+import { useAccesFinances } from '@/lib/acces-finances'
 
 type ModuleEntry = { nom: string; href: string; module: string }
 
@@ -110,8 +111,14 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   const activeCategory = findActiveCategory(pathname || '', slug)
   const isDashboardActive = pathname === '/' + slug + '/dashboard'
 
+  const { acces: accesFinances } = useAccesFinances()
+
   function moduleHasAccess(m: ModuleEntry): boolean {
     if (m.href.includes('comptes-acces')) return isAdminPrincipal || role === 'super_admin'
+    // Verrou financier transversal : si pas d'accès finances, les modules financiers sont masqués
+    // (peu importe la permission spécifique au module). Ne touche pas super_admin.
+    const estModuleFinancier = ['facturation','compta','paye'].includes(m.module)
+    if (estModuleFinancier && !accesFinances && role !== 'super_admin') return false
     if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
     if (!permsLoaded) return true
     return (perms[m.module] || 'aucun') !== 'aucun'
