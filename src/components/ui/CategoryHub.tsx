@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
 import { useAccesFinances } from '@/lib/acces-finances'
+import EcoleAppLayout from '@/components/ui/EcoleAppLayout'
 
 type ModuleInfo = {
   code: string
@@ -18,6 +19,7 @@ type ModuleInfo = {
 // IMPORTANT : doit matcher exactement MODULES_BY_CATEGORY dans EcoleSidebar.tsx
 const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
   administration: [
+    { code: 'administratif', nom: 'Tableau de bord direction', description: 'Vue d\'ensemble : effectifs, finances, indicateurs', icone: '📊', href: 'direction' },
     { code: 'administratif', nom: 'Familles', description: 'Liste, fiche détaillée, contacts', icone: '👨‍👩‍👧', href: 'familles' },
     { code: 'administratif', nom: 'Élèves', description: 'Liste, fiches, classes', icone: '🎓', href: 'enfants' },
     { code: 'administratif', nom: 'Passages de classe', description: 'Réaffecter les élèves vers leur classe suivante', icone: '🎒', href: 'passages-de-classe' },
@@ -28,6 +30,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
   finances: [
     { code: 'facturation', nom: 'Tableau de bord', description: 'Vue d\'ensemble : KPI, encaissements, impayés', icone: '📊', href: 'finances/dashboard' },
     { code: 'facturation', nom: 'Factures', description: 'Liste, création et suivi des factures', icone: '📄', href: 'finances' },
+    { code: 'facturation', nom: 'Avoirs', description: 'Notes de crédit émises aux familles', icone: '🎁', href: 'finances/avoirs' },
     { code: 'facturation', nom: 'Relances impayés', description: 'Rappels, relances et mises en demeure', icone: '🔔', href: 'finances/relances' },
     { code: 'facturation', nom: 'Bordereau chèques', description: 'Préparer une remise de chèques à la banque', icone: '🧾', href: 'finances/bordereau' },
     { code: 'compta', nom: 'Rapprochement bancaire', description: 'Importer un relevé bancaire et rapprocher les recettes contre les impayés', icone: '🏦', href: 'finances/rapprochement' },
@@ -66,8 +69,10 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'parametres', nom: 'Infos & identifiants', description: 'Coordonnées, SIREN, code UAI/RNE, académie', icone: '🏫', href: 'parametres/ecole-infos' },
     { code: 'parametres', nom: 'Intégrations', description: 'Stripe, GoCardless, Brevo SMS, YouSign', icone: '🔌', href: 'parametres/integrations' },
     { code: 'parametres', nom: 'Comptes & accès', description: 'Permissions des admins (admin principal)', icone: '🔐', href: 'parametres/comptes-acces' },
+    { code: 'parametres', nom: 'Journal d\'audit', description: 'Historique des actions sensibles sur l\'app', icone: '📋', href: 'parametres/audit' },
     { code: 'parametres', nom: 'Exports CSV', description: 'Exporter familles, élèves, factures', icone: '📤', href: 'exports' },
     { code: 'parametres', nom: 'Importer des données', description: 'Importer la base familles & élèves depuis un fichier CSV', icone: '📥', href: 'import' },
+    { code: 'parametres', nom: 'Aide & démarrage', description: 'Guide pas à pas pour prendre en main l\'app', icone: '🎓', href: 'aide' },
   ],
 }
 
@@ -97,8 +102,8 @@ export default function CategoryHub({ code }: { code: string }) {
     })()
   }, [ecole?.id])
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
-  if (!cat) return <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Catégorie inconnue</div>
+  if (loading) return <EcoleAppLayout><div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div></EcoleAppLayout>
+  if (!cat) return <EcoleAppLayout><div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Catégorie inconnue</div></EcoleAppLayout>
 
   // Bypass total pour super_admin/admin/admin principal
   const bypass = role === 'super_admin' || role === 'admin' || isAdminPrincipal
@@ -122,6 +127,7 @@ export default function CategoryHub({ code }: { code: string }) {
   const accessibleCount = modules.filter(m => moduleAccessible(m).ok).length
 
   return (
+    <EcoleAppLayout>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '24px clamp(16px, 4vw, 40px) 48px', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box' }}>
       {/* Bouton retour — pilule lisible */}
       <button onClick={() => router.push('/' + ecole.slug + '/dashboard')}
@@ -210,5 +216,6 @@ export default function CategoryHub({ code }: { code: string }) {
         })}
       </div>
     </div>
+    </EcoleAppLayout>
   )
 }
