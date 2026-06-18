@@ -62,41 +62,62 @@ const SECTIONS_DEFAUT: { emoji: string; titre: string; placeholder: string }[] =
   },
 ]
 
-/** Parse un Markdown en sections, en se basant sur les "## emoji titre". */
+/** Parse un Markdown en sections, en se basant sur les "## emoji titre".
+ *  Fusionne avec les SECTIONS_DEFAUT pour que toutes les sections potentielles soient visibles.
+ */
 function parseMarkdown(md: string): Section[] {
-  if (!md || md.trim().length === 0) {
-    return SECTIONS_DEFAUT.map((s, i) => ({ id: 's' + i, emoji: s.emoji, titre: s.titre, contenu: '' }))
-  }
-  const sections: Section[] = []
-  const blocs = md.split(/^##\s+/m).filter(b => b.trim().length > 0)
-  for (let i = 0; i < blocs.length; i++) {
-    const lignes = blocs[i].split('\n')
-    const premiere = lignes[0].trim()
-    // Detecte emoji en premiere position : si la 1ere "tranche" avant l espace est courte
-    // et ne commence pas par un caractere ASCII lettre, on la traite comme emoji.
-    let emoji = '📝'
-    let titre = premiere
-    const espace = premiere.indexOf(' ')
-    if (espace > 0 && espace <= 10) {
-      const debut = premiere.substring(0, espace)
-      const premier = debut.charCodeAt(0)
-      // Si le premier caractere n est PAS une lettre ASCII (a-z, A-Z) ni un chiffre,
-      // on suppose que c est un emoji.
-      const estLettre = (premier >= 65 && premier <= 90) || (premier >= 97 && premier <= 122)
-      const estChiffre = premier >= 48 && premier <= 57
-      if (!estLettre && !estChiffre) {
-        emoji = debut
-        titre = premiere.substring(espace + 1) || premiere
+  const trouvees: Map<string, Section> = new Map()
+
+  if (md && md.trim().length > 0) {
+    // Split sur '## ' en debut de ligne. Le premier morceau (avant le premier ##) est ignore
+    // (preambule, titre H1, etc.).
+    const blocs = md.split(/^##\s+/m)
+    // On ignore blocs[0] (preambule). Si y a aucun ## du tout, c est qu il n y a qu un preambule.
+    for (let i = 1; i < blocs.length; i++) {
+      const bloc = blocs[i]
+      if (!bloc.trim()) continue
+      const lignes = bloc.split('\n')
+      const premiere = lignes[0].trim()
+      let emoji = '📝'
+      let titre = premiere
+      const espace = premiere.indexOf(' ')
+      if (espace > 0 && espace <= 10) {
+        const debut = premiere.substring(0, espace)
+        const premier = debut.charCodeAt(0)
+        const estLettre = (premier >= 65 && premier <= 90) || (premier >= 97 && premier <= 122)
+        const estChiffre = premier >= 48 && premier <= 57
+        // On exclut aussi les caracteres typographiques qui ne sont pas des vrais emojis
+        const estCaractereSimple = ['#', '*', '-', '_', '=', '~'].includes(debut)
+        if (!estLettre && !estChiffre && !estCaractereSimple) {
+          emoji = debut
+          titre = premiere.substring(espace + 1) || premiere
+        }
       }
+      const contenu = lignes.slice(1).join('\n').trim()
+      trouvees.set(titre.toLowerCase(), { id: 's' + i, emoji, titre, contenu })
     }
-    const contenu = lignes.slice(1).join('\n').trim()
-    sections.push({ id: 's' + i, emoji, titre, contenu })
   }
-  // Si parse failed completely (pas de ## detecte), on met tout dans "Autre"
-  if (sections.length === 0) {
-    return [{ id: 's0', emoji: '📝', titre: 'Autre', contenu: md }]
+
+  // Fusionne avec SECTIONS_DEFAUT : si une section par defaut existe deja, on la garde,
+  // sinon on l ajoute vide. Resultat ordonne par SECTIONS_DEFAUT, puis les sections custom restantes.
+  const resultat: Section[] = []
+  const utilisees = new Set<string>()
+  for (let i = 0; i < SECTIONS_DEFAUT.length; i++) {
+    const d = SECTIONS_DEFAUT[i]
+    const cle = d.titre.toLowerCase()
+    const existante = trouvees.get(cle)
+    if (existante) {
+      resultat.push({ ...existante, emoji: d.emoji, id: 'def' + i })
+      utilisees.add(cle)
+    } else {
+      resultat.push({ id: 'def' + i, emoji: d.emoji, titre: d.titre, contenu: '' })
+    }
   }
-  return sections
+  // Ajoute les sections custom non-defaut a la fin
+  for (const [cle, sec] of trouvees) {
+    if (!utilisees.has(cle)) resultat.push(sec)
+  }
+  return resultat
 }
 
 /** Compile les sections en Markdown structure. */
