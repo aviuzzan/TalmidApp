@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
+import ChatbotWidget from '@/components/ui/ChatbotWidget'
 import LangSwitcher from '@/components/LangSwitcher'
 import { useI18n } from '@/lib/i18n'
 import { getExerciceInscription } from '@/lib/annee-inscription'
@@ -195,6 +196,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           </InscriptionContext.Provider>
         </ParentContext.Provider>
       </main>
+      <ChatbotWidget />
     </div>
   )
 }

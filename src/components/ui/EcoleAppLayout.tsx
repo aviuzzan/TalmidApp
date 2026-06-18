@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import EcoleSidebar from '@/components/ui/EcoleSidebar'
+import ChatbotWidget from '@/components/ui/ChatbotWidget'
 import GlobalSearch from '@/components/ui/GlobalSearch'
 import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import { useEcole } from '@/lib/ecole-context'
@@ -73,6 +74,7 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
         </div>
       </main>
       <GlobalSearch />
+      <ChatbotWidget />
     </div>
     </AccesFinancesProvider>
   )
