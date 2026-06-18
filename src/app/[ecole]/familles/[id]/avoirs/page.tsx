@@ -83,8 +83,31 @@ export default function AvoirsFamillePage() {
       const { error } = await s.from('avoirs').update(payload).eq('id', editId)
       if (error) return alert('Erreur : ' + error.message)
     } else {
-      const { error } = await s.from('avoirs').insert(payload)
+      const { data: avoirCree, error } = await s.from('avoirs').insert(payload).select('id, montant, numero').single()
       if (error) return alert('Erreur : ' + error.message)
+      // Si une facture d'origine est selectionnee, proposer l'imputation automatique
+      if (avoirCree && form.facture_origine_id) {
+        const fact = factures.find(f => f.id === form.facture_origine_id)
+        const factLabel = fact ? `${fact.numero} (${fact.annee_scolaire})` : 'la facture'
+        const m = Number(payload.montant)
+        if (confirm(`Imputer immediatement ${m.toFixed(2)} EUR sur ${factLabel} ?\n\n(L avoir va deduire ce montant du solde restant.)`)) {
+          await s.from('avoirs_imputations').insert({
+            avoir_id: avoirCree.id,
+            facture_id: form.facture_origine_id,
+            montant: m,
+            cree_par: session?.user.id,
+          })
+          await s.from('reglements').insert({
+            facture_id: form.facture_origine_id,
+            montant: m,
+            date_reglement: new Date().toISOString().split('T')[0],
+            mode: 'avoir',
+            reference: avoirCree.numero,
+            notes: `Imputation avoir ${avoirCree.numero || avoirCree.id.substring(0, 8)} (cree dans le meme geste)`,
+          })
+          await s.from('avoirs').update({ statut: 'utilise' }).eq('id', avoirCree.id)
+        }
+      }
     }
     setShowForm(false); setEditId(null)
     setForm({ type: 'avoir', montant: '', motif: '', source: 'paiement_excedentaire', facture_origine_id: '', date_expiration: '' })
@@ -213,11 +236,14 @@ export default function AvoirsFamillePage() {
               </select>
             </div>
             <div>
-              <label style={lbl}>Facture d&apos;origine (optionnel)</label>
+              <label style={lbl}>Facture concernée (optionnel)</label>
               <select style={inp} value={form.facture_origine_id} onChange={e => setForm({ ...form, facture_origine_id: e.target.value })}>
                 <option value="">— Aucune —</option>
                 {factures.map(f => <option key={f.id} value={f.id}>{f.numero} ({f.annee_scolaire})</option>)}
               </select>
+              {!editId && form.facture_origine_id && (
+                <div style={{ fontSize: 10, color: '#065F46', marginTop: 4 }}>✓ Imputation automatique proposée à la création</div>
+              )}
             </div>
             <div>
               <label style={lbl}>Date d&apos;expiration (optionnel)</label>

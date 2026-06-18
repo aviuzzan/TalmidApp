@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { loadPermissions, hasAtLeast, Niveau } from '@/lib/permissions'
 import { useAccesFinances } from '@/lib/acces-finances'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
+import { useAnneeScolaireActive } from '@/lib/exercice-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import BoutonReinscription from '@/components/BoutonReinscription'
@@ -67,7 +68,9 @@ export default function FamilleDetailPage() {
   const [error, setError] = useState('')
 
   // Année courante calculée dynamiquement (sept-août)
-  const ANNEE = getAnneeCouranteSync()
+  // Annee suit le selecteur global du header (fallback annee courante si pas selectionne).
+  const ANNEE_GLOBALE = useAnneeScolaireActive()
+  const ANNEE = ANNEE_GLOBALE || getAnneeCouranteSync()
 
   const emptyEnfant = {
     prenom: '', deuxieme_prenom: '', nom: '', date_naissance: '', genre: '',
@@ -122,7 +125,7 @@ export default function FamilleDetailPage() {
       setNPlus1(null)
     }
 
-    const { data: fact } = await supabase.from('factures_solde').select('*').eq('famille_id', id).eq('annee_scolaire', ANNEE).single()
+    const { data: fact } = await supabase.from('factures_solde').select('*').eq('famille_id', id).eq('annee_scolaire', ANNEE).maybeSingle()
     if (fact) {
       setFacture(fact)
       const [{ data: lig }, { data: regl }] = await Promise.all([
@@ -131,7 +134,7 @@ export default function FamilleDetailPage() {
       ])
       setLignes(lig ?? []); setReglements(regl ?? [])
     } else { setFacture(null); setLignes([]); setReglements([]) }
-  }, [id])
+  }, [id, ANNEE])
 
   useEffect(() => { load() }, [load])
 
