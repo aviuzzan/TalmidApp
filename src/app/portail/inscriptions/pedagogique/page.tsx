@@ -101,6 +101,20 @@ export default function PedagogiqueNouvelEnfantPage() {
     setSaving(true)
     const s = createClient()
 
+    // 0. Anti-doublon : verifier qu'aucun enfant identique n'existe deja dans la famille
+    const { data: existants } = await s.from('enfants')
+      .select('id, prenom, nom, date_naissance, statut_inscription')
+      .eq('famille_id', familleId)
+      .ilike('prenom', prenom.trim())
+      .ilike('nom', nom.trim())
+      .eq('date_naissance', dateNaissance)
+    if (existants && existants.length > 0) {
+      const e0 = existants[0] as any
+      setError(`Une fiche existe deja pour ${e0.prenom} ${e0.nom} ne(e) le ${e0.date_naissance} (statut : ${e0.statut_inscription || 'en_attente'}). Pour eviter les doublons, modifie ou complete la fiche existante au lieu d en creer une nouvelle. Contacte l ecole si besoin.`)
+      setSaving(false)
+      return
+    }
+
     // 1. Créer l'enfant
     const { data: nouvelEnfant, error: insErr } = await s
       .from('enfants')

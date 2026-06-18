@@ -180,6 +180,20 @@ export default function FamilleDetailPage() {
 
   async function saveEnfant(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setError('')
+    // Anti-doublon : meme prenom + nom + date_naissance dans la meme famille
+    if (enfantForm.prenom && enfantForm.nom && enfantForm.date_naissance) {
+      const { data: existant } = await supabase.from('enfants')
+        .select('id, prenom, nom, date_naissance')
+        .eq('famille_id', id)
+        .ilike('prenom', enfantForm.prenom.trim())
+        .ilike('nom', enfantForm.nom.trim())
+        .eq('date_naissance', enfantForm.date_naissance)
+      const conflit = (existant || []).find((x: any) => x.id !== editEnfantId)
+      if (conflit) {
+        setError(`Un enfant nomme ${conflit.prenom} ${conflit.nom} ne le ${conflit.date_naissance} existe deja dans cette famille. Modifie la fiche existante au lieu d en creer une nouvelle.`)
+        setSaving(false); return
+      }
+    }
     const payload = {
       famille_id: id, prenom: enfantForm.prenom, deuxieme_prenom: enfantForm.deuxieme_prenom || null,
       nom: enfantForm.nom, date_naissance: enfantForm.date_naissance || null,
@@ -199,12 +213,47 @@ export default function FamilleDetailPage() {
   }
 
   async function deleteEnfant(enfantId: string) {
-    const ok = await confirm({ title: 'Supprimer cet élève ?', message: 'Cette action est irréversible.', danger: true })
+    // Verifier le statut de l'enfant : un enfant valide ne peut pas etre supprime, il faut le sortir
+    const enfantCible = enfants.find((e: any) => e.id === enfantId)
+    const statut = enfantCible?.statut_inscription
+    const estValide = statut === 'valide' || statut === 'inscrit' || statut === 'inscrit_valide'
+
+    // Verifier qu'il n'a pas de ligne facture active (si oui, refuser la suppression)
+    const { data: lignesActives } = await supabase
+      .from('facture_lignes')
+      .select('id, factures!inner(statut)')
+      .eq('enfant_id', enfantId)
+    const aDesFactures = (lignesActives || []).some((l: any) => l.factures?.statut !== 'annule')
+
+    if (aDesFactures) {
+      toast.error('Cet enfant a des lignes sur une facture non annulee. Annule la facture d abord ou retire la ligne.')
+      return
+    }
+
+    const ok = await confirm({
+      title: 'Supprimer cet eleve ?',
+      message: estValide
+        ? `${enfantCible?.prenom} est marque "${statut}". La suppression effacera aussi ses fiches pedagogiques, scolarites et demandes d inscription. Continuer ?`
+        : 'Cette action effacera aussi ses fiches pedagogiques, scolarites et demandes d inscription. Irreversible.',
+      danger: true,
+      confirmLabel: 'Supprimer definitivement',
+    })
     if (!ok) return
-    const { error } = await supabase.from('enfants').delete().eq('id', enfantId)
-    if (error) { toast.error('Suppression impossible : ' + error.message); return }
-    toast.success('Élève supprimé')
-    load()
+
+    // Cascade manuelle dans l'ordre des FK
+    try {
+      await supabase.from('inscriptions_pedagogiques').delete().eq('enfant_id', enfantId)
+      await supabase.from('scolarites').delete().eq('enfant_id', enfantId)
+      await supabase.from('demandes_inscription').delete().eq('enfant_id', enfantId)
+      // contrat_enfants : on retire la ligne enfant des contrats (le contrat lui-meme reste s il a d autres enfants)
+      await supabase.from('contrat_enfants').delete().eq('enfant_id', enfantId)
+      const { error } = await supabase.from('enfants').delete().eq('id', enfantId)
+      if (error) { toast.error('Suppression impossible : ' + error.message); return }
+      toast.success('Eleve supprime')
+      load()
+    } catch (err: any) {
+      toast.error('Erreur : ' + (err?.message || 'inconnue'))
+    }
   }
 
   async function creerFacture() {
