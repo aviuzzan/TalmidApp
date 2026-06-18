@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
+import { useAccesFinances } from '@/lib/acces-finances'
 
 type ModuleInfo = {
   code: string
@@ -77,6 +78,7 @@ export default function CategoryHub({ code }: { code: string }) {
   const [role, setRole] = useState<string>('')
   const [perms, setPerms] = useState<Record<string, Niveau>>({})
   const [isAdminPrincipal, setIsAdminPrincipal] = useState(false)
+  const { acces: accesFinances } = useAccesFinances()
 
   const cat: Categorie | undefined = CATEGORIES.find(c => c.code === code)
   const modules = MODULES_PAR_CATEGORIE[code] || []
@@ -105,6 +107,12 @@ export default function CategoryHub({ code }: { code: string }) {
     if (m.code === 'parametres' && m.href.includes('comptes-acces')) {
       // Accès Comptes & accès = admin principal uniquement
       return { ok: isAdminPrincipal || role === 'super_admin', niveau: isAdminPrincipal ? 'admin' : 'aucun' }
+    }
+    // Verrou financier transversal : si pas d'acces finances, on bloque les modules financiers
+    // (peu importe la permission admin). Super_admin garde toujours acces.
+    const estModuleFinancier = ['facturation', 'compta', 'paye'].includes(m.code)
+    if (estModuleFinancier && !accesFinances && role !== 'super_admin') {
+      return { ok: false, niveau: 'aucun' }
     }
     if (bypass) return { ok: true, niveau: 'admin' }
     const n = perms[m.code] || 'aucun'

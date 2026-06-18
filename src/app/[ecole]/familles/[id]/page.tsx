@@ -338,7 +338,8 @@ export default function FamilleDetailPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{famille.numero}</span>
             {famille.situation_maritale && <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{SITUATIONS[famille.situation_maritale]}</span>}
-            {tranches.length > 0 && (
+            {/* Tranche / code de facturation - masque si pas d'acces finances (chantier lll) */}
+            {tranches.length > 0 && accesFinancesProfile && (
               <select
                 value={famille.tranche_id || ''}
                 onChange={async e => {
