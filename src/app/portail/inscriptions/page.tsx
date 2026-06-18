@@ -164,46 +164,16 @@ function DossierTab({ router }: { router: any }) {
       )}
 
       {/* Demarches a faire */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Ajouter un enfant non encore inscrit dans l'ecole */}
-        <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 14, padding: '16px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 28, flexShrink: 0 }}>👶</div>
-          <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>Ajouter un autre enfant à votre famille</span>
-              <AideEtape
-                titreEtape="Ajouter un autre enfant"
-                aQuoiCaSert="Permet d'ajouter un nouvel enfant qui n'a pas encore de fiche dans l'école — typiquement un petit frère ou une petite sœur qui n'a jamais été scolarisé chez nous, un nouveau-né, ou un enfant qui arrive d'un autre établissement. À faire AVANT le contrat pour que cet enfant soit inclus dedans."
-                preparation={[
-                  "L'état civil de l'enfant (nom, prénom, date de naissance)",
-                  "La classe souhaitée pour la rentrée",
-                  "Les coordonnées des contacts d'urgence et du médecin",
-                ]}
-                duree="10 à 15 minutes"
-                couleur="#1E293B"
-              />
-            </div>
-            <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
-              {enfants.length > 0
-                ? <>Vos {enfants.length > 1 ? `${enfants.length} enfants` : 'enfant'} déjà enregistré{enfants.length > 1 ? 's' : ''} <strong>({enfants.map(e => e.prenom).join(', ')})</strong> sont automatiquement inclus dans le contrat. Utilisez ce bouton <strong>uniquement</strong> pour ajouter un enfant qui n'a pas encore de fiche dans l'école.</>
-                : <>Pour un enfant qui n'a pas encore de fiche dans l'école.</>}
-            </div>
-          </div>
-          <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
-            style={{ background: '#1E293B', border: 'none', borderRadius: 10, padding: '10px 16px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap', minHeight: 44 }}>
-            + Nouvel enfant
-          </button>
-        </div>
-
-        {/* Alerte verrou DDR : la famille est éligible, n'a pas encore déposé de DDR ni renoncé. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Alerte verrou DDR : la famille est eligible, n'a pas encore depose de DDR ni renonce. Bloque le contrat. */}
         {contratBloqueParDDR && !contrat && (
-          <div style={{ background: '#FFFBEB', border: '2px solid #FDE68A', borderRadius: 14, padding: '18px 22px' }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)', border: '1px solid #FDE68A', borderRadius: 16, padding: '20px 22px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
               <span style={{ fontSize: 22 }}>⚠️</span>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E' }}>Une étape est nécessaire avant le contrat</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#92400E' }}>Une étape avant de pouvoir signer le contrat</div>
             </div>
             <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.55, marginBottom: 14 }}>
-              Votre tranche vous donne droit à un examen de votre situation par la commission de l&apos;école. Pour pouvoir signer le contrat de scolarisation, vous devez choisir :
+              Votre tranche vous donne droit à un examen de votre situation par la commission. Pour signer le contrat, vous devez choisir :
             </div>
             <ul style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 13, color: '#78350F', lineHeight: 1.7 }}>
               <li><strong>Soit déposer une demande de réduction</strong> et attendre la réponse de la commission.</li>
@@ -211,21 +181,91 @@ function DossierTab({ router }: { router: any }) {
             </ul>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button onClick={() => router.push('/portail/inscriptions/reduction')}
-                style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 44 }}>
                 💸 Déposer une demande de réduction
               </button>
               <button onClick={renoncerDDR}
-                style={{ background: '#fff', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                Je renonce et veux le tarif normal
+                style={{ background: '#fff', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>
+                Je renonce, tarif normal
               </button>
             </div>
           </div>
         )}
 
-        {/* Étape Demande de réduction : MASQUÉE COMPLÈTEMENT si la famille n'est pas éligible.
-            Reste visible UNIQUEMENT si :
-            - la famille a déjà un dossier (toujours pouvoir le consulter), OU
-            - reductionsOuvertes (qui inclut désormais le check tranche éligible) */}
+        {/* HERO Contrat — l'action principale, mise en grand */}
+        {(() => {
+          const ouvertContrat = (inscriptionsOuvertes && !contratBloqueParDDR) || !!contrat
+          const titreContrat = contratSoumis
+            ? `Contrat ${anneeInscription} signé`
+            : enfants.length === 1
+              ? `Réinscrire ${enfants[0]?.prenom} pour ${anneeInscription}`
+              : enfants.length > 1
+                ? `Réinscrire vos ${enfants.length} enfants pour ${anneeInscription}`
+                : `Inscrire votre enfant pour ${anneeInscription}`
+          const sousTitre = contratSoumis
+            ? `Statut : ${formatStatut(contrat?.statut).label}`
+            : contratBloqueParDDR
+              ? `Disponible après votre choix sur la demande de réduction`
+              : config?.date_cloture_inscription
+                ? `À signer avant le ${new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}`
+                : `Signez le contrat de scolarisation pour préparer la rentrée`
+          const actionLabel = contrat ? 'Voir mon contrat' : 'Remplir le contrat'
+          return (
+            <div style={{
+              background: contratSoumis
+                ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)'
+                : contratBloqueParDDR
+                  ? '#F8FAFC'
+                  : 'linear-gradient(135deg, #1E3A8A, #2563EB, #3B82F6)',
+              color: contratSoumis || contratBloqueParDDR ? '#1E293B' : '#fff',
+              border: contratSoumis
+                ? '1px solid #A7F3D0'
+                : contratBloqueParDDR
+                  ? '1px solid #E2E8F0'
+                  : 'none',
+              borderRadius: 18,
+              padding: '24px 24px 22px',
+              boxShadow: !contratSoumis && !contratBloqueParDDR ? '0 10px 30px rgba(37,99,235,0.25)' : 'none',
+              position: 'relative', overflow: 'hidden',
+            }}>
+              {/* Decoration */}
+              {!contratSoumis && !contratBloqueParDDR && (
+                <div aria-hidden style={{ position: 'absolute', right: -30, top: -30, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', pointerEvents: 'none' }} />
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, position: 'relative' }}>
+                <span style={{ fontSize: 22 }}>{contratSoumis ? '✅' : '📝'}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: contratSoumis || contratBloqueParDDR ? 0.6 : 0.85 }}>
+                  {contratSoumis ? 'Inscription validée' : contratBloqueParDDR ? 'En attente' : 'Action principale'}
+                </span>
+              </div>
+              <h2 style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, margin: '0 0 8px', position: 'relative' }}>
+                {titreContrat}
+              </h2>
+              <div style={{ fontSize: 13, opacity: contratSoumis || contratBloqueParDDR ? 0.8 : 0.92, lineHeight: 1.5, marginBottom: 18, position: 'relative' }}>
+                {sousTitre}
+              </div>
+              {ouvertContrat && (
+                <button onClick={() => router.push('/portail/inscriptions/contrat')}
+                  style={{
+                    background: contratSoumis ? '#fff' : contratBloqueParDDR ? '#E2E8F0' : '#fff',
+                    color: contratSoumis ? '#065F46' : contratBloqueParDDR ? '#94A3B8' : '#1E40AF',
+                    border: 'none', borderRadius: 12, padding: '14px 22px',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    minHeight: 48, width: '100%', maxWidth: 360,
+                    boxShadow: !contratSoumis && !contratBloqueParDDR ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
+                    position: 'relative',
+                  }}>
+                  {actionLabel} →
+                </button>
+              )}
+              {!ouvertContrat && !contratSoumis && (
+                <div style={{ fontSize: 12, opacity: 0.7, position: 'relative' }}>Inscriptions actuellement fermées</div>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* DDR optionnelle (si eligible et ouverte) */}
         {(reductionsOuvertes || !!reduction) && (
           <EtapeCard
             icone="💸"
@@ -238,7 +278,7 @@ function DossierTab({ router }: { router: any }) {
             statutLabel={reduction ? formatStatut(reduction.statut).label : null}
             statutColor={reduction ? formatStatut(reduction.statut).color : null}
             onAction={() => router.push('/portail/inscriptions/reduction')}
-            actionLabel={reduction ? 'Voir mon dossier →' : 'Déposer une demande →'}
+            actionLabel={reduction ? 'Voir mon dossier' : 'Déposer une demande'}
             aide={
               <AideEtape
                 titreEtape="Demande de réduction"
@@ -256,37 +296,51 @@ function DossierTab({ router }: { router: any }) {
           />
         )}
 
-        <EtapeCard
-          icone="📝"
-          titre="Contrat de scolarisation"
-          desc={contratBloqueParDDR
-            ? `Vous devez d'abord déposer votre demande de réduction (ou y renoncer) pour pouvoir signer le contrat ${anneeInscription}.`
-            : enfants.length > 0
-              ? `Réinscrivez ${enfants.length > 1 ? 'vos enfants' : enfants[0]?.prenom || 'votre enfant'} pour ${anneeInscription}`
-              : `Finalisez votre inscription pour ${anneeInscription}`}
-          status={contratSoumis ? 'done' : contrat?.statut === 'brouillon' ? 'inprogress' : 'todo'}
-          ouvert={(inscriptionsOuvertes && !contratBloqueParDDR) || !!contrat}
-          dateLimite={config?.date_cloture_inscription ? `Avant le ${new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}` : null}
-          statutLabel={contrat ? formatStatut(contrat.statut).label : null}
-          statutColor={contrat ? formatStatut(contrat.statut).color : null}
-          onAction={() => router.push('/portail/inscriptions/contrat')}
-          actionLabel={contrat ? 'Voir mon contrat →' : `Remplir le contrat${enfants.length > 1 ? ` (${enfants.length} enfants)` : ''} →`}
-          highlight
-          aide={
-            <AideEtape
-              titreEtape="Contrat de scolarisation"
-              aQuoiCaSert="L'engagement annuel entre votre famille et l'école. Vous y choisissez la classe de chaque enfant, les options souhaitées (assurance, transport, instruction religieuse, étude/garderie) et votre mode de règlement. Une fois validé par l'école, votre facture annuelle est générée automatiquement."
-              preparation={[
-                "La classe envisagée pour chaque enfant pour la rentrée",
-                "Vos coordonnées bancaires (IBAN si SEPA, ou les chèques)",
-                "Le nombre de mensualités souhaité",
-                "Les options à activer (transport, cantine, etc.)",
-              ]}
-              duree="10 à 15 minutes"
-              couleur="#2563EB"
-            />
-          }
-        />
+        {/* Ajouter un autre enfant — secondaire, discret, en bas */}
+        <div style={{
+          background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14,
+          padding: '14px 16px', display: 'flex', flexWrap: 'wrap',
+          alignItems: 'center', gap: 12, marginTop: 4,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+            background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+          }}>
+            👶
+          </div>
+          <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+                {enfants.length > 0
+                  ? `Ajouter un autre enfant que ${enfants.map(e => e.prenom).join(', ')}`
+                  : 'Ajouter votre premier enfant'}
+              </span>
+              <AideEtape
+                titreEtape="Ajouter un autre enfant"
+                aQuoiCaSert="Permet d'ajouter un enfant qui n'a pas encore de fiche dans l'école — un nouveau-né, un petit frère/petite sœur, ou un enfant qui arrive d'un autre établissement. Vous l'inscrirez dans le contrat dès que l'école aura confirmé son ajout."
+                preparation={[
+                  "L'état civil de l'enfant (nom, prénom, date de naissance)",
+                  "La classe souhaitée pour la rentrée",
+                  "Les coordonnées des contacts d'urgence et du médecin",
+                ]}
+                duree="10 à 15 minutes"
+                couleur="#1E293B"
+              />
+            </div>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 3, lineHeight: 1.5 }}>
+              Vous pourrez l&apos;inscrire dans le contrat dès que l&apos;école aura confirmé son ajout.
+            </div>
+          </div>
+          <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
+            style={{
+              background: '#F8FAFC', color: '#1E293B', border: '1px solid #CBD5E1',
+              borderRadius: 10, padding: '10px 14px',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              flexShrink: 0, whiteSpace: 'nowrap', minHeight: 40,
+            }}>
+            + Ajouter
+          </button>
+        </div>
       </div>
 
       {((config?.date_cloture_reduction && (reductionsOuvertes || !!reduction)) || config?.date_cloture_inscription) && (
