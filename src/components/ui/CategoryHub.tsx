@@ -117,7 +117,9 @@ export default function CategoryHub({ code }: { code: string }) {
     // Verrou financier transversal : si pas d'acces finances, on bloque les modules financiers
     // (peu importe la permission admin). Super_admin garde toujours acces.
     const estModuleFinancier = ['facturation', 'compta', 'paye'].includes(m.code)
-    if (estModuleFinancier && !accesFinances && role !== 'super_admin') {
+    // Le tableau de bord direction (admin > direction) affiche des KPI financiers → meme verrou.
+    const estDirection = m.href === 'direction'
+    if ((estModuleFinancier || estDirection) && !accesFinances && role !== 'super_admin') {
       return { ok: false, niveau: 'aucun' }
     }
     if (bypass) return { ok: true, niveau: 'admin' }

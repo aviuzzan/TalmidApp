@@ -62,6 +62,33 @@ const SECTIONS_DEFAUT: { emoji: string; titre: string; placeholder: string }[] =
   },
 ]
 
+/** Alias de titres : si l admin a tape un titre court, on le rapproche du titre par defaut.
+ *  Ex: "Calendrier" -> "Calendrier scolaire" pour eviter les doublons.
+ */
+const ALIAS_TITRES: Record<string, string> = {
+  'calendrier': 'Calendrier scolaire',
+  'reglement': 'Règlement intérieur',
+  'reglement interieur': 'Règlement intérieur',
+  'evenements': 'Évènements à venir',
+  'evenement': 'Évènements à venir',
+  'sante': 'Santé / urgences',
+  'urgences': 'Santé / urgences',
+  'sante urgences': 'Santé / urgences',
+  'tarifs': 'Tarifs spéciaux',
+  'programmes': 'Programmes spécifiques',
+  'autre': 'Autre (libre)',
+  'libre': 'Autre (libre)',
+}
+
+function normaliseTitre(titre: string): string {
+  return titre
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // retire accents
+    .replace(/[/\\.,()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** Parse un Markdown en sections, en se basant sur les "## emoji titre".
  *  Fusionne avec les SECTIONS_DEFAUT pour que toutes les sections potentielles soient visibles.
  */
@@ -94,20 +121,25 @@ function parseMarkdown(md: string): Section[] {
         }
       }
       const contenu = lignes.slice(1).join('\n').trim()
-      trouvees.set(titre.toLowerCase(), { id: 's' + i, emoji, titre, contenu })
+      // Normalise + applique alias pour matcher avec les sections par defaut.
+      const titreNorm = normaliseTitre(titre)
+      const titreAlias = ALIAS_TITRES[titreNorm]
+      const titreFinal = titreAlias || titre
+      const cle = normaliseTitre(titreFinal)
+      trouvees.set(cle, { id: 's' + i, emoji, titre: titreFinal, contenu })
     }
   }
 
-  // Fusionne avec SECTIONS_DEFAUT : si une section par defaut existe deja, on la garde,
-  // sinon on l ajoute vide. Resultat ordonne par SECTIONS_DEFAUT, puis les sections custom restantes.
+  // Fusionne avec SECTIONS_DEFAUT : si une section par defaut existe deja (par titre normalise),
+  // on la garde, sinon on l ajoute vide.
   const resultat: Section[] = []
   const utilisees = new Set<string>()
   for (let i = 0; i < SECTIONS_DEFAUT.length; i++) {
     const d = SECTIONS_DEFAUT[i]
-    const cle = d.titre.toLowerCase()
+    const cle = normaliseTitre(d.titre)
     const existante = trouvees.get(cle)
     if (existante) {
-      resultat.push({ ...existante, emoji: d.emoji, id: 'def' + i })
+      resultat.push({ ...existante, emoji: d.emoji, titre: d.titre, id: 'def' + i })
       utilisees.add(cle)
     } else {
       resultat.push({ id: 'def' + i, emoji: d.emoji, titre: d.titre, contenu: '' })

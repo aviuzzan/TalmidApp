@@ -120,7 +120,9 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
     // Verrou financier transversal : si pas d'accès finances, les modules financiers sont masqués
     // (peu importe la permission spécifique au module). Ne touche pas super_admin.
     const estModuleFinancier = ['facturation','compta','paye'].includes(m.module)
-    if (estModuleFinancier && !accesFinances && role !== 'super_admin') return false
+    // Le tableau de bord direction affiche des KPI financiers → meme verrou.
+    const estDirection = m.href === 'direction'
+    if ((estModuleFinancier || estDirection) && !accesFinances && role !== 'super_admin') return false
     if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
     if (!permsLoaded) return true
     return (perms[m.module] || 'aucun') !== 'aucun'
