@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     // Verifie que le chatbot est active pour l ecole
     const { data: config } = await supa
       .from('chatbot_config_ecole')
-      .select('active, limite_parent_par_jour')
+      .select('active, limite_parent_par_jour, modele')
       .eq('ecole_id', ecoleId)
       .maybeSingle()
     if (!config?.active) {
@@ -83,8 +83,9 @@ export async function POST(req: NextRequest) {
     }
 
     const prompt = construirePromptSysteme(ctx)
-    // gemini-1.5-flash : modele stable rock-solid, quota gratuit 15 RPM / 1500 RPD
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+    // Modele configurable via BDD avec fallback. Format Google: <name>-latest pointe sur la derniere version.
+    const modele = config.modele && config.modele !== 'gemini-flash-2.0' ? config.modele : 'gemini-1.5-flash-latest'
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent?key=${apiKey}`
 
     const resp = await fetch(url, {
       method: 'POST',
