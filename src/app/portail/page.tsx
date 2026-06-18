@@ -43,9 +43,14 @@ export default function PortailPage() {
           .eq('annee_scolaire', anneeInscription)
           .single(),
         supabase.from('inscriptions_config')
-          .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction')
+          .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction, tranches_eligibles_ddr')
           .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
       ])
+
+      // Tranche famille (pour check éligibilité DDR sur la pastille "réductions ouvertes")
+      const trancheFamille = (profile as any)?.familles?.tranche_id || null
+      const eligibles: string[] = (cfg as any)?.tranches_eligibles_ddr || []
+      const trancheEligibleDDR = trancheFamille && eligibles.includes(trancheFamille)
 
       let reglements: any[] = []
       if (facture) {
@@ -55,7 +60,7 @@ export default function PortailPage() {
 
       const inscriptionsOuvertes = !!cfg && (
         (!!cfg.inscriptions_ouvertes && cfg.date_ouverture_inscription <= now && cfg.date_cloture_inscription >= now) ||
-        (!!cfg.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now)
+        (!!cfg.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now && trancheEligibleDDR)
       )
 
       setData({

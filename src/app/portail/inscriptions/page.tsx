@@ -91,7 +91,18 @@ function DossierTab({ router }: { router: any }) {
   if (!famille) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14 }}>Aucune famille liée à ce compte. Contactez l'école.</div>
 
   const today = new Date().toISOString().split('T')[0]
-  const reductionsOuvertes = config?.reductions_ouvertes && config?.date_ouverture_reduction <= today && config?.date_cloture_reduction >= today
+  // Éligibilité DDR : 4 conditions cumulatives
+  //  1) toggle reductions_ouvertes activé côté école
+  //  2) date du jour dans la période d'ouverture
+  //  3) la tranche de la famille est listée dans tranches_eligibles_ddr (si liste non vide)
+  //     - si liste vide/null => aucune famille éligible (sécurité par défaut côté école)
+  const eligiblesTranches: string[] = config?.tranches_eligibles_ddr || []
+  const trancheEligible = famille?.tranche_id && eligiblesTranches.includes(famille.tranche_id)
+  const reductionsOuvertes =
+    !!config?.reductions_ouvertes
+    && config?.date_ouverture_reduction <= today
+    && config?.date_cloture_reduction >= today
+    && trancheEligible
   const inscriptionsOuvertes = config?.inscriptions_ouvertes && config?.date_ouverture_inscription <= today && config?.date_cloture_inscription >= today
   const contratSoumis = contrat && ['soumis', 'valide'].includes(contrat.statut)
 

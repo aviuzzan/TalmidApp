@@ -19,6 +19,7 @@ export default function InscriptionsAdminPage() {
   const [config, setConfig] = useState<any>(null)
   const [stats, setStats] = useState({ pedagogique: 0, reduction: 0, contrats: 0, cheques_a_encaisser: 0 })
   const [dossiers, setDossiers] = useState<any[]>([])
+  const [tranchesEcole, setTranchesEcole] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -48,6 +49,8 @@ export default function InscriptionsAdminPage() {
     setConfig(cfg)
     setStats({ pedagogique: ped ?? 0, reduction: red ?? 0, contrats: cont ?? 0, cheques_a_encaisser: chq ?? 0 })
     setDossiers(contrats ?? [])
+    const { data: trs } = await s.from('tranches_facturation').select('id, libelle, ordre').eq('ecole_id', ecole.id).order('ordre')
+    setTranchesEcole(trs ?? [])
     setLoading(false)
   }
 
@@ -157,6 +160,31 @@ export default function InscriptionsAdminPage() {
                     <label style={lbl}>Clôture</label>
                     <input style={inp} type="date" defaultValue={config?.date_cloture_reduction || ''}
                       onBlur={e => sauvegarderConfig({ date_cloture_reduction: e.target.value || null })} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Tranches éligibles à la DDR</label>
+                    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {tranchesEcole.length === 0 && (
+                        <div style={{ fontSize: 11, color: '#94A3B8', padding: '6px 4px' }}>Aucune tranche configurée. Va dans Paramètres &gt; Tranches.</div>
+                      )}
+                      {tranchesEcole.map(tr => {
+                        const eligibles: string[] = config?.tranches_eligibles_ddr || []
+                        const isChecked = eligibles.includes(tr.id)
+                        return (
+                          <label key={tr.id} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#475569', cursor: 'pointer', padding: '4px 4px' }}>
+                            <input type="checkbox" checked={isChecked}
+                              onChange={() => {
+                                const next = isChecked ? eligibles.filter((x: string) => x !== tr.id) : [...eligibles, tr.id]
+                                sauvegarderConfig({ tranches_eligibles_ddr: next })
+                              }} />
+                            {tr.libelle}
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 4, lineHeight: 1.4 }}>
+                      Si aucune case n&apos;est cochée, <strong>aucune famille</strong> ne pourra faire de DDR. Cocher uniquement les tranches qui ont droit à une réduction sur dossier (typiquement "Tarif réduit (sur dossier)").
+                    </div>
                   </div>
                 </div>
               </div>
@@ -316,12 +344,20 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       }
       const numero = `FACT-${yearSuffix}-${String(nextNum).padStart(4, '0')}`
 
+      // Résoudre exercice_id pour que la facture remonte dans Direction et Finances filtrés par exercice
+      let exerciceIdForFact: string | null = contrat.exercice_id || null
+      if (!exerciceIdForFact) {
+        const { data: ex } = await s.from('exercices').select('id').eq('ecole_id', ecoleId).eq('code', annee).maybeSingle()
+        exerciceIdForFact = ex?.id || null
+      }
+
       // 2b. Créer entête facture
       const { data: nf, error: insErr } = await s
         .from('factures')
         .insert({
           famille_id: contrat.famille_id,
           annee_scolaire: annee,
+          exercice_id: exerciceIdForFact,
           numero,
           date_emission: new Date().toISOString().split('T')[0],
           statut: 'en_attente',
