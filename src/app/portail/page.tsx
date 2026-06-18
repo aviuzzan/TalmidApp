@@ -54,7 +54,7 @@ export default function PortailPage() {
       // Fiches pedagogiques en 2eme passe car depend de la liste des enfants
       const enfantIds = (enfantsList || []).map((e: any) => e.id)
       const { data: fichesPedago } = enfantIds.length > 0
-        ? await supabase.from('inscriptions_pedagogiques').select('id, enfant_id, urgence1_nom, medecin_nom').in('enfant_id', enfantIds)
+        ? await supabase.from('inscriptions_pedagogiques').select('id, enfant_id, urgence_1_nom, medecin_nom, statut').in('enfant_id', enfantIds)
         : { data: [] }
 
       // Tranche famille (pour check éligibilité DDR sur la pastille "réductions ouvertes")
@@ -87,12 +87,14 @@ export default function PortailPage() {
           sub: ctrSigne ? undefined : 'Inscription pas encore validée par l\'école',
         })
       }
-      // 2) Fiche pedagogique par enfant (urgences + medecin requis)
+      // 2) Fiche pedagogique par enfant (urgences + medecin requis OU statut accepte)
       ;(enfantsList || []).forEach((enf: any) => {
         const fp = (fichesPedago || []).find((f: any) => f.enfant_id === enf.id)
-        const complete = !!(fp && fp.urgence1_nom && fp.medecin_nom)
+        const acceptee = fp?.statut === 'accepte' || fp?.statut === 'valide'
+        const champsOk = !!(fp && fp.urgence_1_nom && fp.medecin_nom)
+        const complete = acceptee || champsOk
         taches.push({
-          label: complete ? `Fiche pédagogique de ${enf.prenom} complète` : `Compléter la fiche pédagogique de ${enf.prenom}`,
+          label: complete ? `Fiche pédagogique de ${enf.prenom} validée` : `Compléter la fiche pédagogique de ${enf.prenom}`,
           fait: complete,
           href: '/portail/inscriptions',
           urgent: !complete && enf.statut_inscription !== 'sorti',
