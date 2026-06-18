@@ -20,13 +20,23 @@ import { sendEmail, isEmailConfigured } from '@/lib/email'
  */
 export async function POST(req: NextRequest) {
   try {
-    const { ecole_id, famille_id, type } = await req.json()
+    const { ecole_id, famille_id, type, info } = await req.json()
 
-    if (!ecole_id || !famille_id || !type) {
+    if (!ecole_id || !type) {
       return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
     }
-    if (type !== 'ddr_soumis' && type !== 'contrat_soumis') {
+    // 4 types supportés :
+    //  - ddr_soumis             : parent a soumis une DDR depuis son portail
+    //  - contrat_soumis         : parent a soumis un contrat depuis son portail
+    //  - demande_inscription    : prospect a soumis le formulaire via lien token public
+    //  - fiche_pedagogique      : parent existant a ajouté un nouvel enfant (fiche pédagogique)
+    const typesSupp = ['ddr_soumis', 'contrat_soumis', 'demande_inscription', 'fiche_pedagogique']
+    if (!typesSupp.includes(type)) {
       return NextResponse.json({ error: 'Type invalide' }, { status: 400 })
+    }
+    // famille_id est requis sauf pour demande_inscription (prospect = pas de famille)
+    if (type !== 'demande_inscription' && !famille_id) {
+      return NextResponse.json({ error: 'famille_id requis pour ce type' }, { status: 400 })
     }
 
     if (!isEmailConfigured()) {
@@ -47,17 +57,22 @@ export async function POST(req: NextRequest) {
         .select('nom, slug, notif_emails_admin, notif_ddr_active, notif_contrat_active')
         .eq('id', ecole_id)
         .single(),
-      supabase
-        .from('familles')
-        .select('nom, parent1_prenom, parent1_nom, parent1_email')
-        .eq('id', famille_id)
-        .single(),
+      famille_id
+        ? supabase
+            .from('familles')
+            .select('nom, parent1_prenom, parent1_nom, parent1_email')
+            .eq('id', famille_id)
+            .single()
+        : Promise.resolve({ data: null }),
     ])
 
     if (!ecole) return NextResponse.json({ error: 'École introuvable' }, { status: 404 })
-    if (!famille) return NextResponse.json({ error: 'Famille introuvable' }, { status: 404 })
+    if (type !== 'demande_inscription' && !famille) {
+      return NextResponse.json({ error: 'Famille introuvable' }, { status: 404 })
+    }
 
-    // Notif active ?
+    // Toutes ces notifs sont gouvernees par notif_contrat_active (inscription liee a la scolarisation)
+    // sauf DDR qui a son propre toggle. On simplifie : si type !== 'ddr_soumis', on respecte notif_contrat_active.
     const actif = type === 'ddr_soumis' ? ecole.notif_ddr_active : ecole.notif_contrat_active
     if (!actif) {
       return NextResponse.json({ skipped: true, reason: 'Notification désactivée' })
@@ -70,18 +85,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ skipped: true, reason: 'Aucun email admin configuré' })
     }
 
-    const isDDR = type === 'ddr_soumis'
-    const titreType = isDDR ? 'Demande de réduction' : 'Contrat de scolarisation'
-    const couleur = isDDR ? '#7C3AED' : '#2563EB'
-    const icone = isDDR ? '📨' : '📝'
+    // Variations par type
+    let titreType = ''
+    let couleur = '#2563EB'
+    let icone = '📝'
+    let lienPath = ''
+    let corps = ''
+    let identifiant = ''
 
-    const sujet = `[${ecole.nom}] ${icone} ${titreType} soumis(e) — Famille ${famille.nom}`
+    if (type === 'ddr_soumis') {
+      titreType = 'Demande de réduction'
+      couleur = '#7C3AED'
+      icone = '📨'
+      lienPath = `/${ecole.slug}/inscriptions?tab=reductions`
+      identifiant = `Famille ${famille?.nom || ''}`
+      corps = `La famille <strong>${famille?.nom || '?'}</strong> (${famille?.parent1_prenom ?? ''} ${famille?.parent1_nom ?? ''}) vient de soumettre une <strong>demande de réduction</strong> via le portail famille.`
+    } else if (type === 'contrat_soumis') {
+      titreType = 'Contrat de scolarisation'
+      couleur = '#2563EB'
+      icone = '📝'
+      lienPath = `/${ecole.slug}/inscriptions?tab=contrats`
+      identifiant = `Famille ${famille?.nom || ''}`
+      corps = `La famille <strong>${famille?.nom || '?'}</strong> (${famille?.parent1_prenom ?? ''} ${famille?.parent1_nom ?? ''}) vient de soumettre un <strong>contrat de scolarisation</strong> via le portail famille.`
+    } else if (type === 'fiche_pedagogique') {
+      titreType = 'Fiche pédagogique'
+      couleur = '#0891B2'
+      icone = '👶'
+      lienPath = `/${ecole.slug}/inscriptions?tab=pedagogique`
+      const enfantNom = info?.enfant_prenom && info?.enfant_nom ? ` (${info.enfant_prenom} ${info.enfant_nom})` : ''
+      identifiant = `Famille ${famille?.nom || ''}`
+      corps = `La famille <strong>${famille?.nom || '?'}</strong> (${famille?.parent1_prenom ?? ''} ${famille?.parent1_nom ?? ''}) vient de soumettre une <strong>fiche pédagogique pour un nouvel enfant</strong>${enfantNom} via le portail famille.`
+    } else if (type === 'demande_inscription') {
+      titreType = "Demande d'inscription"
+      couleur = '#10B981'
+      icone = '🆕'
+      lienPath = `/${ecole.slug}/demandes-inscription`
+      const nomProspect = info?.nom_famille || info?.parent1_nom || 'prospect'
+      const enfantNom = info?.enfant_prenom && info?.enfant_nom ? ` pour ${info.enfant_prenom} ${info.enfant_nom}` : ''
+      identifiant = nomProspect
+      corps = `Un parent (<strong>${nomProspect}</strong>) vient de soumettre une <strong>demande d'inscription</strong>${enfantNom} via le lien public que vous lui avez envoyé.`
+    }
 
-    // Lien direct vers la page admin correspondante
+    const sujet = `[${ecole.nom}] ${icone} ${titreType} soumis(e) — ${identifiant}`
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
-    const lienAdmin = isDDR
-      ? `${baseUrl}/${ecole.slug}/inscriptions?tab=reductions`
-      : `${baseUrl}/${ecole.slug}/inscriptions?tab=contrats`
+    const lienAdmin = `${baseUrl}${lienPath}`
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
@@ -93,12 +140,8 @@ export async function POST(req: NextRequest) {
     </div>
     <div style="padding:24px 28px;color:#1E293B;font-size:14px;line-height:1.6;">
       <p style="margin:0 0 14px;">Bonjour,</p>
-      <p style="margin:0 0 14px;">
-        La famille <strong>${famille.nom}</strong>
-        (${famille.parent1_prenom ?? ''} ${famille.parent1_nom ?? ''})
-        vient de soumettre ${isDDR ? 'une demande de réduction' : 'un contrat de scolarisation'} via le portail famille.
-      </p>
-      <p style="margin:0 0 18px;">Le dossier est en attente de validation administrative.</p>
+      <p style="margin:0 0 14px;">${corps}</p>
+      <p style="margin:0 0 18px;">Le dossier est en attente de votre validation.</p>
       <a href="${lienAdmin}"
          style="display:inline-block;background:${couleur};color:#fff;padding:11px 22px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;">
         Ouvrir le dossier →

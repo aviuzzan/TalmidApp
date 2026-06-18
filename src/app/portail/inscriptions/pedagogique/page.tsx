@@ -172,6 +172,20 @@ export default function PedagogiqueNouvelEnfantPage() {
       }
     }
 
+    // Notif admin (best-effort)
+    try {
+      await fetch('/api/notify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ecole_id: ecoleId,
+          famille_id: familleId,
+          type: 'fiche_pedagogique',
+          info: { enfant_prenom: prenom, enfant_nom: nom },
+        }),
+      })
+    } catch {}
+
     setSaving(false)
     setSuccess(`✓ ${prenom} ${nom} a bien été ajouté(e). Vous pouvez maintenant retourner sur "Année N+1" pour finaliser le contrat de scolarisation. Des frais d'inscription seront ajoutés automatiquement à la facture.`)
     setTimeout(() => router.push('/portail/inscriptions'), 3500)

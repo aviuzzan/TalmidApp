@@ -184,6 +184,29 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
+    // Notif admin (best-effort)
+    try {
+      const { data: dem } = await s.from('demandes_inscription').select('ecole_id').eq('id', demande.id).single()
+      if (dem?.ecole_id) {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
+        await fetch(`${baseUrl}/api/notify-admin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ecole_id: dem.ecole_id,
+            type: 'demande_inscription',
+            info: {
+              nom_famille: payload.nom_famille,
+              parent1_prenom: payload.parent1_prenom,
+              parent1_nom: payload.parent1_nom,
+              enfant_prenom: payload.enfant_prenom,
+              enfant_nom: payload.enfant_nom,
+            },
+          }),
+        })
+      }
+    } catch {}
+
     return NextResponse.json({ success: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Erreur' }, { status: 500 })
