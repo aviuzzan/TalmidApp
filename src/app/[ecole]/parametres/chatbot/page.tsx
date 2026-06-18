@@ -72,13 +72,22 @@ function parseMarkdown(md: string): Section[] {
   for (let i = 0; i < blocs.length; i++) {
     const lignes = blocs[i].split('\n')
     const premiere = lignes[0].trim()
-    // Detecte emoji en premiere position si present
-    const match = premiere.match(/^(\p{Emoji}+)\s*(.*)$/u)
+    // Detecte emoji en premiere position : si la 1ere "tranche" avant l espace est courte
+    // et ne commence pas par un caractere ASCII lettre, on la traite comme emoji.
     let emoji = '📝'
     let titre = premiere
-    if (match) {
-      emoji = match[1]
-      titre = match[2] || premiere
+    const espace = premiere.indexOf(' ')
+    if (espace > 0 && espace <= 10) {
+      const debut = premiere.substring(0, espace)
+      const premier = debut.charCodeAt(0)
+      // Si le premier caractere n est PAS une lettre ASCII (a-z, A-Z) ni un chiffre,
+      // on suppose que c est un emoji.
+      const estLettre = (premier >= 65 && premier <= 90) || (premier >= 97 && premier <= 122)
+      const estChiffre = premier >= 48 && premier <= 57
+      if (!estLettre && !estChiffre) {
+        emoji = debut
+        titre = premiere.substring(espace + 1) || premiere
+      }
     }
     const contenu = lignes.slice(1).join('\n').trim()
     sections.push({ id: 's' + i, emoji, titre, contenu })
