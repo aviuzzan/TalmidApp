@@ -188,7 +188,7 @@ async function contexteAdmin(
   lignes.push(`- ${enfants ?? 0} enfants au total`)
   lignes.push(`- ${classes?.length ?? 0} classes`)
   if (classes && classes.length > 0) {
-    lignes.push(`- Liste des classes : ${classes.map(c => c.nom).join(', ')}`)
+    lignes.push(`- Liste des classes : ${classes.map((c: any) => c.nom).join(', ')}`)
   }
 
   if (accesFinances) {
@@ -198,9 +198,9 @@ async function contexteAdmin(
       .neq('statut', 'annule')
 
     if (factures && factures.length > 0) {
-      const totalFacture = factures.reduce((s, f) => s + Number(f.total_facture || 0), 0)
-      const totalRegle = factures.reduce((s, f) => s + Number(f.total_regle || 0), 0)
-      const totalReste = factures.reduce((s, f) => s + Number(f.solde_restant || 0), 0)
+      const totalFacture = factures.reduce((s: number, f: any) => s + Number(f.total_facture || 0), 0)
+      const totalRegle = factures.reduce((s: number, f: any) => s + Number(f.total_regle || 0), 0)
+      const totalReste = factures.reduce((s: number, f: any) => s + Number(f.solde_restant || 0), 0)
       lignes.push(``)
       lignes.push(`## Finances ecole`)
       lignes.push(`- ${factures.length} factures emises`)
