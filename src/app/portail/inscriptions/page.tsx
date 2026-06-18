@@ -6,6 +6,7 @@ import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
+import AideEtape from '@/components/portail/AideEtape'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -149,6 +150,18 @@ function DossierTab({ router }: { router: any }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>Inscrire un nouvel enfant</span>
               <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>SI BESOIN</span>
+              <AideEtape
+                titreEtape="Inscrire un nouvel enfant"
+                aQuoiCaSert="Cette étape permet d'ajouter un enfant qui n'est pas encore inscrit dans l'établissement. Elle est à faire AVANT la demande de réduction et le contrat, car les autres démarches s'appuient sur la liste de vos enfants."
+                preparation={[
+                  "L'état civil de l'enfant (nom, prénom, date de naissance)",
+                  "La classe souhaitée pour la rentrée",
+                  "Le secteur d'inscription (Enseignement, etc.)",
+                  "Les coordonnées des contacts d'urgence et du médecin",
+                ]}
+                duree="10 à 15 minutes"
+                couleur="#1E293B"
+              />
             </div>
             <div style={{ fontSize: 12, color: '#64748B' }}>Pour un enfant qui n'est pas encore dans l'école — à faire avant la demande de réduction et le contrat</div>
           </div>
@@ -175,6 +188,20 @@ function DossierTab({ router }: { router: any }) {
             statutColor={reduction ? formatStatut(reduction.statut).color : null}
             onAction={() => router.push('/portail/inscriptions/reduction')}
             actionLabel={reduction ? 'Voir mon dossier →' : 'Déposer une demande →'}
+            aide={
+              <AideEtape
+                titreEtape="Demande de réduction"
+                aQuoiCaSert="Vous permet de demander à la commission de l'école une réduction sur les frais de scolarité, en fonction de votre situation financière. Le tarif accordé est ensuite appliqué automatiquement dans votre contrat."
+                preparation={[
+                  "Votre dernier avis d'imposition",
+                  "Vos justificatifs de revenus (salaires, allocations, APL...)",
+                  "Vos quittances de loyer ou taxe foncière",
+                  "Tout document utile à l'étude de votre dossier",
+                ]}
+                duree="20 à 30 minutes"
+                couleur="#7C3AED"
+              />
+            }
           />
         )}
 
@@ -190,6 +217,20 @@ function DossierTab({ router }: { router: any }) {
           onAction={() => router.push('/portail/inscriptions/contrat')}
           actionLabel={contrat ? 'Voir mon contrat →' : `Remplir le contrat${enfants.length > 1 ? ` (${enfants.length} enfants)` : ''} →`}
           highlight
+          aide={
+            <AideEtape
+              titreEtape="Contrat de scolarisation"
+              aQuoiCaSert="L'engagement annuel entre votre famille et l'école. Vous y choisissez la classe de chaque enfant, les options souhaitées (assurance, transport, instruction religieuse, étude/garderie) et votre mode de règlement. Une fois validé par l'école, votre facture annuelle est générée automatiquement."
+              preparation={[
+                "La classe envisagée pour chaque enfant pour la rentrée",
+                "Vos coordonnées bancaires (IBAN si SEPA, ou les chèques)",
+                "Le nombre de mensualités souhaité",
+                "Les options à activer (transport, cantine, etc.)",
+              ]}
+              duree="10 à 15 minutes"
+              couleur="#2563EB"
+            />
+          }
         />
       </div>
 
@@ -432,13 +473,14 @@ function DocumentsTab() {
   )
 }
 
-function EtapeCard({ numero, titre, desc, status, ouvert, dateLimite, statutLabel, statutColor, onAction, actionLabel, optional, highlight }: {
+function EtapeCard({ numero, titre, desc, status, ouvert, dateLimite, statutLabel, statutColor, onAction, actionLabel, optional, highlight, aide }: {
   numero: number; titre: string; desc: string
   status: 'todo' | 'inprogress' | 'done'
   ouvert: boolean; dateLimite: string | null
   statutLabel: string | null; statutColor: string | null
   onAction: () => void; actionLabel: string
   optional?: boolean; highlight?: boolean
+  aide?: React.ReactNode
 }) {
   const isDone = status === 'done'
   const isProgress = status === 'inprogress'
@@ -452,6 +494,7 @@ function EtapeCard({ numero, titre, desc, status, ouvert, dateLimite, statutLabe
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{titre}</span>
             {optional && <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>OPTIONNEL</span>}
+            {aide}
           </div>
           <div style={{ fontSize: 12, color: '#64748B' }}>{desc}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>

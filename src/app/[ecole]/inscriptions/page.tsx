@@ -231,6 +231,31 @@ export default function InscriptionsAdminPage() {
                   placeholder="Message affiché aux parents..." />
               </div>
             </div>
+
+            {/* Bandeau personnalisable affiché en haut du portail famille quand inscriptions ouvertes */}
+            <div style={{ marginTop: 20, background: '#ECFDF5', border: '1px solid #10B981', borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#065F46', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>📣 BANDEAU "INSCRIPTIONS OUVERTES" — VISIBLE COTE PARENT</span>
+                <span style={{ fontSize: 10, color: '#10B981', fontWeight: 500 }}>S&apos;affiche automatiquement quand les inscriptions sont ouvertes</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+                <div>
+                  <label style={lbl}>Titre du bandeau (laissez vide pour utiliser le texte par défaut)</label>
+                  <input style={inp} defaultValue={config?.bandeau_titre || ''}
+                    onBlur={e => sauvegarderConfig({ bandeau_titre: e.target.value || null })}
+                    placeholder={`Période d'inscriptions ${annee} ouverte`} />
+                </div>
+                <div>
+                  <label style={lbl}>Message du bandeau (laissez vide pour le texte automatique avec la date limite)</label>
+                  <textarea style={{ ...inp, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }} defaultValue={config?.bandeau_message || ''}
+                    onBlur={e => sauvegarderConfig({ bandeau_message: e.target.value || null })}
+                    placeholder={`Vous pouvez inscrire vos enfants pour l'année ${annee} jusqu'au [date]. Nous restons à votre disposition pour toute question.`} />
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#065F46', marginTop: 8, fontStyle: 'italic' }}>
+                💡 Ces 2 champs sont optionnels. Si vide, TalmidApp génère automatiquement un titre et un message clair avec la date de clôture configurée ci-dessus.
+              </div>
+            </div>
           </div>
 
           {/* Derniers dossiers */}

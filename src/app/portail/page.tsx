@@ -43,7 +43,7 @@ export default function PortailPage() {
           .eq('annee_scolaire', anneeInscription)
           .single(),
         supabase.from('inscriptions_config')
-          .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction, tranches_eligibles_ddr')
+          .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction, tranches_eligibles_ddr, bandeau_titre, bandeau_message')
           .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
       ])
 
@@ -69,6 +69,8 @@ export default function PortailPage() {
         facture: facture ?? null,
         reglements,
         inscriptionsOuvertes,
+        cfg: cfg ?? null,
+        anneeInscription,
       })
       setLoading(false)
     }
@@ -109,6 +111,49 @@ export default function PortailPage() {
         </div>
         <div style={{ fontSize: 48, opacity: 0.3 }}>🏫</div>
       </div>
+
+      {/* Bandeau "Inscriptions ouvertes" — si l'école a une fenêtre active */}
+      {data.inscriptionsOuvertes && (() => {
+        const cfg = data.cfg || {}
+        const titre = cfg.bandeau_titre?.trim() || `Période d'inscriptions ${data.anneeInscription} ouverte`
+        const today = new Date().toISOString().split('T')[0]
+        const dateLimite = cfg.date_cloture_inscription && cfg.date_cloture_inscription >= today
+          ? new Date(cfg.date_cloture_inscription).toLocaleDateString('fr-FR')
+          : null
+        const messageDefaut = dateLimite
+          ? `Vous pouvez inscrire vos enfants pour l'année ${data.anneeInscription} jusqu'au ${dateLimite}. Nous restons à votre disposition pour toute question.`
+          : `Vous pouvez inscrire vos enfants pour l'année ${data.anneeInscription}.`
+        const message = cfg.bandeau_message?.trim() || messageDefaut
+        return (
+          <div style={{
+            background: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)',
+            border: '1px solid #10B981',
+            borderRadius: 14, padding: '18px 22px',
+            display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
+            boxShadow: '0 1px 3px rgba(16,185,129,0.1)',
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: '50%',
+              background: '#10B981', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22, flexShrink: 0,
+            }}>✓</div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#065F46' }}>{titre}</div>
+              <div style={{ fontSize: 13, color: '#047857', marginTop: 3, lineHeight: 1.5 }}>{message}</div>
+            </div>
+            <button onClick={() => router.push('/portail/inscriptions')}
+              style={{
+                background: '#10B981', color: '#fff', border: 'none',
+                borderRadius: 10, padding: '11px 22px', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(16,185,129,0.35)',
+              }}>
+              Démarrer les démarches →
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
