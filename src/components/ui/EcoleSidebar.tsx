@@ -22,6 +22,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   finances: [
     { nom: 'Tableau de bord', href: 'finances/dashboard', module: 'facturation' },
     { nom: 'Factures', href: 'finances', module: 'facturation' },
+    { nom: 'Avoirs', href: 'finances/avoirs', module: 'facturation' },
     { nom: 'Relances impayés', href: 'finances/relances', module: 'facturation' },
     { nom: 'Bordereau chèques', href: 'finances/bordereau', module: 'facturation' },
     { nom: 'Rapprochement bancaire', href: 'finances/rapprochement', module: 'compta' },

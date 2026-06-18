@@ -235,7 +235,13 @@ export default function FinancesPage() {
           <button className="btn-primary" onClick={() => { setTarifForm({ ...emptyTarif, annee_scolaire: ANNEE }); setShowTarifForm(true) }}>+ Nouveau tarif</button>
         )}
         {tab === 'factures' && (
-          <button className="btn-primary" onClick={() => { setFactureForm({ ...emptyFacture, annee_scolaire: ANNEE }); setShowFactureForm(true) }}>+ Nouvelle facture</button>
+          <>
+            <button onClick={() => router.push(`/${ecole.slug}/finances/avoirs`)}
+              style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              🎁 Avoirs
+            </button>
+            <button className="btn-primary" onClick={() => { setFactureForm({ ...emptyFacture, annee_scolaire: ANNEE }); setShowFactureForm(true) }}>+ Nouvelle facture</button>
+          </>
         )}
         {tab === 'paiements' && (
           <button className="btn-primary" onClick={() => setShowPaiementForm(true)}>+ Saisir un paiement</button>
