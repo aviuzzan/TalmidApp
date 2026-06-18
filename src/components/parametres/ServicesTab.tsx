@@ -17,7 +17,8 @@ export default function ServicesTab({ ecoleId }: { ecoleId: string }) {
     const s = createClient()
     const [{ data: svc }, { data: prof }, { data: sa }] = await Promise.all([
       s.from('services').select('*').eq('ecole_id', ecoleId).order('ordre'),
-      s.from('profiles').select('id, prenom, nom, role').in('role', ['admin', 'super_admin']),
+      // Vue profiles_with_email pour avoir l'email en fallback quand prenom/nom sont vides
+      s.from('profiles_with_email').select('id, prenom, nom, role, email').eq('ecole_id', ecoleId).in('role', ['admin', 'super_admin']),
       s.from('service_agents').select('service_id, profile_id'),
     ])
     setServices(svc ?? [])
@@ -35,7 +36,16 @@ export default function ServicesTab({ ecoleId }: { ecoleId: string }) {
     e.preventDefault()
     if (!newSvc.nom.trim()) return
     const ordre = (services.length || 0) + 1
-    await createClient().from('services').insert({ ecole_id: ecoleId, nom: newSvc.nom.trim(), description: newSvc.description.trim() || null, ordre, actif: true })
+    const s = createClient()
+    const { data: nv } = await s.from('services').insert({ ecole_id: ecoleId, nom: newSvc.nom.trim(), description: newSvc.description.trim() || null, ordre, actif: true }).select().single()
+    // Auto-assigner tous les admin / super_admin de l'école au nouveau service
+    // (sinon les messages envoyés à ce service seraient invisibles par défaut).
+    if (nv?.id) {
+      const { data: adminsEcole } = await s.from('profiles').select('id').eq('ecole_id', ecoleId).in('role', ['admin','super_admin'])
+      if (adminsEcole && adminsEcole.length > 0) {
+        await s.from('service_agents').insert(adminsEcole.map((a: any) => ({ service_id: nv.id, profile_id: a.id })))
+      }
+    }
     setNewSvc({ nom: '', description: '' })
     await load()
   }
@@ -117,9 +127,15 @@ export default function ServicesTab({ ecoleId }: { ecoleId: string }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {agents.map(a => {
                     const on = assigned.includes(a.id)
-                    const nom = `${a.prenom ?? ''} ${a.nom ?? ''}`.trim() || a.id.substring(0, 8)
+                    // Fallback en cascade : "Prénom Nom" > email > "Compte sans nom"
+                    const nomComplet = `${a.prenom ?? ''} ${a.nom ?? ''}`.trim()
+                    const label = nomComplet || a.email || 'Compte sans nom'
                     return (
-                      <button key={a.id} onClick={() => toggleAgent(svc.id, a.id)} style={{ background: on ? '#2563EB' : '#F1F5F9', color: on ? '#fff' : '#475569', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>{on ? '✓' : '+'} {nom}{a.role === 'super_admin' && ' (super)'}</button>
+                      <button key={a.id} onClick={() => toggleAgent(svc.id, a.id)}
+                        title={a.email ? `Email : ${a.email}` : undefined}
+                        style={{ background: on ? '#2563EB' : '#F1F5F9', color: on ? '#fff' : '#475569', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>
+                        {on ? '✓' : '+'} {label}{a.role === 'super_admin' && ' (super)'}
+                      </button>
                     )
                   })}
                 </div>
