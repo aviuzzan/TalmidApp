@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
     }
 
     const prompt = construirePromptSysteme(ctx)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
+    // gemini-1.5-flash : modele stable rock-solid, quota gratuit 15 RPM / 1500 RPD
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
 
     const resp = await fetch(url, {
       method: 'POST',
@@ -103,7 +104,13 @@ export async function POST(req: NextRequest) {
     if (!resp.ok) {
       const errTxt = await resp.text()
       console.error('Gemini error', resp.status, errTxt)
-      return NextResponse.json({ error: `Erreur LLM (${resp.status})` }, { status: 502 })
+      // Extrait le message Google pour le debug cote client
+      let detail = errTxt.slice(0, 300)
+      try {
+        const errJson = JSON.parse(errTxt)
+        detail = errJson?.error?.message || errJson?.error?.status || detail
+      } catch { /* keep raw */ }
+      return NextResponse.json({ error: `Erreur LLM (${resp.status}) : ${detail}` }, { status: 502 })
     }
 
     const data = await resp.json()
