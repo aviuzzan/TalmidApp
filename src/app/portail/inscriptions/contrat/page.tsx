@@ -384,19 +384,25 @@ export default function ContratPage() {
         }
       }
 
-      // Générer chèques/échéances — l'échéancier démarre en septembre de l'année scolaire
-      if ((modeReglement === 'cheque' || modeReglement === 'sepa') && nbEcheances > 0 && dateEncaissement) {
+      // Générer échéances pour TOUS les modes — l'échéancier démarre en septembre.
+      // Avant : seulement cheque + sepa. Maintenant : aussi virement / especes / prelevement,
+      // pour que la facture annuelle ne soit pas marquee "impayee" tant qu'aucune echeance n'est echue.
+      if (nbEcheances > 0) {
         await s.from('cheques_prevus').delete().eq('contrat_id', contratId)
         // Année scolaire "2026-2027" => septembre 2026 (mois index 8)
         const anneeDebut = parseInt(anneeInscription.split('-')[0]) || new Date().getFullYear()
         const moisDebut = 8
-        // Les chèques restent invisibles tant que l'admin n'a pas validé leur réception.
+        // Jour du mois : utilise celui choisi par la famille, sinon 5 par defaut.
+        const jourEcheance = dateEncaissement || 5
+        // Statut initial :
+        //  - cheque : attente_reception (l'admin doit confirmer la reception physique)
+        //  - tous les autres modes : prevu (visible directement dans l'echeancier)
         const statutInitial = modeReglement === 'cheque' ? 'attente_reception' : 'prevu'
         const cheques = []
         for (let i = 0; i < nbEcheances; i++) {
           let m = moisDebut + i; let y = anneeDebut
           while (m > 11) { m -= 12; y++ }
-          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(dateEncaissement).padStart(2, '0')}`
+          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(jourEcheance).padStart(2, '0')}`
           cheques.push({ contrat_id: contratId, famille_id: familleId, ecole_id: ecoleId, numero_cheque: i + 1, montant: montantEcheance, date_echeance: dateStr, statut: statutInitial, mode_paiement: modeReglement })
         }
         await s.from('cheques_prevus').insert(cheques)
