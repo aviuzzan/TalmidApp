@@ -207,8 +207,12 @@ export function hasCategoryAccess(
   cat: Categorie,
   perms: Record<string, Niveau>,
   role: string,
-  isAdminPrincipal: boolean
+  isAdminPrincipal: boolean,
+  accesFinances: boolean = true
 ): boolean {
+  // Verrou financier transversal : si la categorie est financiere et acces_finances = false,
+  // on bloque (la card sera grisee). Super_admin garde toujours l'acces.
+  if (cat.code === 'finances' && !accesFinances && role !== 'super_admin') return false
   if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
   return cat.modules.some(m => {
     const n = perms[m] || 'aucun'

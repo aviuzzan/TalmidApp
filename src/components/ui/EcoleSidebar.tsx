@@ -222,7 +222,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
           }}>Catégories</div>
 
           {CATEGORIES.map(cat => {
-            const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal)
+            const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal, accesFinances)
             const isCatActive = cat.code === activeCategory
             const modules = MODULES_BY_CATEGORY[cat.code] || []
             // Toujours afficher tous les modules — on grise ceux sans accès

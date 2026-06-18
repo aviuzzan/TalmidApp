@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
+import { useAccesFinances } from '@/lib/acces-finances'
 import AlertesUrgentes from '@/components/ui/AlertesUrgentes'
 import { useI18n } from '@/lib/i18n'
 
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [role, setRole] = useState<string>('')
   const [perms, setPerms] = useState<Record<string, Niveau>>({})
   const [isAdminPrincipal, setIsAdminPrincipal] = useState(false)
+  const { acces: accesFinances } = useAccesFinances()
   const [stats, setStats] = useState<Stats>({ familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_impayees: 0, montant_impayes: 0, professeurs: 0, classes: 0 })
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -141,7 +143,7 @@ export default function DashboardPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 260px))', gap: 18, justifyContent: 'center' }}>
         {CATEGORIES.map(cat => {
-          const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal)
+          const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal, accesFinances)
           const badge = accessible ? categoryBadge(cat) : null
           const onClick = accessible ? () => router.push(`/${ecole.slug}/${cat.hrefHub}`) : undefined
 
