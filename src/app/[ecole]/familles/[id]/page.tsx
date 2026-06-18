@@ -380,7 +380,7 @@ export default function FamilleDetailPage() {
             { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
           ] : []),
           { label: '🛡️ RGPD — Export / Anonymisation', href: `/${ecole.slug}/familles/${id}/rgpd` },
-        ]} onNav={(h) => h === '#tranche-manuelle' ? setShowTrancheModal(true) : router.push(h)} />
+        ]} onNav={(h) => { if (h === '#tranche-manuelle') { setShowTrancheModal(true) } else { router.push(h) } }} />
       </div>
 
       {estSeparee && (
