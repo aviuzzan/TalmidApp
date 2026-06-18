@@ -12,6 +12,7 @@ export default function PortailFacturesPage() {
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
   const [avoirs, setAvoirs] = useState<any[]>([])
+  const [imputations, setImputations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [stripeActif, setStripeActif] = useState(false)
   const [gocardlessActif, setGocardlessActif] = useState(false)
@@ -43,13 +44,17 @@ export default function PortailFacturesPage() {
 
       if (fact) {
         setFacture(fact)
-        const [{ data: lig }, { data: regl }, { data: integrationsActives }] = await Promise.all([
+        const [{ data: lig }, { data: regl }, { data: imp }, { data: integrationsActives }] = await Promise.all([
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
+          supabase.from('avoirs_imputations').select('*, avoirs(numero, motif)').eq('facture_id', fact.id),
           supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless', 'paypal']),
         ])
         setLignes(lig ?? [])
-        setReglements(parent.estSeparee ? (regl ?? []).filter((r: any) => r.paye_par === parent.parentSlot) : (regl ?? []))
+        setImputations(imp ?? [])
+        // Filtrer les reglements de mode_paiement=avoir (deja comptes dans imputations)
+        const reglementsReels = (regl ?? []).filter((r: any) => r.mode_paiement !== 'avoir')
+        setReglements(parent.estSeparee ? reglementsReels.filter((r: any) => r.paye_par === parent.parentSlot) : reglementsReels)
         setStripeActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'stripe' && i.actif)))
         setGocardlessActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'gocardless' && i.actif)))
         setPaypalActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'paypal' && i.actif)))
@@ -92,7 +97,11 @@ export default function PortailFacturesPage() {
 
   // Si la facture est annulee, rien n'est du ni a regler
   const isAnnulee = facture?.statut === 'annule'
-  const maPart = facture && !isAnnulee ? Number(facture.total_facture) * parent.partPct / 100 : 0
+  // Avoirs imputes sur cette facture (deduction du facture)
+  const totalAvoirsImputes = isAnnulee ? 0 : imputations.reduce((s, i) => s + Number(i.montant), 0)
+  // Net a regler par la famille apres deduction avoirs (= "facture nette")
+  const totalFactureNet = facture && !isAnnulee ? Number(facture.total_facture) - totalAvoirsImputes : 0
+  const maPart = facture && !isAnnulee ? totalFactureNet * parent.partPct / 100 : 0
   const regleMoi = isAnnulee ? 0 : reglements.reduce((s, r) => s + Number(r.montant), 0)
   const monSolde = maPart - regleMoi
 
@@ -159,23 +168,36 @@ export default function PortailFacturesPage() {
         </div>
       ) : (
         <>
-          {/* Solde */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {(parent.estSeparee ? [
-              { label: 'Ma part', value: `${maPart.toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-              { label: 'Réglé par moi', value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-              { label: 'Mon solde', value: `${monSolde.toLocaleString('fr-FR')} €`, color: monSolde > 0 ? '#DC2626' : '#059669', bg: monSolde > 0 ? '#FEF2F2' : '#ECFDF5' },
-            ] : [
-              { label: 'Total facturé', value: `${(isAnnulee ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-              { label: 'Total réglé', value: `${(isAnnulee ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-              { label: 'Reste à régler', value: `${(isAnnulee ? 0 : Number(facture.solde_restant)).toLocaleString('fr-FR')} €`, color: !isAnnulee && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: !isAnnulee && Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
-            ]).map(s => (
-              <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
+          {/* Solde - mode comptable: facture inchangee + avoirs en deduction separee */}
+          {parent.estSeparee ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {[
+                { label: 'Ma part', value: `${maPart.toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+                { label: 'Réglé par moi', value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
+                { label: 'Mon solde', value: `${monSolde.toLocaleString('fr-FR')} €`, color: monSolde > 0 ? '#DC2626' : '#059669', bg: monSolde > 0 ? '#FEF2F2' : '#ECFDF5' },
+              ].map(s => (
+                <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '18px 22px' }}>
+              {[
+                { label: 'Total facturé', value: isAnnulee ? 0 : Number(facture.total_facture), color: '#1E293B', bold: true },
+                ...(totalAvoirsImputes > 0 ? [{ label: 'Avoirs / réductions', value: -totalAvoirsImputes, color: '#059669', bold: false }] : []),
+                ...(totalAvoirsImputes > 0 ? [{ label: 'Net à régler', value: isAnnulee ? 0 : totalFactureNet, color: '#1E293B', bold: true, separator: true }] : []),
+                { label: 'Total réglé', value: isAnnulee ? 0 : (Number(facture.total_regle) - totalAvoirsImputes), color: '#059669', bold: false },
+                { label: 'Reste à régler', value: isAnnulee ? 0 : Number(facture.solde_restant), color: !isAnnulee && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bold: true, highlight: true },
+              ].map((row: any, idx: number) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: row.separator ? '1px solid #E2E8F0' : 'none', marginTop: row.separator ? 6 : 0, paddingTop: row.separator ? 12 : 8 }}>
+                  <div style={{ fontSize: row.highlight ? 15 : 13, fontWeight: row.bold ? 700 : 500, color: row.highlight ? '#1E293B' : '#475569' }}>{row.label}</div>
+                  <div style={{ fontSize: row.highlight ? 22 : 16, fontWeight: row.bold ? 800 : 600, color: row.color }}>{Number(row.value).toLocaleString('fr-FR')} €</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Statut */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

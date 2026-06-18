@@ -37,6 +37,10 @@ export default function FamilleDetailPage() {
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
+  const [imputations, setImputations] = useState<any[]>([])
+  const [showTrancheModal, setShowTrancheModal] = useState(false)
+  const [trancheForm, setTrancheForm] = useState<{ exercice_id: string; tranche_id: string; tarif_accorde: string; note: string }>({ exercice_id: '', tranche_id: '', tarif_accorde: '', note: '' })
+  const [savingTranche, setSavingTranche] = useState(false)
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
   const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
@@ -128,12 +132,13 @@ export default function FamilleDetailPage() {
     const { data: fact } = await supabase.from('factures_solde').select('*').eq('famille_id', id).eq('annee_scolaire', ANNEE).maybeSingle()
     if (fact) {
       setFacture(fact)
-      const [{ data: lig }, { data: regl }] = await Promise.all([
+      const [{ data: lig }, { data: regl }, { data: imp }] = await Promise.all([
         supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id).order('date_creation'),
         supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
+        supabase.from('avoirs_imputations').select('*, avoirs(numero, motif)').eq('facture_id', fact.id),
       ])
-      setLignes(lig ?? []); setReglements(regl ?? [])
-    } else { setFacture(null); setLignes([]); setReglements([]) }
+      setLignes(lig ?? []); setReglements(regl ?? []); setImputations(imp ?? [])
+    } else { setFacture(null); setLignes([]); setReglements([]); setImputations([]) }
   }, [id, ANNEE])
 
   useEffect(() => { load() }, [load])
@@ -370,11 +375,12 @@ export default function FamilleDetailPage() {
             { label: '📋 Engagement financier', href: `/${ecole.slug}/familles/${id}/engagement` },
             { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
             { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
+            { label: '🏷️ Définir tranche manuellement', href: '#tranche-manuelle' },
             { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
             { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
           ] : []),
           { label: '🛡️ RGPD — Export / Anonymisation', href: `/${ecole.slug}/familles/${id}/rgpd` },
-        ]} onNav={(h) => router.push(h)} />
+        ]} onNav={(h) => h === '#tranche-manuelle' ? setShowTrancheModal(true) : router.push(h)} />
       </div>
 
       {estSeparee && (
@@ -509,18 +515,29 @@ export default function FamilleDetailPage() {
             </div>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                {[
-                  { label: 'Total facturé', value: `${Number(facture.total_facture).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-                  { label: 'Total réglé', value: `${Number(facture.total_regle).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-                  { label: 'Solde restant', value: `${Number(facture.solde_restant).toLocaleString('fr-FR')} €`, color: Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
-                ].map(s => (
-                  <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '14px 18px' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{s.label}</div>
+              {(() => {
+                const totalAvoirs = imputations.reduce((s: number, i: any) => s + Number(i.montant), 0)
+                const totalFact = Number(facture.total_facture)
+                const totalNet = totalFact - totalAvoirs
+                const totalRegleReel = Number(facture.total_regle) - totalAvoirs
+                const solde = Number(facture.solde_restant)
+                return (
+                  <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 20px' }}>
+                    {[
+                      { label: 'Total facturé', value: totalFact, color: '#1E293B', bold: true },
+                      ...(totalAvoirs > 0 ? [{ label: 'Avoirs / réductions', value: -totalAvoirs, color: '#059669', bold: false }] : []),
+                      ...(totalAvoirs > 0 ? [{ label: 'Net à régler', value: totalNet, color: '#1E293B', bold: true, separator: true }] : []),
+                      { label: 'Total réglé', value: totalRegleReel, color: '#059669', bold: false },
+                      { label: 'Solde restant', value: solde, color: solde > 0 ? '#DC2626' : '#059669', bold: true, highlight: true },
+                    ].map((row: any, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderTop: row.separator ? '1px solid #E2E8F0' : 'none', marginTop: row.separator ? 4 : 0, paddingTop: row.separator ? 10 : 6 }}>
+                        <div style={{ fontSize: row.highlight ? 14 : 12, fontWeight: row.bold ? 700 : 500, color: row.highlight ? '#1E293B' : '#475569' }}>{row.label}</div>
+                        <div style={{ fontSize: row.highlight ? 20 : 15, fontWeight: row.bold ? 800 : 600, color: row.color }}>{Number(row.value).toLocaleString('fr-FR')} €</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )
+              })()}
 
               {estSeparee && (
                 <div className="card">
@@ -723,6 +740,100 @@ export default function FamilleDetailPage() {
                 <button type="submit" className="btn-primary" disabled={saving}>{saving ? '...' : editEnfantId ? '✓ Mettre à jour' : '✓ Enregistrer'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal : Definir tranche manuellement (DDR pre-saisie admin) */}
+      {showTrancheModal && (
+        <div onClick={() => !savingTranche && setShowTrancheModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, maxWidth: 520, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{ fontSize: 26 }}>🏷️</div>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 800, color: '#1E293B', margin: 0 }}>Définir la tranche manuellement</h3>
+                <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0' }}>Saisie directe par l&apos;admin — la famille n&apos;aura pas à remplir la demande de réduction sur le portail.</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Exercice</label>
+                <select value={trancheForm.exercice_id} onChange={e => setTrancheForm({ ...trancheForm, exercice_id: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13 }}>
+                  <option value="">— Sélectionner —</option>
+                  {exercicesDispo.map(ex => <option key={ex.id} value={ex.id}>{ex.libelle || ex.code}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Tranche</label>
+                <select value={trancheForm.tranche_id} onChange={e => setTrancheForm({ ...trancheForm, tranche_id: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13 }}>
+                  <option value="">— Sélectionner —</option>
+                  {tranches.map(t => <option key={t.id} value={t.id}>{t.code}{t.libelle ? ' — ' + t.libelle : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Tarif accordé par enfant (€/an, optionnel)</label>
+                <input type="number" step="0.01" value={trancheForm.tarif_accorde} onChange={e => setTrancheForm({ ...trancheForm, tarif_accorde: e.target.value })}
+                  placeholder="Laisser vide pour utiliser le tarif de la grille"
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Note interne (optionnel)</label>
+                <textarea value={trancheForm.note} onChange={e => setTrancheForm({ ...trancheForm, note: e.target.value })}
+                  placeholder="Ex: Tranche calculée en commission le 12/06/2026, dossier sur papier"
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13, minHeight: 56, resize: 'vertical' }} />
+              </div>
+            </div>
+            <div style={{ background: '#FEFCE8', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#92400E', marginTop: 12 }}>
+              <strong>⚠️ Cette saisie remplace une demande de réduction.</strong> La famille verra sa tranche déjà appliquée lors de la signature du contrat. Si une DDR existe déjà pour cet exercice, elle ne sera pas écrasée.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button onClick={() => setShowTrancheModal(false)} disabled={savingTranche}
+                style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, cursor: savingTranche ? 'not-allowed' : 'pointer' }}>Annuler</button>
+              <button disabled={savingTranche || !trancheForm.exercice_id || !trancheForm.tranche_id}
+                onClick={async () => {
+                  setSavingTranche(true)
+                  try {
+                    const ex = exercicesDispo.find(e => e.id === trancheForm.exercice_id)
+                    const tr = tranches.find(t => t.id === trancheForm.tranche_id)
+                    const { data: { session } } = await supabase.auth.getSession()
+                    // Verifier qu'il n'y a pas deja une DDR pour cet exercice
+                    const { data: existing } = await supabase.from('demandes_reduction')
+                      .select('id, statut').eq('famille_id', id).eq('exercice_id', trancheForm.exercice_id).maybeSingle()
+                    if (existing) {
+                      if (!confirm(`Une demande existe deja pour ${ex?.code} (statut: ${existing.statut}). La remplacer ?`)) { setSavingTranche(false); return }
+                      await supabase.from('demandes_reduction').delete().eq('id', existing.id)
+                    }
+                    const payload: any = {
+                      ecole_id: ecole.id,
+                      famille_id: id,
+                      annee_scolaire: ex?.code || null,
+                      exercice_id: trancheForm.exercice_id,
+                      statut: 'accepte',
+                      tarif_accorde: trancheForm.tarif_accorde ? parseFloat(trancheForm.tarif_accorde) : null,
+                      tarif_accorde_par: tr ? `Tranche ${tr.code}` : null,
+                      decide_par: session?.user.id,
+                      decide_le: new Date().toISOString(),
+                      soumis_le: new Date().toISOString(),
+                      note_interne: `SAISIE_ADMIN_DIRECTE${trancheForm.note ? ' — ' + trancheForm.note : ''}`,
+                      attestation_honneur: true,
+                    }
+                    const { error } = await supabase.from('demandes_reduction').insert(payload)
+                    if (error) { alert('Erreur : ' + error.message); setSavingTranche(false); return }
+                    alert(`Tranche ${tr?.code} définie pour ${ex?.code}. La famille n'aura pas la DDR à remplir.`)
+                    setShowTrancheModal(false)
+                    setTrancheForm({ exercice_id: '', tranche_id: '', tarif_accorde: '', note: '' })
+                    setSavingTranche(false)
+                  } catch (err: any) {
+                    alert('Erreur : ' + (err?.message || 'inconnue'))
+                    setSavingTranche(false)
+                  }
+                }}
+                style={{ background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (savingTranche || !trancheForm.exercice_id || !trancheForm.tranche_id) ? 0.5 : 1 }}>
+                {savingTranche ? '…' : '✓ Valider la tranche'}
+              </button>
+            </div>
           </div>
         </div>
       )}
