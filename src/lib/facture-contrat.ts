@@ -31,16 +31,27 @@ export async function creerFactureDepuisContrat(
 ): Promise<CreerFactureResult> {
   if (!contrat?.famille_id) return { ok: false, error: 'Contrat sans famille' }
 
-  // 1. Idempotence : si déjà une facture pour cette famille/année → on retourne celle-là
+  // 1. Vérifier s'il existe une facture (n'importe quel statut) pour cette famille/année.
+  //    La table a une contrainte UNIQUE (famille_id, annee_scolaire) → on ne peut pas
+  //    en avoir deux. Donc :
+  //      - facture active (≠ annule)   → idempotent, on retourne celle-là
+  //      - facture annulée              → on la RÉACTIVE (purge ses lignes + repasse en en_attente)
   const { data: existing } = await s
     .from('factures')
-    .select('id, numero')
+    .select('id, numero, statut')
     .eq('famille_id', contrat.famille_id)
     .eq('annee_scolaire', annee)
     .maybeSingle()
 
-  if (existing) {
+  if (existing && existing.statut !== 'annule') {
     return { ok: true, deja_existante: true, facture_id: existing.id, numero: existing.numero }
+  }
+
+  // Cas réactivation : delete anciennes lignes + reset statut + on continue avec cette facture
+  let reactivation = false
+  if (existing && existing.statut === 'annule') {
+    reactivation = true
+    await s.from('facture_lignes').delete().eq('facture_id', existing.id)
   }
 
   // 2. Numéro séquentiel FACT-{YYYY}-{NNNN}
@@ -59,19 +70,48 @@ export async function creerFactureDepuisContrat(
   }
   const numero = `FACT-${yearSuffix}-${String(nextNum).padStart(4, '0')}`
 
-  // 3. Insert entête facture
-  const { data: nf, error: insErr } = await s
-    .from('factures')
-    .insert({
-      famille_id: contrat.famille_id,
-      annee_scolaire: annee,
-      numero,
-      date_emission: new Date().toISOString().split('T')[0],
-      statut: 'en_attente',
-      notes: `Générée automatiquement à la validation du contrat ${annee}`,
-    })
-    .select()
-    .single()
+  // Résoudre exercice_id (NULL → résolution via annee_scolaire)
+  let exerciceId: string | null = contrat.exercice_id || null
+  if (!exerciceId) {
+    const { data: ex } = await s.from('exercices').select('id').eq('ecole_id', ecoleId).eq('code', annee).maybeSingle()
+    exerciceId = ex?.id || null
+  }
+
+  // 3. Insert OU update (cas réactivation d'une facture annulée).
+  let nf: any = null
+  let insErr: any = null
+  if (reactivation && existing) {
+    const upd = await s
+      .from('factures')
+      .update({
+        statut: 'en_attente',
+        annule_le: null,
+        exercice_id: exerciceId,
+        date_emission: new Date().toISOString().split('T')[0],
+        notes: `Réactivée après re-validation du contrat ${annee}`,
+      })
+      .eq('id', existing.id)
+      .select()
+      .single()
+    nf = upd.data
+    insErr = upd.error
+  } else {
+    const ins = await s
+      .from('factures')
+      .insert({
+        famille_id: contrat.famille_id,
+        annee_scolaire: annee,
+        exercice_id: exerciceId,
+        numero,
+        date_emission: new Date().toISOString().split('T')[0],
+        statut: 'en_attente',
+        notes: `Générée automatiquement à la validation du contrat ${annee}`,
+      })
+      .select()
+      .single()
+    nf = ins.data
+    insErr = ins.error
+  }
 
   if (insErr || !nf) {
     return { ok: false, error: insErr?.message || 'Insert facture échoué' }

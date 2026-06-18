@@ -319,13 +319,22 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       return
     }
 
-    // 2. Créer facture (si pas déjà existante pour cette famille/année)
-    const { data: existing } = await s
+    // 2. Vérifier existence facture (contrainte unique famille_id + annee_scolaire).
+    //    Si active → idempotent. Si annulée → on la réactive (purge lignes + reset statut).
+    const { data: existingFact } = await s
       .from('factures')
-      .select('id')
+      .select('id, numero, statut')
       .eq('famille_id', contrat.famille_id)
       .eq('annee_scolaire', annee)
       .maybeSingle()
+
+    const existing = existingFact && existingFact.statut !== 'annule' ? existingFact : null
+    const factureAReactiver = existingFact && existingFact.statut === 'annule' ? existingFact : null
+
+    if (factureAReactiver) {
+      // Purger les anciennes lignes
+      await s.from('facture_lignes').delete().eq('facture_id', factureAReactiver.id)
+    }
 
     if (!existing) {
       // 2a. Numéro facture séquentiel : FACT-{YYYY}-{NNNN}
@@ -351,20 +360,41 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
         exerciceIdForFact = ex?.id || null
       }
 
-      // 2b. Créer entête facture
-      const { data: nf, error: insErr } = await s
-        .from('factures')
-        .insert({
-          famille_id: contrat.famille_id,
-          annee_scolaire: annee,
-          exercice_id: exerciceIdForFact,
-          numero,
-          date_emission: new Date().toISOString().split('T')[0],
-          statut: 'en_attente',
-          notes: `Générée automatiquement à la validation du contrat ${annee}`,
-        })
-        .select()
-        .single()
+      // 2b. INSERT (création) OU UPDATE (réactivation d'une facture annulée)
+      let nf: any = null
+      let insErr: any = null
+      if (factureAReactiver) {
+        const upd = await s
+          .from('factures')
+          .update({
+            statut: 'en_attente',
+            annule_le: null,
+            exercice_id: exerciceIdForFact,
+            date_emission: new Date().toISOString().split('T')[0],
+            notes: `Réactivée après re-validation du contrat ${annee}`,
+          })
+          .eq('id', factureAReactiver.id)
+          .select()
+          .single()
+        nf = upd.data
+        insErr = upd.error
+      } else {
+        const ins = await s
+          .from('factures')
+          .insert({
+            famille_id: contrat.famille_id,
+            annee_scolaire: annee,
+            exercice_id: exerciceIdForFact,
+            numero,
+            date_emission: new Date().toISOString().split('T')[0],
+            statut: 'en_attente',
+            notes: `Générée automatiquement à la validation du contrat ${annee}`,
+          })
+          .select()
+          .single()
+        nf = ins.data
+        insErr = ins.error
+      }
 
       if (insErr || !nf) {
         alert('Contrat validé mais erreur création facture : ' + (insErr?.message || 'inconnue'))
