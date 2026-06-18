@@ -4,7 +4,8 @@
  * Regle metier capitale : le contexte reflete EXACTEMENT les permissions UI.
  * Un parent ne voit que sa famille. Un admin sans acces_finances n a pas les blocs financiers.
  */
-import { createClient } from '@supabase/supabase-js'
+// Le type SupabaseClient est volontairement `any` ici car les versions de @supabase/supabase-js
+// et de @supabase/ssr peuvent diverger sur les generics public/schema, ce qui casse le build TS.
 
 export type RoleChatbot = 'parent' | 'admin' | 'super_admin'
 
@@ -22,7 +23,7 @@ export interface ContexteChatbot {
  * Le client supabase doit etre service_role car on appelle depuis l API server-side.
  */
 export async function chargerContexteChatbot(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   userId: string,
 ): Promise<ContexteChatbot | null> {
   // 1. Profil utilisateur
@@ -85,7 +86,7 @@ export async function chargerContexteChatbot(
  * Strict : aucune donnee d une autre famille.
  */
 async function contexteParent(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   familleId: string,
   accesFinances: boolean,
 ): Promise<string> {
@@ -170,7 +171,7 @@ async function contexteParent(
  * Si pas d acces finances : exclu les montants.
  */
 async function contexteAdmin(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   ecoleId: string,
   accesFinances: boolean,
 ): Promise<string> {
