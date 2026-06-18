@@ -33,19 +33,29 @@ export default function PortailPage() {
       const ecoleId = (profile as any).familles?.ecole_id
       const now = new Date().toISOString().split('T')[0]
 
-      const [{ count: enfants }, { data: facture }, { data: cfg }] = await Promise.all([
+      const [{ count: enfants }, { data: enfantsList }, { data: facture }, { data: cfg }, { data: contrat }, { data: docsConfig }, { data: docsFournis }, { data: ddr }] = await Promise.all([
         supabase.from('enfants').select('*', { count: 'exact', head: true })
           .eq('famille_id', familleId)
           .or(`date_entree.is.null,date_entree.lte.${now}`)
           .or(`date_sortie.is.null,date_sortie.gte.${now}`),
+        supabase.from('enfants').select('id, prenom, nom, statut_inscription').eq('famille_id', familleId),
         supabase.from('factures_solde').select('*')
           .eq('famille_id', familleId)
           .eq('annee_scolaire', anneeInscription)
-          .single(),
+          .maybeSingle(),
         supabase.from('inscriptions_config')
           .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction, tranches_eligibles_ddr, bandeau_titre, bandeau_message')
           .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
+        supabase.from('contrats_scolarisation').select('id, statut').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
+        supabase.from('documents_ecole').select('id, nom, obligatoire').eq('ecole_id', ecoleId).eq('actif', true),
+        supabase.from('documents_famille').select('document_id').eq('famille_id', familleId),
+        supabase.from('demandes_reduction').select('id, statut').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
       ])
+      // Fiches pedagogiques en 2eme passe car depend de la liste des enfants
+      const enfantIds = (enfantsList || []).map((e: any) => e.id)
+      const { data: fichesPedago } = enfantIds.length > 0
+        ? await supabase.from('inscriptions_pedagogiques').select('id, enfant_id, urgence1_nom, medecin_nom').in('enfant_id', enfantIds)
+        : { data: [] }
 
       // Tranche famille (pour check éligibilité DDR sur la pastille "réductions ouvertes")
       const trancheFamille = (profile as any)?.familles?.tranche_id || null
@@ -63,6 +73,64 @@ export default function PortailPage() {
         (!!cfg.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now && trancheEligibleDDR)
       )
 
+      // --- Checklist "Vos taches a realiser" ---
+      const taches: Array<{ label: string; fait: boolean; href: string; urgent?: boolean; sub?: string }> = []
+      // 1) Contrat de l'annee
+      if (inscriptionsOuvertes && cfg?.inscriptions_ouvertes) {
+        const ctrStatut = (contrat as any)?.statut
+        const ctrSigne = ctrStatut === 'valide' || ctrStatut === 'signe' || ctrStatut === 'accepte'
+        taches.push({
+          label: ctrSigne ? `Contrat ${anneeInscription} signé` : `Signer le contrat ${anneeInscription}`,
+          fait: ctrSigne,
+          href: '/portail/inscriptions',
+          urgent: !ctrSigne,
+          sub: ctrSigne ? undefined : 'Inscription pas encore validée par l\'école',
+        })
+      }
+      // 2) Fiche pedagogique par enfant (urgences + medecin requis)
+      ;(enfantsList || []).forEach((enf: any) => {
+        const fp = (fichesPedago || []).find((f: any) => f.enfant_id === enf.id)
+        const complete = !!(fp && fp.urgence1_nom && fp.medecin_nom)
+        taches.push({
+          label: complete ? `Fiche pédagogique de ${enf.prenom} complète` : `Compléter la fiche pédagogique de ${enf.prenom}`,
+          fait: complete,
+          href: '/portail/inscriptions',
+          urgent: !complete && enf.statut_inscription !== 'sorti',
+          sub: complete ? undefined : (fp ? 'Manque contact d\'urgence ou médecin traitant' : 'Aucune fiche pédagogique remplie'),
+        })
+      })
+      // 3) Documents obligatoires
+      const idsFournis = new Set((docsFournis || []).map((d: any) => d.document_id))
+      ;(docsConfig || []).filter((d: any) => d.obligatoire).forEach((d: any) => {
+        const fait = idsFournis.has(d.id)
+        taches.push({
+          label: fait ? `Document fourni : ${d.nom}` : `Fournir le document : ${d.nom}`,
+          fait,
+          href: '/portail/documents',
+          urgent: !fait,
+        })
+      })
+      // 4) DDR si eligible et inscriptions ouvertes pour reduc
+      if (trancheEligibleDDR && cfg?.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now) {
+        const ddrFaite = !!ddr && (ddr as any).statut !== 'brouillon'
+        taches.push({
+          label: ddrFaite ? `Demande de réduction soumise (statut : ${(ddr as any).statut})` : 'Faire votre demande de réduction',
+          fait: ddrFaite,
+          href: '/portail/inscriptions/reduction',
+          urgent: !ddrFaite,
+          sub: ddrFaite ? undefined : 'Vous êtes éligible — pensez à la faire avant la clôture',
+        })
+      }
+      // 5) Reglement si solde > 0 et facture en attente
+      if (facture && (facture as any).statut === 'en_attente' && Number((facture as any).solde_restant) > 0) {
+        taches.push({
+          label: `Régler la facture (reste ${Number((facture as any).solde_restant).toLocaleString('fr-FR')} €)`,
+          fait: false,
+          href: '/portail/factures',
+          sub: 'En attente du moyen de règlement choisi par l\'école',
+        })
+      }
+
       setData({
         famille: (profile as any).familles,
         nbEnfants: enfants ?? 0,
@@ -71,6 +139,7 @@ export default function PortailPage() {
         inscriptionsOuvertes,
         cfg: cfg ?? null,
         anneeInscription,
+        taches,
       })
       setLoading(false)
     }
@@ -111,6 +180,72 @@ export default function PortailPage() {
         </div>
         <div style={{ fontSize: 48, opacity: 0.3 }}>🏫</div>
       </div>
+
+      {/* Checklist "Vos taches" */}
+      {data.taches && data.taches.length > 0 && (() => {
+        const restantes = data.taches.filter((t: any) => !t.fait)
+        const total = data.taches.length
+        const faites = total - restantes.length
+        const toutBon = restantes.length === 0
+        return (
+          <div style={{
+            background: toutBon ? '#F0FDF4' : '#FFF7ED',
+            border: `1px solid ${toutBon ? '#BBF7D0' : '#FED7AA'}`,
+            borderRadius: 14, overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '14px 18px', borderBottom: `1px solid ${toutBon ? '#DCFCE7' : '#FFEDD5'}`,
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            }}>
+              <div style={{ fontSize: 24 }}>{toutBon ? '✅' : '📋'}</div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: toutBon ? '#065F46' : '#9A3412' }}>
+                  {toutBon ? 'Votre dossier est complet 🎉' : 'Vos tâches à réaliser'}
+                </div>
+                <div style={{ fontSize: 12, color: toutBon ? '#065F46' : '#9A3412', opacity: 0.85, marginTop: 2 }}>
+                  {toutBon
+                    ? 'Vous n\'avez plus rien à faire pour le moment. L\'école vous contactera si besoin.'
+                    : `${faites}/${total} éléments complétés — il vous reste ${restantes.length} action${restantes.length > 1 ? 's' : ''}`}
+                </div>
+              </div>
+            </div>
+            <div style={{ background: '#fff' }}>
+              {data.taches.map((t: any, i: number) => (
+                <div key={i} onClick={() => t.href && router.push(t.href)}
+                  style={{
+                    padding: '12px 18px', borderBottom: i < data.taches.length - 1 ? '1px solid #F1F5F9' : 'none',
+                    display: 'flex', alignItems: 'flex-start', gap: 12, cursor: t.href ? 'pointer' : 'default',
+                    background: '#fff', transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => { if (t.href) e.currentTarget.style.background = '#F8FAFC' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#fff' }}>
+                  <div style={{
+                    fontSize: 18, marginTop: 1,
+                    color: t.fait ? '#10B981' : t.urgent ? '#DC2626' : '#94A3B8',
+                  }}>{t.fait ? '✓' : t.urgent ? '⚠' : '○'}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: t.fait ? 500 : 600,
+                      color: t.fait ? '#94A3B8' : '#1E293B',
+                      textDecoration: t.fait ? 'line-through' : 'none',
+                    }}>{t.label}</div>
+                    {t.sub && !t.fait && (
+                      <div style={{ fontSize: 11, color: t.urgent ? '#991B1B' : '#64748B', marginTop: 2 }}>{t.sub}</div>
+                    )}
+                  </div>
+                  {t.href && !t.fait && (
+                    <div style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: t.urgent ? '#DC2626' : '#2563EB',
+                      whiteSpace: 'nowrap', flexShrink: 0, paddingTop: 1,
+                    }}>{t.urgent ? 'À faire →' : 'Voir →'}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Bandeau "Inscriptions ouvertes" — si l'école a une fenêtre active */}
       {data.inscriptionsOuvertes && (() => {
