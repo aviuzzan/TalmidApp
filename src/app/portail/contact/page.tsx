@@ -50,8 +50,8 @@ export default function PortailContactPage() {
         {visibles.length === 0 ? (
           <div style={{ padding: '20px 0', color: '#94A3B8', fontSize: 13 }}>Aucune coordonnée renseignée.</div>
         ) : visibles.map((l, i) => (
-          <div key={l.label} style={{ display: 'flex', gap: 14, padding: '14px 0', borderBottom: i < visibles.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-            <div style={{ width: 120, flexShrink: 0, fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', paddingTop: 2 }}>{l.label}</div>
+          <div key={l.label} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '14px 0', borderBottom: i < visibles.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+            <div style={{ minWidth: 110, flex: '0 0 auto', fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', paddingTop: 2 }}>{l.label}</div>
             <div style={{ fontSize: 14, color: '#1E293B', fontWeight: 500 }}>
               {l.href ? <a href={l.href} style={{ color: primary, textDecoration: 'none' }}>{l.value}</a> : l.value}
             </div>

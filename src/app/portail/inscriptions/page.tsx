@@ -354,7 +354,7 @@ function FactureTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
           { label: 'Total facturé', value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
           { label: 'Total réglé', value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },

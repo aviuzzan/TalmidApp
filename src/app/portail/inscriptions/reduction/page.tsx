@@ -557,11 +557,11 @@ export default function DemandeReductionPage() {
             <option value="divorce">Divorcé(e)</option><option value="autre">Autre</option>
           </select>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div><label style={lbl}>Prénom *</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_prenom: e.target.value })); setFamModified(true) }} /></div>
           <div><label style={lbl}>Nom *</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_nom: e.target.value })); setFamModified(true) }} /></div>
           <div><label style={lbl}>Adresse *</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_adresse: e.target.value })); setFamModified(true) }} /></div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
             <div><label style={lbl}>CP *</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_code_postal: e.target.value })); setFamModified(true) }} /></div>
             <div><label style={lbl}>Ville *</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_ville: e.target.value })); setFamModified(true) }} /></div>
           </div>
@@ -572,7 +572,7 @@ export default function DemandeReductionPage() {
 
       {/* ── 2. RESPONSABLE 2 ── */}
       <Section title="2. Responsable 2 (si applicable)">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div><label style={lbl}>Prénom</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_prenom: e.target.value })); setFamModified(true) }} /></div>
           <div><label style={lbl}>Nom</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_nom: e.target.value })); setFamModified(true) }} /></div>
           <div><label style={lbl}>Téléphone</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_telephone: e.target.value })); setFamModified(true) }} /></div>
@@ -623,7 +623,7 @@ export default function DemandeReductionPage() {
 
       {/* ── 4. LOGEMENT ── */}
       <Section title="4. Logement *">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {qActif('logement_type') && <div><label style={lbl}>{qL('logement_type', 'Type')}</label>
             <select style={inp} value={logType} onChange={e => { ks(); setLogType(e.target.value) }}>
               <option value="locataire">Locataire</option><option value="proprietaire">Propriétaire</option><option value="autre">Autre</option>
@@ -650,14 +650,14 @@ export default function DemandeReductionPage() {
 
       {/* ── 5. REVENUS ── */}
       <Section title="5. Revenus du foyer *">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {qActif('quotient_familial') && <div><label style={lbl}>{qL('quotient_familial', 'Quotient familial CAF (€)')}</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>}
         </div>
 
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus salariés *</div>
           {revenus.map((r: any, i: number) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr 1fr 1fr 1fr auto', gap: 7, marginBottom: 8, alignItems: 'end' }}>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 7, marginBottom: 8, alignItems: 'end' }}>
               <div><label style={{ ...lbl, marginBottom: 3 }}>Nom/Prénom</label><input style={inp} value={r.nom_prenom} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x)) }} /></div>
               <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} value={r.lien_parente} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x)) }} /></div>
               <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} value={r.employeur} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x)) }} /></div>
@@ -698,7 +698,7 @@ export default function DemandeReductionPage() {
 
       {/* ── 6. ALLOCATIONS ── */}
       <Section title="6. Allocations et autres revenus *">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
           {qActif('alloc_familiales_mensuelles') && <div><label style={lbl}>{qL('alloc_familiales_mensuelles', 'Allocations familiales (€/mois)')}</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>}
           {qActif('alloc_chomage_mensuelle') && <div><label style={lbl}>{qL('alloc_chomage_mensuelle', 'Allocation chômage (€/mois)')}</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>}
           {qActif('apl_mensuelle') && <div><label style={lbl}>{qL('apl_mensuelle', 'APL / Aide logement (€/mois)')}</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>}
@@ -737,7 +737,7 @@ export default function DemandeReductionPage() {
       <Section title="7. Enfants scolarisés dans d'autres établissements">
         <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Enfants scolarisés dans d'autres écoles juives.</p>
         {enfantsAutres.map((e: any, i: number) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.5fr 1fr 2fr 1fr 0.5fr auto', gap: 8, alignItems: 'end', marginBottom: 8 }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 8 }}>
             <div><label style={{ ...lbl, marginBottom: 3 }}>Prénom</label><input style={inp} value={e.prenom} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>Âge</label><input style={inp} type="number" value={e.age} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>Classe</label><input style={inp} value={e.classe} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, classe: ev.target.value } : x)) }} /></div>
@@ -754,7 +754,7 @@ export default function DemandeReductionPage() {
       <Section title="8. Personnes à charge non scolarisées et non salariées">
         <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Membres du foyer à charge ne percevant pas de revenus et non scolarisés.</p>
         {personnesCharge.map((p: any, i: number) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.5fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 8 }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 8 }}>
             <div><label style={{ ...lbl, marginBottom: 3 }}>Nom</label><input style={inp} value={p.nom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, nom: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>Prénom</label><input style={inp} value={p.prenom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>Âge</label><input style={inp} type="number" value={p.age} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
@@ -833,7 +833,7 @@ export default function DemandeReductionPage() {
           Je soussigné(e), <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, atteste sur l'honneur que tous les renseignements portés sur cette demande et les pièces justificatives sont conformes, sincères et véritables. J'accepte que l'établissement transmette les informations nécessaires à tout organisme susceptible d'accorder une aide. Je m'engage à informer le service comptabilité de toute modification de ma situation.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
           <div><label style={lbl}>Fait à *</label><input style={inp} value={attestationLieu} onChange={e => { ks(); setAttestationLieu(e.target.value) }} placeholder="Ville" /></div>
           <div><label style={lbl}>Le</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} readOnly /></div>
         </div>

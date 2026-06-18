@@ -170,7 +170,7 @@ export default function PortailFacturesPage() {
         <>
           {/* Solde - mode comptable: facture inchangee + avoirs en deduction separee */}
           {parent.estSeparee ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
               {[
                 { label: 'Ma part', value: `${maPart.toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
                 { label: 'Réglé par moi', value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },

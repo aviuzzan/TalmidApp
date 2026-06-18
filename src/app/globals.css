@@ -832,3 +832,65 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
   .edt-desktop-only { display: none !important; }
   .edt-mobile-only  { display: flex !important; }
 }
+
+/* ============================================================
+   PORTAIL — passe responsive mobile complete (320-768px)
+   Surcharge des styles inline rigides via selecteur tag
+   pour ne pas avoir a editer chaque fichier.
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Header portail: padding reduit, hauteur conservee */
+  .portail-header {
+    padding: 0 12px !important;
+  }
+  /* Toutes les tables du portail : scroll horizontal natif sur mobile */
+  main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  /* H1 et titres du portail : taille reduite */
+  main h1 {
+    font-size: 18px !important;
+  }
+  main h2 {
+    font-size: 16px !important;
+  }
+  /* Cards / sections : padding interieur reduit */
+  .portail-card-pad-mobile,
+  main .card {
+    padding: 14px !important;
+  }
+}
+
+/* Surclasse generique : tous les grids fluides (320-640px → 1 col, sinon multi-col)
+   A utiliser dans le code: className="portail-grid-fluid" + remove gridTemplateColumns inline */
+.portail-grid-fluid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .portail-grid-fluid {
+    grid-template-columns: 1fr;
+  }
+  /* Polices grandes (chiffres KPI) reduites encore */
+  main [data-kpi-value],
+  main [data-kpi] {
+    font-size: 20px !important;
+  }
+  /* Boutons CTA pleine largeur */
+  main button[type="submit"] {
+    min-height: 44px;
+  }
+}
+
+/* Wrapper utilitaire pour les tableaux: scroll horizontal */
+.portail-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

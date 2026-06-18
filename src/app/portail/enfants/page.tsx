@@ -86,7 +86,7 @@ export default function PortailEnfantsPage() {
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
                 {[
                   ['📚 Classe', e.classe ?? '—'],
                   ['🍽 Régime', REGIME[e.regime] ?? e.regime ?? '—'],
@@ -158,7 +158,7 @@ function PersonnesAutorisees({ enfantId, familleId }: { enfantId: string; famill
       </div>
 
       {showForm && (
-        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12, marginBottom: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12, marginBottom: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
           <input style={inp} value={form.prenom} onChange={e => setForm(p => ({ ...p, prenom: e.target.value }))} placeholder="Prénom" />
           <input style={inp} value={form.nom} onChange={e => setForm(p => ({ ...p, nom: e.target.value }))} placeholder="Nom *" />
           <input style={inp} value={form.lien} onChange={e => setForm(p => ({ ...p, lien: e.target.value }))} placeholder="Lien (grand-mère, nounou...)" />

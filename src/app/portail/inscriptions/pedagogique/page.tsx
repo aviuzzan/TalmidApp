@@ -233,7 +233,7 @@ export default function PedagogiqueNouvelEnfantPage() {
       {/* État civil */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>État civil de l'enfant</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div><label style={lbl}>Prénom *</label><input style={inp} value={prenom} onChange={e => setPrenom(e.target.value)} /></div>
           <div><label style={lbl}>Nom *</label><input style={inp} value={nom} onChange={e => setNom(e.target.value)} /></div>
           <div><label style={lbl}>Deuxième prénom</label><input style={inp} value={deuxiemePrenom} onChange={e => setDeuxiemePrenom(e.target.value)} /></div>
@@ -253,7 +253,7 @@ export default function PedagogiqueNouvelEnfantPage() {
       {/* Scolarité demandée */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>Scolarité demandée</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div>
             <label style={lbl}>Secteur souhaité</label>
             <select style={inp} value={secteurSouhaite} onChange={e => { setSecteurSouhaite(e.target.value); setClasseSouhaitee('') }}>
@@ -310,7 +310,7 @@ export default function PedagogiqueNouvelEnfantPage() {
           <label style={lbl}>Signes particuliers / allergies / traitements</label>
           <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={signesParticuliers} onChange={e => setSignesParticuliers(e.target.value)} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div><label style={lbl}>Médecin traitant</label><input style={inp} value={medecinNom} onChange={e => setMedecinNom(e.target.value)} /></div>
           <div><label style={lbl}>Téléphone médecin</label><input style={inp} value={medecinTelephone} onChange={e => setMedecinTelephone(e.target.value)} /></div>
         </div>
@@ -320,13 +320,13 @@ export default function PedagogiqueNouvelEnfantPage() {
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', borderBottom: '1px solid #F1F5F9', paddingBottom: 10 }}>Personnes à prévenir en cas d'urgence</div>
         <div style={{ fontSize: 12, color: '#64748B' }}>Contact 1</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
           <div><label style={lbl}>Nom prénom</label><input style={inp} value={urgence1Nom} onChange={e => setUrgence1Nom(e.target.value)} /></div>
           <div><label style={lbl}>Téléphone</label><input style={inp} value={urgence1Tel} onChange={e => setUrgence1Tel(e.target.value)} /></div>
           <div><label style={lbl}>Lien parenté</label><input style={inp} value={urgence1Lien} onChange={e => setUrgence1Lien(e.target.value)} placeholder="Ex: Grand-mère" /></div>
         </div>
         <div style={{ fontSize: 12, color: '#64748B' }}>Contact 2 (optionnel)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
           <div><label style={lbl}>Nom prénom</label><input style={inp} value={urgence2Nom} onChange={e => setUrgence2Nom(e.target.value)} /></div>
           <div><label style={lbl}>Téléphone</label><input style={inp} value={urgence2Tel} onChange={e => setUrgence2Tel(e.target.value)} /></div>
           <div><label style={lbl}>Lien parenté</label><input style={inp} value={urgence2Lien} onChange={e => setUrgence2Lien(e.target.value)} /></div>
