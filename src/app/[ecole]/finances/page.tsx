@@ -175,16 +175,12 @@ export default function FinancesPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header — uniquement titre + sélecteur année (PAS de boutons d'action ici) */}
+      {/* Header — titre uniquement. Le selecteur d'annee est dans le header global. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.finances.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & Règlements — {ANNEE}</p>
         </div>
-        <select value={ANNEE} onChange={e => changeAnnee(e.target.value)}
-          style={{ padding: '8px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#2563EB', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          {ANNEES_DISPO.map(a => <option key={a} value={a}>📅 {a}</option>)}
-        </select>
       </div>
 
       {/* Stats */}
