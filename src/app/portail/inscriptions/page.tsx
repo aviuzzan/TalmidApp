@@ -163,33 +163,35 @@ function DossierTab({ router }: { router: any }) {
         </div>
       )}
 
-      {/* Étapes — l'inscription d'un nouvel enfant precede la reduction et le contrat */}
+      {/* Demarches a faire */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Étape 1 : Nouvel enfant (si besoin) */}
-        <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 14, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#94A3B8' }}>1</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>Inscrire un nouvel enfant</span>
-              <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>SI BESOIN</span>
+        {/* Ajouter un enfant non encore inscrit dans l'ecole */}
+        <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 14, padding: '16px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 28, flexShrink: 0 }}>👶</div>
+          <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>Ajouter un autre enfant à votre famille</span>
               <AideEtape
-                titreEtape="Inscrire un nouvel enfant"
-                aQuoiCaSert="Cette étape permet d'ajouter un enfant qui n'est pas encore inscrit dans l'établissement. Elle est à faire AVANT la demande de réduction et le contrat, car les autres démarches s'appuient sur la liste de vos enfants."
+                titreEtape="Ajouter un autre enfant"
+                aQuoiCaSert="Permet d'ajouter un nouvel enfant qui n'a pas encore de fiche dans l'école — typiquement un petit frère ou une petite sœur qui n'a jamais été scolarisé chez nous, un nouveau-né, ou un enfant qui arrive d'un autre établissement. À faire AVANT le contrat pour que cet enfant soit inclus dedans."
                 preparation={[
                   "L'état civil de l'enfant (nom, prénom, date de naissance)",
                   "La classe souhaitée pour la rentrée",
-                  "Le secteur d'inscription (Enseignement, etc.)",
                   "Les coordonnées des contacts d'urgence et du médecin",
                 ]}
                 duree="10 à 15 minutes"
                 couleur="#1E293B"
               />
             </div>
-            <div style={{ fontSize: 12, color: '#64748B' }}>Pour un enfant qui n'est pas encore dans l'école — à faire avant la demande de réduction et le contrat</div>
+            <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+              {enfants.length > 0
+                ? <>Vos {enfants.length > 1 ? `${enfants.length} enfants` : 'enfant'} déjà enregistré{enfants.length > 1 ? 's' : ''} <strong>({enfants.map(e => e.prenom).join(', ')})</strong> sont automatiquement inclus dans le contrat. Utilisez ce bouton <strong>uniquement</strong> pour ajouter un enfant qui n'a pas encore de fiche dans l'école.</>
+                : <>Pour un enfant qui n'a pas encore de fiche dans l'école.</>}
+            </div>
           </div>
           <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
-            style={{ background: '#1E293B', border: 'none', borderRadius: 10, padding: '10px 18px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
-            Fiche d'inscription →
+            style={{ background: '#1E293B', border: 'none', borderRadius: 10, padding: '10px 16px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap', minHeight: 44 }}>
+            + Nouvel enfant
           </button>
         </div>
 
@@ -226,7 +228,7 @@ function DossierTab({ router }: { router: any }) {
             - reductionsOuvertes (qui inclut désormais le check tranche éligible) */}
         {(reductionsOuvertes || !!reduction) && (
           <EtapeCard
-            numero={2}
+            icone="💸"
             titre="Demande de réduction"
             desc="Facultatif — déposez votre dossier avant la date limite"
             optional
@@ -255,7 +257,7 @@ function DossierTab({ router }: { router: any }) {
         )}
 
         <EtapeCard
-          numero={3}
+          icone="📝"
           titre="Contrat de scolarisation"
           desc={contratBloqueParDDR
             ? `Vous devez d'abord déposer votre demande de réduction (ou y renoncer) pour pouvoir signer le contrat ${anneeInscription}.`
@@ -526,8 +528,8 @@ function DocumentsTab() {
   )
 }
 
-function EtapeCard({ numero, titre, desc, status, ouvert, dateLimite, statutLabel, statutColor, onAction, actionLabel, optional, highlight, aide }: {
-  numero: number; titre: string; desc: string
+function EtapeCard({ icone, titre, desc, status, ouvert, dateLimite, statutLabel, statutColor, onAction, actionLabel, optional, highlight, aide }: {
+  icone?: string; titre: string; desc: string
   status: 'todo' | 'inprogress' | 'done'
   ouvert: boolean; dateLimite: string | null
   statutLabel: string | null; statutColor: string | null
@@ -538,31 +540,46 @@ function EtapeCard({ numero, titre, desc, status, ouvert, dateLimite, statutLabe
   const isDone = status === 'done'
   const isProgress = status === 'inprogress'
   return (
-    <div style={{ background: highlight && !isDone ? 'linear-gradient(135deg, #EFF6FF, #F0F9FF)' : '#fff', border: `1px solid ${isDone ? 'rgba(16,185,129,0.3)' : highlight ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 14, padding: '18px 20px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, background: isDone ? '#10B981' : isProgress ? '#F59E0B' : highlight ? '#2563EB' : '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: isDone || highlight || isProgress ? '#fff' : '#94A3B8' }}>
-          {isDone ? '✓' : numero}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{titre}</span>
-            {optional && <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>OPTIONNEL</span>}
-            {aide}
-          </div>
-          <div style={{ fontSize: 12, color: '#64748B' }}>{desc}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
-            {statutLabel && <span style={{ fontSize: 11, fontWeight: 600, color: statutColor || '#64748B', background: `${statutColor}18`, borderRadius: 20, padding: '3px 10px' }}>{statutLabel}</span>}
-            {dateLimite && !isDone && <span style={{ fontSize: 11, color: '#94A3B8' }}>📅 {dateLimite}</span>}
-          </div>
-        </div>
-        {ouvert && (
-          <button onClick={onAction}
-            style={{ background: isDone ? '#F1F5F9' : highlight ? '#2563EB' : '#1E293B', border: 'none', borderRadius: 10, padding: '10px 18px', color: isDone ? '#64748B' : '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap', boxShadow: !isDone && highlight ? '0 4px 12px rgba(37,99,235,0.3)' : 'none' }}>
-            {actionLabel}
-          </button>
-        )}
-        {!ouvert && !isDone && <span style={{ fontSize: 12, color: '#CBD5E1', flexShrink: 0 }}>Fermé</span>}
+    <div style={{
+      background: highlight && !isDone ? 'linear-gradient(135deg, #EFF6FF, #F0F9FF)' : '#fff',
+      border: `1px solid ${isDone ? 'rgba(16,185,129,0.3)' : highlight ? '#BFDBFE' : '#E2E8F0'}`,
+      borderRadius: 14, padding: '16px 18px',
+      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12,
+    }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+        background: isDone ? '#10B981' : isProgress ? '#FEF3C7' : highlight ? '#DBEAFE' : '#F1F5F9',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: isDone ? 18 : 20, fontWeight: 800,
+        color: isDone ? '#fff' : isProgress ? '#92400E' : highlight ? '#1E40AF' : '#64748B',
+      }}>
+        {isDone ? '✓' : (icone || '•')}
       </div>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{titre}</span>
+          {optional && <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>FACULTATIF</span>}
+          {aide}
+        </div>
+        <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>{desc}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+          {statutLabel && <span style={{ fontSize: 11, fontWeight: 600, color: statutColor || '#64748B', background: `${statutColor}18`, borderRadius: 20, padding: '3px 10px' }}>{statutLabel}</span>}
+          {dateLimite && !isDone && <span style={{ fontSize: 11, color: '#94A3B8' }}>📅 {dateLimite}</span>}
+        </div>
+      </div>
+      {ouvert && (
+        <button onClick={onAction}
+          style={{
+            background: isDone ? '#F1F5F9' : highlight ? '#2563EB' : '#1E293B',
+            border: 'none', borderRadius: 10, padding: '10px 16px',
+            color: isDone ? '#64748B' : '#fff', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap', minHeight: 44,
+            boxShadow: !isDone && highlight ? '0 4px 12px rgba(37,99,235,0.3)' : 'none',
+          }}>
+          {actionLabel}
+        </button>
+      )}
+      {!ouvert && !isDone && <span style={{ fontSize: 12, color: '#CBD5E1', flexShrink: 0 }}>Fermé</span>}
     </div>
   )
 }
