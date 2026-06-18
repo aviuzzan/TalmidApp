@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 
-type Tab = 'inbox' | 'nouveau'
+type Tab = 'inbox' | 'nouveau_famille' | 'nouveau_interne'
 type Filtre = 'ouvert' | 'resolu' | 'archive' | 'tous'
 
 export default function EcoleMessagesPage() {
@@ -18,12 +18,17 @@ export default function EcoleMessagesPage() {
   const [threads, setThreads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Form nouveau interne
+  // Form nouveau interne / à famille
   const [newServiceId, setNewServiceId] = useState('')
   const [newSujet, setNewSujet] = useState('')
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+
+  // Selecteur famille
+  const [familles, setFamilles] = useState<any[]>([])
+  const [familleSearch, setFamilleSearch] = useState('')
+  const [familleIdNew, setFamilleIdNew] = useState('')
 
   useEffect(() => { if (ecole?.id) load() }, [ecole?.id, filtre, serviceFiltre])
 
@@ -47,15 +52,28 @@ export default function EcoleMessagesPage() {
     ])
     setThreads(th ?? [])
     setServices(sv ?? [])
+    // Charger la liste des familles pour le sélecteur (light, juste id/nom/parent1)
+    const { data: fams } = await s
+      .from('familles')
+      .select('id, nom, numero, parent1_prenom, parent1_nom, parent1_email')
+      .eq('ecole_id', ecole.id)
+      .order('nom')
+    setFamilles(fams ?? [])
     setLoading(false)
   }
 
-  async function createInterne(e: React.FormEvent) {
+  async function createThread(e: React.FormEvent, famille_id: string | null) {
     e.preventDefault(); setError(''); setSending(true)
-    if (!newServiceId || !newSujet.trim() || !newMessage.trim()) { setError('Tous les champs sont requis'); setSending(false); return }
+    if (!newServiceId || !newSujet.trim() || !newMessage.trim()) {
+      setError('Service, sujet et message sont requis'); setSending(false); return
+    }
+    if (famille_id === '__demande__' || (famille_id === null && tab === 'nouveau_famille' && !familleIdNew)) {
+      setError('Choisissez une famille destinataire'); setSending(false); return
+    }
+    const familleFinale = tab === 'nouveau_famille' ? familleIdNew : null
     const s = createClient()
     const { data: th, error: errT } = await s.from('message_threads').insert({
-      ecole_id: ecole.id, service_id: newServiceId, famille_id: null,
+      ecole_id: ecole.id, service_id: newServiceId, famille_id: familleFinale,
       sujet: newSujet.trim(), statut: 'ouvert', created_by: profile.id,
     }).select().single()
     if (errT || !th) { setError(errT?.message || 'Erreur'); setSending(false); return }
@@ -69,16 +87,33 @@ export default function EcoleMessagesPage() {
     router.push(`/${ecole.slug}/messages/${th.id}`)
   }
 
+
   if (loading && !threads.length) return <div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: '#1E293B' }}>💬 Messagerie école</h1>
-        <button onClick={() => setTab(tab === 'inbox' ? 'nouveau' : 'inbox')}
-          style={{ background: tab === 'nouveau' ? '#F1F5F9' : '#2563EB', color: tab === 'nouveau' ? '#475569' : '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          {tab === 'nouveau' ? '← Inbox' : '+ Nouveau (interne)'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {tab !== 'inbox' && (
+            <button onClick={() => { setTab('inbox'); setError(''); setNewSujet(''); setNewMessage(''); setFamilleIdNew(''); setFamilleSearch('') }}
+              style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              ← Inbox
+            </button>
+          )}
+          {tab === 'inbox' && (
+            <>
+              <button onClick={() => setTab('nouveau_famille')}
+                style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                + Écrire à un parent
+              </button>
+              <button onClick={() => setTab('nouveau_interne')}
+                style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                + Conversation interne
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {tab === 'inbox' && (
@@ -135,18 +170,69 @@ export default function EcoleMessagesPage() {
         </>
       )}
 
-      {tab === 'nouveau' && (
-        <form onSubmit={createInterne} className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: 24 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: '#1E293B' }}>Nouvelle conversation interne</h2>
-          <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 18px' }}>Pour échanger entre agents (sans famille). Tous les agents du service choisi pourront y répondre.</p>
+      {(tab === 'nouveau_famille' || tab === 'nouveau_interne') && (
+        <form onSubmit={(e) => createThread(e, tab === 'nouveau_famille' ? familleIdNew : null)}
+          className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: 24 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: '#1E293B' }}>
+            {tab === 'nouveau_famille' ? 'Écrire à un parent' : 'Nouvelle conversation interne'}
+          </h2>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 18px' }}>
+            {tab === 'nouveau_famille'
+              ? 'Le parent recevra un email de notification au nom de l\'école et pourra répondre depuis son portail.'
+              : 'Pour échanger entre agents (sans famille). Tous les agents du service choisi pourront y répondre.'}
+          </p>
+
+          {tab === 'nouveau_famille' && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Famille destinataire</div>
+              <input type="text" value={familleSearch}
+                onChange={e => { setFamilleSearch(e.target.value); setFamilleIdNew('') }}
+                placeholder="Tapez nom, n° ou email pour filtrer..."
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+              {familleSearch && !familleIdNew && (
+                <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff' }}>
+                  {familles
+                    .filter(f => {
+                      const q = familleSearch.toLowerCase()
+                      return f.nom?.toLowerCase().includes(q)
+                        || (f.numero || '').toLowerCase().includes(q)
+                        || (f.parent1_email || '').toLowerCase().includes(q)
+                        || (f.parent1_nom || '').toLowerCase().includes(q)
+                        || (f.parent1_prenom || '').toLowerCase().includes(q)
+                    })
+                    .slice(0, 20)
+                    .map(f => (
+                      <button key={f.id} type="button"
+                        onClick={() => { setFamilleIdNew(f.id); setFamilleSearch(`${f.nom} — ${f.parent1_prenom || ''} ${f.parent1_nom || ''}`.trim()) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: '#fff', border: 'none', borderBottom: '1px solid #F1F5F9', cursor: 'pointer', fontSize: 13 }}>
+                        <strong style={{ color: '#1E293B' }}>{f.nom}</strong>
+                        {f.numero && <span style={{ color: '#94A3B8', marginLeft: 6 }}>N° {f.numero}</span>}
+                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                          {[f.parent1_prenom, f.parent1_nom].filter(Boolean).join(' ')}
+                          {f.parent1_email && ` · ${f.parent1_email}`}
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              )}
+              {familleIdNew && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#059669', fontWeight: 600 }}>
+                  ✓ Famille sélectionnée. <button type="button" onClick={() => { setFamilleIdNew(''); setFamilleSearch('') }} style={{ background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer', fontSize: 12, padding: 0, marginLeft: 6 }}>Changer</button>
+                </div>
+              )}
+            </div>
+          )}
 
           <label style={{ display: 'block', marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Service destinataire</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Service expéditeur</div>
             <select value={newServiceId} onChange={e => setNewServiceId(e.target.value)} required
               style={{ width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 14, background: '#fff' }}>
               <option value="">— Choisir un service —</option>
               {services.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
             </select>
+            {tab === 'nouveau_famille' && (
+              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Le parent verra le message comme venant de ce service.</div>
+            )}
           </label>
 
           <label style={{ display: 'block', marginBottom: 14 }}>
@@ -165,7 +251,7 @@ export default function EcoleMessagesPage() {
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button type="button" onClick={() => setTab('inbox')} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Annuler</button>
-            <button type="submit" disabled={sending} style={{ background: sending ? '#94A3B8' : '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 13, fontWeight: 700, cursor: sending ? 'wait' : 'pointer' }}>
+            <button type="submit" disabled={sending} style={{ background: sending ? '#94A3B8' : (tab === 'nouveau_famille' ? '#2563EB' : '#7C3AED'), color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 13, fontWeight: 700, cursor: sending ? 'wait' : 'pointer' }}>
               {sending ? 'Envoi…' : 'Envoyer'}
             </button>
           </div>
