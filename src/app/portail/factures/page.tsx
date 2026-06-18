@@ -113,6 +113,46 @@ export default function PortailFacturesPage() {
         </div>
       )}
 
+      {/* Avoirs visibles meme si pas de facture pour l'annee selectionnee (un avoir peut etre emis sur N et applique sur N+1) */}
+      {avoirs.length > 0 && !parent.estSeparee && (
+        <div style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #DCFCE7', background: '#F0FDF4', fontWeight: 600, fontSize: 14, color: '#065F46' }}>
+            🎁 Mes avoirs & notes de crédit
+          </div>
+          <div style={{ padding: '12px 20px', fontSize: 12, color: '#475569' }}>
+            Ces avoirs sont émis par l&apos;école à votre nom. Ils sont déduits automatiquement de vos factures lorsque l&apos;école les impute. Pour toute question, contactez l&apos;administration.
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: '#F8FAFC' }}>
+                <tr>
+                  {['N°', 'Émis le', 'Motif', 'Montant', 'Disponible', 'Statut'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {avoirs.map((a: any) => (
+                  <tr key={a.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                    <td style={{ padding: '10px 16px', fontSize: 12, fontFamily: 'monospace', fontWeight: 600 }}>{a.numero || a.id.substring(0, 8)}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{new Date(a.date_emission).toLocaleDateString('fr-FR')}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{a.motif || '—'}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{Number(a.montant).toLocaleString('fr-FR')} €</td>
+                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: Number(a.montant_disponible) > 0 ? '#10B981' : '#94A3B8' }}>{Number(a.montant_disponible).toLocaleString('fr-FR')} €</td>
+                    <td style={{ padding: '10px 16px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 10,
+                        background: a.statut === 'actif' ? '#ECFDF5' : a.statut === 'utilise' ? '#F1F5F9' : a.statut === 'partiellement_utilise' ? '#FEF3C7' : '#FEF2F2',
+                        color: a.statut === 'actif' ? '#065F46' : a.statut === 'utilise' ? '#475569' : a.statut === 'partiellement_utilise' ? '#92400E' : '#991B1B',
+                        textTransform: 'uppercase' }}>{a.statut.replace(/_/g, ' ')}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {!facture ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
           Aucune facture pour l'année {anneeInscription.replace('-', '/')}
@@ -218,44 +258,6 @@ export default function PortailFacturesPage() {
               <div style={{ fontSize: 13, color: '#991B1B', lineHeight: 1.5 }}>
                 <strong>Cette facture a été annulée par l'école.</strong> Si vous avez une question, contactez l'administration.
               </div>
-            </div>
-          )}
-
-          {/* Avoirs disponibles - visible pour parent meme si pas separe */}
-          {avoirs.length > 0 && !parent.estSeparee && (
-            <div style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #DCFCE7', background: '#F0FDF4', fontWeight: 600, fontSize: 14, color: '#065F46' }}>
-                🎁 Avoirs & notes de crédit
-              </div>
-              <div style={{ padding: '12px 20px', fontSize: 12, color: '#475569' }}>
-                Ces avoirs sont émis par l&apos;école à votre nom. Ils sont déduits automatiquement de vos factures lorsque l&apos;école les impute. Pour toute question, contactez l&apos;administration.
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#F8FAFC' }}>
-                  <tr>
-                    {['N°', 'Émis le', 'Motif', 'Montant', 'Disponible', 'Statut'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {avoirs.map((a: any) => (
-                    <tr key={a.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                      <td style={{ padding: '10px 16px', fontSize: 12, fontFamily: 'monospace', fontWeight: 600 }}>{a.numero || a.id.substring(0, 8)}</td>
-                      <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{new Date(a.date_emission).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{a.motif || '—'}</td>
-                      <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{Number(a.montant).toLocaleString('fr-FR')} €</td>
-                      <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: Number(a.montant_disponible) > 0 ? '#10B981' : '#94A3B8' }}>{Number(a.montant_disponible).toLocaleString('fr-FR')} €</td>
-                      <td style={{ padding: '10px 16px' }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 10,
-                          background: a.statut === 'actif' ? '#ECFDF5' : a.statut === 'utilise' ? '#F1F5F9' : a.statut === 'partiellement_utilise' ? '#FEF3C7' : '#FEF2F2',
-                          color: a.statut === 'actif' ? '#065F46' : a.statut === 'utilise' ? '#475569' : a.statut === 'partiellement_utilise' ? '#92400E' : '#991B1B',
-                          textTransform: 'uppercase' }}>{a.statut.replace(/_/g, ' ')}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
 

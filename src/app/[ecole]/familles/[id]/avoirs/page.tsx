@@ -97,14 +97,16 @@ export default function AvoirsFamillePage() {
             montant: m,
             cree_par: session?.user.id,
           })
-          await s.from('reglements').insert({
+          const { error: errRegA } = await s.from('reglements').insert({
             facture_id: form.facture_origine_id,
+            famille_id: familleId,
             montant: m,
             date_reglement: new Date().toISOString().split('T')[0],
-            mode: 'avoir',
+            mode_paiement: 'avoir',
             reference: avoirCree.numero,
             notes: `Imputation avoir ${avoirCree.numero || avoirCree.id.substring(0, 8)} (cree dans le meme geste)`,
           })
+          if (errRegA) alert('Avoir cree mais reglement non trace : ' + errRegA.message)
           await s.from('avoirs').update({ statut: 'utilise' }).eq('id', avoirCree.id)
         }
       }
@@ -135,14 +137,16 @@ export default function AvoirsFamillePage() {
 
     // 2. Si imputé sur une facture → créer un règlement de type "avoir"
     if (imputForm.factureId) {
-      await s.from('reglements').insert({
+      const { error: errReg } = await s.from('reglements').insert({
         facture_id: imputForm.factureId,
+        famille_id: familleId,
         montant: m,
         date_reglement: new Date().toISOString().split('T')[0],
-        mode: 'avoir',
+        mode_paiement: 'avoir',
         reference: avoir.numero,
         notes: `Imputation avoir ${avoir.numero || avoir.id.substring(0, 8)}`,
       })
+      if (errReg) alert('Imputation enregistree mais reglement non trace : ' + errReg.message)
     }
 
     // 3. Mettre à jour le statut de l'avoir
