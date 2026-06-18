@@ -478,13 +478,34 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
           }
         }
       } else {
-        // Pas de DDR validée : 1 ligne par enfant avec sous_total complet
+        // Pas de DDR validée : on éclate les postes du contrat (Frais de scolarité,
+        // Demi-pension, Navette, Cantine, etc.) pour que la facture montre le détail
+        // au lieu d'un montant global.
         for (const e of enfants) {
-          if (e.sous_total != null) {
+          const postes = Array.isArray((e as any).postes) ? (e as any).postes : []
+          const enfantLabel = e.enfants ? `${e.enfants.prenom || ''} ${e.enfants.nom || ''}`.trim() : ''
+          const classe = e.classe_prevue ? ` (${e.classe_prevue})` : ''
+          if (postes.length > 0) {
+            for (const p of postes) {
+              const montant = parseFloat(p.montant) || 0
+              if (montant <= 0) continue
+              const nom = p.nom || 'Poste'
+              const tarifInclus = tarifMap[p.tarif_id]
+              const estScolarite = /scolarit/i.test(nom)
+              const deductible = tarifInclus !== undefined ? tarifInclus !== false : estScolarite
+              lignes.push({
+                facture_id: nf.id,
+                enfant_id: e.enfant_id,
+                description: `${nom} ${annee} — ${enfantLabel}${classe}`.trim(),
+                montant,
+                deductible,
+              })
+            }
+          } else if (e.sous_total != null) {
             lignes.push({
               facture_id: nf.id,
               enfant_id: e.enfant_id,
-              description: `Scolarité ${annee}${e.classe_prevue ? ' — ' + e.classe_prevue : ''}${e.enfants ? ' (' + (e.enfants.prenom || '') + ' ' + (e.enfants.nom || '') + ')' : ''}`.trim(),
+              description: `Scolarité ${annee}${e.classe_prevue ? ' — ' + e.classe_prevue : ''}${enfantLabel ? ' (' + enfantLabel + ')' : ''}`.trim(),
               montant: parseFloat(e.sous_total) || 0,
               deductible: true,
             })
