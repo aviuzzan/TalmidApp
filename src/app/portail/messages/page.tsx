@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { calcRetention, couleurRetention } from '@/lib/retention-messages'
 
 type Tab = 'liste' | 'nouveau'
 
@@ -11,6 +12,7 @@ export default function PortailMessagesPage() {
   const [profile, setProfile] = useState<any>(null)
   const [threads, setThreads] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
+  const [dureeRetention, setDureeRetention] = useState<number>(15)
   const [loading, setLoading] = useState(true)
 
   // Nouveau thread form
@@ -39,6 +41,10 @@ export default function PortailMessagesPage() {
     ])
     setThreads(th ?? [])
     setServices(sv ?? [])
+    if (ecoleId) {
+      const { data: ec } = await s.from('ecoles').select('duree_retention_messages_jours').eq('id', ecoleId).single()
+      setDureeRetention(ec?.duree_retention_messages_jours ?? 15)
+    }
     setLoading(false)
   }
 
@@ -81,6 +87,11 @@ export default function PortailMessagesPage() {
       </div>
 
       {tab === 'liste' && (
+        <>
+        <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#1E40AF', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>🗑</span>
+          <span>Pour respecter la confidentialité, les conversations sont <strong>automatiquement supprimées {dureeRetention} jours</strong> après le dernier message — de votre côté comme du côté de l&apos;école.</span>
+        </div>
         <div className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
           {threads.length === 0 ? (
             <div style={{ padding: 50, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
@@ -114,12 +125,23 @@ export default function PortailMessagesPage() {
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                       {new Date(t.last_message_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
+                    {(() => {
+                      const ret = calcRetention(t.last_message_at, dureeRetention)
+                      const col = couleurRetention(ret.niveau)
+                      return (
+                        <div title={ret.labelComplet}
+                          style={{ display: 'inline-block', marginTop: 4, background: col.bg, color: col.fg, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5 }}>
+                          🗑 {ret.labelCourt}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               </a>
             )
           })}
         </div>
+        </>
       )}
 
       {tab === 'nouveau' && (

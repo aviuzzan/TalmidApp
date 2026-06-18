@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { calcRetention, couleurRetention } from '@/lib/retention-messages'
 
 type Tab = 'inbox' | 'nouveau_famille' | 'nouveau_interne'
 type Filtre = 'ouvert' | 'resolu' | 'archive' | 'tous'
@@ -17,6 +18,7 @@ export default function EcoleMessagesPage() {
   const [services, setServices] = useState<any[]>([])
   const [threads, setThreads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [dureeRetention, setDureeRetention] = useState<number>(15)
 
   // Form nouveau interne / à famille
   const [newServiceId, setNewServiceId] = useState('')
@@ -52,6 +54,9 @@ export default function EcoleMessagesPage() {
     ])
     setThreads(th ?? [])
     setServices(sv ?? [])
+    // Durée de rétention pour l'affichage du marquage
+    const { data: ec } = await s.from('ecoles').select('duree_retention_messages_jours').eq('id', ecole.id).single()
+    setDureeRetention(ec?.duree_retention_messages_jours ?? 15)
     // Charger la liste des familles pour le sélecteur (light, juste id/nom/parent1)
     const { data: fams } = await s
       .from('familles')
@@ -118,6 +123,11 @@ export default function EcoleMessagesPage() {
 
       {tab === 'inbox' && (
         <>
+          {/* Bannière rétention */}
+          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#1E40AF', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>🗑</span>
+            <span>Pour respecter la confidentialité, les conversations sont <strong>automatiquement supprimées {dureeRetention} jours</strong> après le dernier message — côté école comme côté famille.</span>
+          </div>
           {/* Filtres */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
             {(['ouvert', 'resolu', 'archive', 'tous'] as Filtre[]).map(f => (
@@ -161,6 +171,16 @@ export default function EcoleMessagesPage() {
                       <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                         {new Date(t.last_message_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </div>
+                      {(() => {
+                        const ret = calcRetention(t.last_message_at, dureeRetention)
+                        const col = couleurRetention(ret.niveau)
+                        return (
+                          <div title={ret.labelComplet}
+                            style={{ display: 'inline-block', marginTop: 4, background: col.bg, color: col.fg, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5 }}>
+                            🗑 {ret.labelCourt}
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 </a>
