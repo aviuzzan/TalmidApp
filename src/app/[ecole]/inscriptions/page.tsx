@@ -746,12 +746,23 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
 
   async function changerStatut(id: string, statut: string) {
     const s = createClient()
-    await s.from('inscriptions_pedagogiques').update({ statut }).eq('id', id)
+    const { error: errFiche } = await s.from('inscriptions_pedagogiques').update({ statut }).eq('id', id)
+    if (errFiche) { alert('Erreur fiche : ' + errFiche.message); return }
     // Repercuter sur l'eleve : accepte => inscrit (debloque la reinscription), refuse => refuse
     const fiche = liste.find(d => d.id === id)
     if (fiche?.enfant_id) {
-      if (statut === 'accepte') await s.from('enfants').update({ statut_inscription: 'inscrit' }).eq('id', fiche.enfant_id)
-      else if (statut === 'refuse') await s.from('enfants').update({ statut_inscription: 'refuse' }).eq('id', fiche.enfant_id)
+      const nouveauStatut = statut === 'accepte' ? 'inscrit' : statut === 'refuse' ? 'refuse' : null
+      if (nouveauStatut) {
+        const { data, error: errEnf } = await s
+          .from('enfants')
+          .update({ statut_inscription: nouveauStatut })
+          .eq('id', fiche.enfant_id)
+          .select('id, statut_inscription')
+        if (errEnf || !data || data.length === 0) {
+          alert(`Fiche validée mais le statut de l'élève n'a pas pu être mis à jour. Détail : ${errEnf?.message || 'aucune ligne modifiée (probablement RLS)'}`)
+          return
+        }
+      }
     }
     setListe(p => p.map(d => d.id === id ? { ...d, statut } : d))
   }
