@@ -114,9 +114,9 @@ function parseMarkdown(md: string): Section[] {
     }
   }
   // Ajoute les sections custom non-defaut a la fin
-  for (const [cle, sec] of trouvees) {
+  trouvees.forEach((sec, cle) => {
     if (!utilisees.has(cle)) resultat.push(sec)
-  }
+  })
   return resultat
 }
 
