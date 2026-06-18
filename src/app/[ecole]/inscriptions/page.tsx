@@ -774,6 +774,7 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
     if (fiche?.enfant_id) {
       const nouveauStatut = statut === 'accepte' ? 'inscrit' : statut === 'refuse' ? 'refuse' : null
       if (nouveauStatut) {
+        // 1) Update statut sur enfants (debloque la reinscription)
         const { data, error: errEnf } = await s
           .from('enfants')
           .update({ statut_inscription: nouveauStatut })
@@ -782,6 +783,18 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
         if (errEnf || !data || data.length === 0) {
           alert(`Fiche validée mais le statut de l'élève n'a pas pu être mis à jour. Détail : ${errEnf?.message || 'aucune ligne modifiée (probablement RLS)'}`)
           return
+        }
+        // 2) Update aussi scolarites.statut_inscription pour l'annee de la fiche
+        // C'est ce qui s'affiche dans la fiche enfant (parcours scolaire par annee).
+        if (fiche.annee_scolaire) {
+          const { error: errSco } = await s
+            .from('scolarites')
+            .update({ statut_inscription: nouveauStatut })
+            .eq('enfant_id', fiche.enfant_id)
+            .eq('annee_scolaire', fiche.annee_scolaire)
+          if (errSco) {
+            console.warn('Update scolarites echoue (non bloquant) :', errSco.message)
+          }
         }
       }
     }
