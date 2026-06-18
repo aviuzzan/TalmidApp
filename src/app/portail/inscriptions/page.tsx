@@ -105,6 +105,28 @@ function DossierTab({ router }: { router: any }) {
     && config?.date_cloture_reduction >= today
     && trancheEligible
   const inscriptionsOuvertes = config?.inscriptions_ouvertes && config?.date_ouverture_inscription <= today && config?.date_cloture_inscription >= today
+
+  // Bloquer le contrat si :
+  //  1) la famille est éligible à une DDR (trancheEligible)
+  //  2) ET aucune DDR encore traitée (statut soumis/en_etude OU pas de DDR du tout)
+  //  3) ET la famille n'a PAS renoncé à la DDR pour cette année
+  const renoncements = (famille?.renoncements_ddr || {}) as Record<string, any>
+  const aRenonce = !!renoncements[anneeInscription]
+  const ddrTraitee = reduction && ['accepte', 'refuse'].includes(reduction.statut)
+  const contratBloqueParDDR =
+    trancheEligible
+    && !ddrTraitee
+    && !aRenonce
+
+  async function renoncerDDR() {
+    if (!famille) return
+    if (!confirm(`Confirmez-vous renoncer à la demande de réduction pour ${anneeInscription} ?\n\nVous serez basculé(e) au tarif normal.\nCette décision est définitive pour cette année.`)) return
+    const s = createClient()
+    const nouveau = { ...renoncements, [anneeInscription]: { renonce_le: new Date().toISOString() } }
+    const { error } = await s.from('familles').update({ renoncements_ddr: nouveau }).eq('id', famille.id)
+    if (error) { alert('Erreur : ' + error.message); return }
+    setFamille({ ...famille, renoncements_ddr: nouveau })
+  }
   const contratSoumis = contrat && ['soumis', 'valide'].includes(contrat.statut)
 
   return (
@@ -171,6 +193,33 @@ function DossierTab({ router }: { router: any }) {
           </button>
         </div>
 
+        {/* Alerte verrou DDR : la famille est éligible, n'a pas encore déposé de DDR ni renoncé. */}
+        {contratBloqueParDDR && !contrat && (
+          <div style={{ background: '#FFFBEB', border: '2px solid #FDE68A', borderRadius: 14, padding: '18px 22px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+              <span style={{ fontSize: 22 }}>⚠️</span>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E' }}>Une étape est nécessaire avant le contrat</div>
+            </div>
+            <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.55, marginBottom: 14 }}>
+              Votre tranche vous donne droit à un examen de votre situation par la commission de l&apos;école. Pour pouvoir signer le contrat de scolarisation, vous devez choisir :
+            </div>
+            <ul style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 13, color: '#78350F', lineHeight: 1.7 }}>
+              <li><strong>Soit déposer une demande de réduction</strong> et attendre la réponse de la commission.</li>
+              <li><strong>Soit renoncer à la réduction</strong> et signer le contrat au tarif normal.</li>
+            </ul>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button onClick={() => router.push('/portail/inscriptions/reduction')}
+                style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                💸 Déposer une demande de réduction
+              </button>
+              <button onClick={renoncerDDR}
+                style={{ background: '#fff', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Je renonce et veux le tarif normal
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Étape Demande de réduction : MASQUÉE COMPLÈTEMENT si la famille n'est pas éligible.
             Reste visible UNIQUEMENT si :
             - la famille a déjà un dossier (toujours pouvoir le consulter), OU
@@ -208,9 +257,13 @@ function DossierTab({ router }: { router: any }) {
         <EtapeCard
           numero={3}
           titre="Contrat de scolarisation"
-          desc={enfants.length > 0 ? `Réinscrivez ${enfants.length > 1 ? 'vos enfants' : enfants[0]?.prenom || 'votre enfant'} pour ${anneeInscription}` : `Finalisez votre inscription pour ${anneeInscription}`}
+          desc={contratBloqueParDDR
+            ? `Vous devez d'abord déposer votre demande de réduction (ou y renoncer) pour pouvoir signer le contrat ${anneeInscription}.`
+            : enfants.length > 0
+              ? `Réinscrivez ${enfants.length > 1 ? 'vos enfants' : enfants[0]?.prenom || 'votre enfant'} pour ${anneeInscription}`
+              : `Finalisez votre inscription pour ${anneeInscription}`}
           status={contratSoumis ? 'done' : contrat?.statut === 'brouillon' ? 'inprogress' : 'todo'}
-          ouvert={inscriptionsOuvertes || !!contrat}
+          ouvert={(inscriptionsOuvertes && !contratBloqueParDDR) || !!contrat}
           dateLimite={config?.date_cloture_inscription ? `Avant le ${new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}` : null}
           statutLabel={contrat ? formatStatut(contrat.statut).label : null}
           statutColor={contrat ? formatStatut(contrat.statut).color : null}

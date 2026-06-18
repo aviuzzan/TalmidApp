@@ -111,6 +111,21 @@ export default function ContratPage() {
     // Charger les infos de l'école pour les textes dynamiques (nom institution, SEPA, assurance)
     const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa, assurance_proposee, assurance_montant_annuel').eq('id', profile.ecole_id).single()
     setEcoleInfo(ecData)
+
+    // Verrou DDR : si famille éligible mais pas de réponse ni renoncement → on bascule sur un mode lock
+    // (l'utilisateur sera redirigé vers /portail/inscriptions où la décision se prend)
+    try {
+      const { data: cfgInsc } = await s.from('inscriptions_config').select('tranches_eligibles_ddr').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).maybeSingle()
+      const eligiblesTr: string[] = (cfgInsc as any)?.tranches_eligibles_ddr || []
+      const trancheEligible = fam?.tranche_id && eligiblesTr.includes(fam.tranche_id)
+      const renoncements = (fam?.renoncements_ddr || {}) as Record<string, any>
+      const aRenonce = !!renoncements[anneeInscription]
+      const ddrTraitee = ddr && ['accepte', 'refuse'].includes(ddr.statut)
+      if (trancheEligible && !ddrTraitee && !aRenonce && !cont) {
+        if (typeof window !== 'undefined') router.push('/portail/inscriptions')
+        return
+      }
+    } catch {}
     // Si l'école ne propose pas d'assurance, le défaut est "fournit son propre justificatif"
     if (ecData && ecData.assurance_proposee === false) setAssuranceEcole(false)
 
