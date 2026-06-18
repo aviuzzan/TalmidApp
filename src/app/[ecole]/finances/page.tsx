@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
+import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
 
 type Tab = 'tarifs' | 'factures' | 'paiements'
 const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
@@ -20,6 +21,7 @@ export default function FinancesPage() {
   const [tab, setTab] = useState<Tab>('factures')
   const [tarifs, setTarifs] = useState<any[]>([])
   const [factures, setFactures] = useState<any[]>([])
+  const [duAdates, setDuAdates] = useState<Record<string, DuADateResult>>({})
   const [reglements, setReglements] = useState<any[]>([])
   const [familles, setFamilles] = useState<any[]>([])
   // Filtres paiements
@@ -80,6 +82,16 @@ export default function FinancesPage() {
     setFactures(f ?? [])
     setFamilles(fam ?? [])
     setReglements(regs ?? [])
+
+    // Calcule le du a date pour chaque facture (echeances echues - reglements imputes).
+    const facturesList = f ?? []
+    if (facturesList.length > 0) {
+      const duMap = await calcDuADateBatch(supabase, facturesList.map((x: any) => x.id))
+      setDuAdates(duMap)
+    } else {
+      setDuAdates({})
+    }
+
     setLoading(false)
   }, [ANNEE])
 
@@ -250,17 +262,20 @@ export default function FinancesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ background: '#F8FAFC' }}>
               <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-                {['N° Facture', 'Famille', 'Total', 'Réglé', 'Solde', 'Statut', 'Actions'].map(h => (
+                {['N° Facture', 'Famille', 'Total annuel', 'Réglé', 'Solde annuel', 'Dû à date', 'Statut', 'Actions'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
+                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
               ) : factures.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucune facture pour {ANNEE}</td></tr>
-              ) : factures.map((f, i) => (
+                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucune facture pour {ANNEE}</td></tr>
+              ) : factures.map((f, i) => {
+                const du = duAdates[f.id]
+                const duAdate = du?.duAdate || 0
+                return (
                 <tr key={f.id} style={{ borderBottom: i < factures.length - 1 ? '1px solid #F1F5F9' : 'none' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -268,8 +283,22 @@ export default function FinancesPage() {
                   <td style={{ padding: '13px 16px', fontWeight: 600 }}>{f.familles?.nom} <span style={{ color: '#94A3B8', fontSize: 11 }}>({f.familles?.numero})</span></td>
                   <td style={{ padding: '13px 16px', fontWeight: 600 }}>{Number(f.total_facture).toLocaleString('fr-FR')} €</td>
                   <td style={{ padding: '13px 16px', color: '#059669', fontWeight: 600 }}>{Number(f.total_regle).toLocaleString('fr-FR')} €</td>
-                  <td style={{ padding: '13px 16px', fontWeight: 700, color: Number(f.solde_restant) > 0 ? '#DC2626' : '#059669' }}>
+                  <td style={{ padding: '13px 16px', fontWeight: 600, color: '#475569' }}>
                     {Number(f.solde_restant).toLocaleString('fr-FR')} €
+                  </td>
+                  <td style={{ padding: '13px 16px', fontWeight: 700, color: duAdate > 0 ? '#DC2626' : '#94A3B8' }}>
+                    {duAdate > 0 ? (
+                      <>
+                        {duAdate.toLocaleString('fr-FR')} €
+                        {du?.nbEcheancesEchues ? <div style={{ fontSize: 10, color: '#991B1B', fontWeight: 500 }}>{du.nbEcheancesEchues} éch.</div> : null}
+                      </>
+                    ) : du?.prochaineEcheance ? (
+                      <span style={{ fontSize: 11, fontWeight: 500, color: '#64748B' }}>
+                        Prochaine : {new Date(du.prochaineEcheance.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94A3B8' }}>—</span>
+                    )}
                   </td>
                   <td style={{ padding: '13px 16px' }}>{statutBadge(f.statut)}</td>
                   <td style={{ padding: '13px 16px' }}>
@@ -279,7 +308,8 @@ export default function FinancesPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

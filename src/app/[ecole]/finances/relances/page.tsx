@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
 
 type Facture = {
   id: string
@@ -17,6 +18,7 @@ type Facture = {
   parent_nom?: string
   parent_email?: string
   famille_nom?: string
+  duAdate?: DuADateResult
 }
 
 type RelanceLog = { facture_id: string; niveau: number; envoyee_le: string }
@@ -28,6 +30,7 @@ export default function RelancesPage() {
   const [factures, setFactures] = useState<Facture[]>([])
   const [logs, setLogs] = useState<Record<string, RelanceLog[]>>({})
   const [msg, setMsg] = useState('')
+  const [showAll, setShowAll] = useState(false)  // false = uniquement en retard reel
 
   const load = useCallback(async () => {
     if (!ecole?.id) return
@@ -56,8 +59,11 @@ export default function RelancesPage() {
       parent_email: f.familles?.parent1_email || '',
     }))
 
-    // Affiche TOUTES les factures avec solde > 0 non annulées.
-    // Le retard est calculé et affiché en colonne (peut être négatif si pas encore due).
+    // Calcule le du a date pour chaque facture (echeances echues - reglements imputes).
+    // Permet de distinguer "facture annuelle avec solde" vs "vraiment en retard sur une echeance".
+    const duMap = await calcDuADateBatch(s, factsList.map(f => f.id))
+    for (const f of factsList) f.duAdate = duMap[f.id]
+
     setFactures(factsList)
 
     if (factsList.length > 0) {
@@ -106,26 +112,45 @@ export default function RelancesPage() {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
-  const total = factures.reduce((s, f) => s + f.solde_restant, 0)
+
+  // Filtre principal : facture vraiment en retard (du a date > 0). Toggle pour voir aussi les autres.
+  const facturesEnRetard = factures.filter(f => (f.duAdate?.duAdate || 0) > 0)
+  const facturesAffichees = showAll ? factures : facturesEnRetard
+  const totalDuAdate = facturesEnRetard.reduce((s, f) => s + (f.duAdate?.duAdate || 0), 0)
+  const totalSoldeAnnuel = factures.reduce((s, f) => s + f.solde_restant, 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>📩 Relances impayés</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>
-          Toutes les factures avec solde non réglé. Le retard est calculé à partir de la date d&apos;échéance (ou d&apos;émission si aucune échéance définie).
+          Familles avec au moins une échéance échue non couverte par un règlement.
+          Le solde annuel est affiché à part — une famille peut avoir un solde sans être en retard.
         </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 11, color: '#991B1B', fontWeight: 600, textTransform: 'uppercase' }}>Factures impayées</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: '#DC2626', marginTop: 4 }}>{factures.length}</div>
+          <div style={{ fontSize: 11, color: '#991B1B', fontWeight: 600, textTransform: 'uppercase' }}>Familles en retard</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: '#DC2626', marginTop: 4 }}>{facturesEnRetard.length}</div>
         </div>
         <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 11, color: '#92400E', fontWeight: 600, textTransform: 'uppercase' }}>Montant total dû</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: '#D97706', marginTop: 4 }}>{total.toFixed(2)} €</div>
+          <div style={{ fontSize: 11, color: '#92400E', fontWeight: 600, textTransform: 'uppercase' }}>Dû à date</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: '#D97706', marginTop: 4 }}>{totalDuAdate.toLocaleString('fr-FR')} €</div>
+          <div style={{ fontSize: 11, color: '#92400E', marginTop: 2 }}>échéances échues − règlements</div>
         </div>
+        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase' }}>Solde annuel total</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: '#475569', marginTop: 4 }}>{totalSoldeAnnuel.toLocaleString('fr-FR')} €</div>
+          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>reste à recouvrer sur l&apos;année</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+          <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
+          Voir toutes les factures avec solde (pas seulement en retard)
+        </label>
       </div>
 
       {msg && (
@@ -134,9 +159,9 @@ export default function RelancesPage() {
           padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500 }}>{msg}</div>
       )}
 
-      {factures.length === 0 ? (
+      {facturesAffichees.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          🎉 Aucune facture en retard ! Tous les comptes sont à jour.
+          🎉 Aucune famille en retard. Toutes les échéances échues sont couvertes.
         </div>
       ) : (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
@@ -144,19 +169,20 @@ export default function RelancesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  {['Facture','Famille','Solde','Retard','Relances envoyées','Action'].map(h => (
-                    <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Solde' ? 'right' : h === 'Retard' || h === 'Relances envoyées' ? 'center' : h === 'Action' ? 'right' : 'left', fontWeight: 600, color: '#475569', fontSize: 11, textTransform: 'uppercase' }}>{h}</th>
+                  {['Facture','Famille','Dû à date','Solde annuel','Prochaine éch.','Relances envoyées','Action'].map(h => (
+                    <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Dû à date' || h === 'Solde annuel' ? 'right' : h === 'Prochaine éch.' || h === 'Relances envoyées' ? 'center' : h === 'Action' ? 'right' : 'left', fontWeight: 600, color: '#475569', fontSize: 11, textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {factures.map(f => {
-                  const jours = joursRetard(f)
+                {facturesAffichees.map(f => {
                   const sentLogs = logs[f.id] || []
                   const maxSent = sentLogs.reduce((m, l) => Math.max(m, l.niveau), 0)
                   const next = Math.min(maxSent + 1, 3)
+                  const du = f.duAdate
+                  const enRetard = (du?.duAdate || 0) > 0
                   return (
-                    <tr key={f.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <tr key={f.id} style={{ borderBottom: '1px solid #F1F5F9', background: enRetard ? '#FEF2F2' : 'transparent' }}>
                       <td style={{ padding: '12px', fontWeight: 600, color: '#1E293B' }}>{f.numero}</td>
                       <td style={{ padding: '12px', color: '#475569' }}>
                         <div style={{ fontWeight: 600 }}>{f.famille_nom}</div>
@@ -165,21 +191,30 @@ export default function RelancesPage() {
                           {f.parent_email && <span> · {f.parent_email}</span>}
                         </div>
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>{f.solde_restant.toFixed(2)} €</td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
-                        {jours < 0 ? (
-                          <span style={{ background: '#EFF6FF', color: '#1E40AF', padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>Dans {Math.abs(jours)} j</span>
-                        ) : (
-                          <span style={{ background: jours >= 60 ? '#FEE2E2' : jours >= 30 ? '#FED7AA' : jours >= 7 ? '#FEF3C7' : '#F1F5F9', color: jours >= 60 ? '#991B1B' : jours >= 30 ? '#9A3412' : jours >= 7 ? '#92400E' : '#475569', padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
-                            {jours === 0 ? "Aujourd'hui" : `+${jours} j`}
-                          </span>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: enRetard ? '#DC2626' : '#94A3B8' }}>
+                        {enRetard ? `${(du?.duAdate || 0).toLocaleString('fr-FR')} €` : '— à jour —'}
+                        {enRetard && (
+                          <div style={{ fontSize: 10, color: '#991B1B', fontWeight: 500 }}>
+                            {du?.nbEcheancesEchues} éch. échue{(du?.nbEcheancesEchues || 0) > 1 ? 's' : ''}
+                          </div>
                         )}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', color: '#475569', fontWeight: 600 }}>
+                        {f.solde_restant.toLocaleString('fr-FR')} €
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: '#475569' }}>
+                        {du?.prochaineEcheance ? (
+                          <div>
+                            <div>{new Date(du.prochaineEcheance.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</div>
+                            <div style={{ fontSize: 11, color: '#94A3B8' }}>{du.prochaineEcheance.montant.toLocaleString('fr-FR')} €</div>
+                          </div>
+                        ) : <span style={{ color: '#94A3B8' }}>—</span>}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center', color: '#475569', fontSize: 12 }}>
                         {sentLogs.length === 0 ? '—' : sentLogs.map(l => `N${l.niveau}`).join(', ')}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
-                        {next > maxSent && f.parent_email ? (
+                        {enRetard && next > maxSent && f.parent_email ? (
                           <button onClick={() => envoyerRelance(f, next)} disabled={sending === f.id}
                             style={{ background: next === 3 ? '#DC2626' : '#2563EB', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: sending === f.id ? 0.6 : 1 }}>
                             {sending === f.id ? '…' : `Envoyer N${next}`}
