@@ -98,6 +98,7 @@ export default function DemandeReductionPage() {
   const [famille, setFamille] = useState<any>(null)
   const [enfants, setEnfants] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
+  const [eligible, setEligible] = useState<boolean | null>(null) // null = pas encore evalue
   const [secteurs, setSecteurs] = useState<any[]>([])
   const [demande, setDemande] = useState<any>(null)
   const [docsConfig, setDocsConfig] = useState<any[]>([])
@@ -202,6 +203,23 @@ export default function DemandeReductionPage() {
     setDocsConfig(docs ?? [])
     setQuestionsConfig(questions ?? [])
     if (fam) { setFamForm(fam); setSituation(fam.situation_maritale || 'marie') }
+
+    // Check d'éligibilité DDR : toggle reductions_ouvertes + tranche famille dans liste éligible.
+    // Si une demande existe déjà, on autorise pour qu'elle puisse être consultée/complétée.
+    const { data: cfg } = await s
+      .from('inscriptions_config')
+      .select('reductions_ouvertes, tranches_eligibles_ddr, date_ouverture_reduction, date_cloture_reduction')
+      .eq('ecole_id', profile.ecole_id)
+      .eq('annee_scolaire', anneeInscription)
+      .maybeSingle()
+    const eligiblesT: string[] = (cfg as any)?.tranches_eligibles_ddr || []
+    const trancheOK = fam?.tranche_id && eligiblesT.includes(fam.tranche_id)
+    const today = new Date().toISOString().split('T')[0]
+    const dateOK = cfg?.date_ouverture_reduction && cfg?.date_cloture_reduction
+      ? (cfg.date_ouverture_reduction <= today && cfg.date_cloture_reduction >= today)
+      : true
+    const isEligible = !!cfg?.reductions_ouvertes && dateOK && !!trancheOK
+    setEligible(isEligible || !!dem)
 
     if (dem) {
       setDemande(dem)
@@ -488,6 +506,13 @@ export default function DemandeReductionPage() {
       </div>
     </div>
   )
+
+  // Famille non éligible (toggle off OU tranche pas dans la liste OU hors période) :
+  // on redirige silencieusement vers le portail. Si une demande existe déjà, on autorise.
+  if (eligible === false) {
+    if (typeof window !== 'undefined') router.push('/portail/inscriptions')
+    return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 13 }}>Redirection…</div>
+  }
 
   if (demande && ['soumis', 'en_etude', 'accepte', 'refuse'].includes(demande.statut)) {
     const st = formatStatut(demande.statut)

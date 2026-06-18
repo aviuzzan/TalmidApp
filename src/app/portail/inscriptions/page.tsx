@@ -158,19 +158,25 @@ function DossierTab({ router }: { router: any }) {
           </button>
         </div>
 
-        <EtapeCard
-          numero={2}
-          titre="Demande de réduction"
-          desc="Facultatif — déposez votre dossier avant la date limite"
-          optional
-          status={reduction && ['soumis', 'en_etude', 'accepte'].includes(reduction.statut) ? 'done' : reduction?.statut === 'brouillon' ? 'inprogress' : 'todo'}
-          ouvert={reductionsOuvertes || !!reduction}
-          dateLimite={config?.date_cloture_reduction ? `Avant le ${new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR')}` : null}
-          statutLabel={reduction ? formatStatut(reduction.statut).label : null}
-          statutColor={reduction ? formatStatut(reduction.statut).color : null}
-          onAction={() => router.push('/portail/inscriptions/reduction')}
-          actionLabel={reduction ? 'Voir mon dossier →' : 'Déposer une demande →'}
-        />
+        {/* Étape Demande de réduction : MASQUÉE COMPLÈTEMENT si la famille n'est pas éligible.
+            Reste visible UNIQUEMENT si :
+            - la famille a déjà un dossier (toujours pouvoir le consulter), OU
+            - reductionsOuvertes (qui inclut désormais le check tranche éligible) */}
+        {(reductionsOuvertes || !!reduction) && (
+          <EtapeCard
+            numero={2}
+            titre="Demande de réduction"
+            desc="Facultatif — déposez votre dossier avant la date limite"
+            optional
+            status={reduction && ['soumis', 'en_etude', 'accepte'].includes(reduction.statut) ? 'done' : reduction?.statut === 'brouillon' ? 'inprogress' : 'todo'}
+            ouvert={reductionsOuvertes || !!reduction}
+            dateLimite={config?.date_cloture_reduction ? `Avant le ${new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR')}` : null}
+            statutLabel={reduction ? formatStatut(reduction.statut).label : null}
+            statutColor={reduction ? formatStatut(reduction.statut).color : null}
+            onAction={() => router.push('/portail/inscriptions/reduction')}
+            actionLabel={reduction ? 'Voir mon dossier →' : 'Déposer une demande →'}
+          />
+        )}
 
         <EtapeCard
           numero={3}
@@ -187,10 +193,10 @@ function DossierTab({ router }: { router: any }) {
         />
       </div>
 
-      {(config?.date_cloture_reduction || config?.date_cloture_inscription) && (
+      {((config?.date_cloture_reduction && (reductionsOuvertes || !!reduction)) || config?.date_cloture_inscription) && (
         <div style={{ marginTop: 28, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.05em' }}>DATES CLÉS</div>
-          {config.date_cloture_reduction && (
+          {config.date_cloture_reduction && (reductionsOuvertes || !!reduction) && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B', marginBottom: 8 }}>
               <span>Clôture demandes de réduction</span>
               <span style={{ fontWeight: 600, color: '#1E293B' }}>{new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR')}</span>
