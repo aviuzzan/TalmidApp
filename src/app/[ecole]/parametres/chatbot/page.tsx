@@ -61,9 +61,9 @@ export default function ChatbotConfigPage() {
         <div>
           <button onClick={() => router.push(`/${ecole.slug}/parametres`)}
             style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#475569', cursor: 'pointer', marginBottom: 8 }}>← Paramètres</button>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>💬 Chatbot</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>👨‍🎓 Levy — Assistant virtuel</h1>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
-            Assistant intelligent pour vos parents et admins. Configure l'activation, le ton et la FAQ.
+            Levy aide vos parents et admins en repondant a leurs questions. Configurez l&apos;activation, le ton et la FAQ qu&apos;il utilisera.
           </p>
         </div>
         <button onClick={sauvegarder} disabled={saving}
@@ -84,8 +84,8 @@ export default function ChatbotConfigPage() {
             <div style={{ position: 'absolute', top: 3, left: active ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B' }}>{active ? 'Chatbot activé' : 'Chatbot désactivé'}</div>
-            <div style={{ fontSize: 12, color: '#64748B' }}>Quand activé, le bouton 💬 apparaît sur le portail parent et la console admin.</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B' }}>{active ? 'Levy activé' : 'Levy désactivé'}</div>
+            <div style={{ fontSize: 12, color: '#64748B' }}>Quand activé, le bouton "Demandez à Levy" apparaît sur le portail parent et la console admin.</div>
           </div>
         </label>
       </div>
@@ -94,7 +94,7 @@ export default function ChatbotConfigPage() {
         <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', margin: '0 0 14px' }}>Réglages</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
-            <label style={lbl}>Ton de l'assistant</label>
+            <label style={lbl}>Ton de Levy</label>
             <select value={ton} onChange={e => setTon(e.target.value)} style={inp}>
               <option value="professionnel_chaleureux">Professionnel & chaleureux</option>
               <option value="formel">Formel</option>
@@ -110,10 +110,11 @@ export default function ChatbotConfigPage() {
       </div>
 
       <div style={card}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', margin: '0 0 6px' }}>FAQ école</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', margin: '0 0 6px' }}>FAQ que Levy doit connaître</h2>
         <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 14px' }}>
-          Le chatbot ne sait QUE ce que vous écrivez ici. Format Markdown libre — sections avec ##, listes avec -, etc.
-          Mettez : calendrier, horaires, contacts, règles cantine/transport, infos pratiques.
+          Levy connait déjà vos données (familles, factures, élèves...) et sait expliquer comment utiliser TalmidApp.
+          Ajoutez ici les infos spécifiques à votre école que Levy ne peut pas deviner : calendrier scolaire, horaires d&apos;ouverture, contacts secrétariat, règles cantine/transport, dates des fêtes, etc.
+          Format Markdown libre — sections avec ##, listes avec -.
         </p>
         <textarea value={faq} onChange={e => setFaq(e.target.value)}
           rows={20}

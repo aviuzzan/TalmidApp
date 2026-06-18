@@ -69,6 +69,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'parametres', nom: 'Infos & identifiants', description: 'Coordonnées, SIREN, code UAI/RNE, académie', icone: '🏫', href: 'parametres/ecole-infos' },
     { code: 'parametres', nom: 'Intégrations', description: 'Stripe, GoCardless, Brevo SMS, YouSign', icone: '🔌', href: 'parametres/integrations' },
     { code: 'parametres', nom: 'Comptes & accès', description: 'Permissions des admins (admin principal)', icone: '🔐', href: 'parametres/comptes-acces' },
+    { code: 'parametres', nom: 'Levy (assistant virtuel)', description: 'Activer Levy et éditer la FAQ qu\'il utilise pour répondre', icone: '👨‍🎓', href: 'parametres/chatbot' },
     { code: 'parametres', nom: 'Journal d\'audit', description: 'Historique des actions sensibles sur l\'app', icone: '📋', href: 'parametres/audit' },
     { code: 'parametres', nom: 'Exports CSV', description: 'Exporter familles, élèves, factures', icone: '📤', href: 'exports' },
     { code: 'parametres', nom: 'Importer des données', description: 'Importer la base familles & élèves depuis un fichier CSV', icone: '📥', href: 'import' },

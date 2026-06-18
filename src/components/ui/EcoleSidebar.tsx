@@ -61,6 +61,7 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Infos & identifiants', href: 'parametres/ecole-infos', module: 'parametres' },
     { nom: 'Intégrations', href: 'parametres/integrations', module: 'parametres' },
     { nom: 'Comptes & accès', href: 'parametres/comptes-acces', module: 'parametres' },
+    { nom: 'Levy (assistant)', href: 'parametres/chatbot', module: 'parametres' },
     { nom: 'Journal d\'audit', href: 'parametres/audit', module: 'parametres' },
     { nom: 'Exports CSV', href: 'exports', module: 'parametres' },
     { nom: 'Importer des données', href: 'import', module: 'parametres' },

@@ -82,19 +82,31 @@ export default function ChatbotWidget() {
 
   return (
     <>
-      {/* Bouton flottant */}
+      {/* Bouton flottant - pill avec texte Demandez a Levy */}
       {!open && (
         <button onClick={() => setOpen(true)}
-          aria-label="Ouvrir l assistant"
+          aria-label="Ouvrir Levy l assistant virtuel"
           style={{
             position: 'fixed', bottom: 22, right: 22, zIndex: 998,
-            width: 56, height: 56, borderRadius: '50%',
+            height: 50, padding: '0 18px 0 14px', borderRadius: 25,
             background: 'linear-gradient(135deg, #2563EB, #1E40AF)', border: 'none',
-            color: '#fff', fontSize: 24, cursor: 'pointer',
-            boxShadow: '0 8px 24px rgba(37,99,235,0.4)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(37,99,235,0.45)',
+            display: 'flex', alignItems: 'center', gap: 9,
+            transition: 'transform 0.18s, box-shadow 0.18s',
+          }}
+          onMouseEnter={e => {
+            const el = e.currentTarget
+            el.style.transform = 'translateY(-2px)'
+            el.style.boxShadow = '0 12px 32px rgba(37,99,235,0.55)'
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget
+            el.style.transform = 'translateY(0)'
+            el.style.boxShadow = '0 8px 24px rgba(37,99,235,0.45)'
           }}>
-          💬
+          <span style={{ fontSize: 20, lineHeight: 1 }}>💬</span>
+          <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>Demandez à Levy</span>
         </button>
       )}
 
@@ -115,9 +127,16 @@ export default function ChatbotWidget() {
             background: 'linear-gradient(135deg, #2563EB, #1E40AF)',
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>💬 Assistant TalmidApp</div>
-              <div style={{ fontSize: 11, opacity: 0.85 }}>Posez-moi une question</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+              }}>👨‍🎓</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.1 }}>Levy</div>
+                <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>Assistant virtuel TalmidApp</div>
+              </div>
             </div>
             <button onClick={() => setOpen(false)}
               style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 28, height: 28, borderRadius: 8, cursor: 'pointer', fontSize: 14 }}>✕</button>
@@ -126,8 +145,9 @@ export default function ChatbotWidget() {
           {/* Messages */}
           <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, background: '#F8FAFC' }}>
             {messages.length === 0 && (
-              <div style={{ color: '#64748B', fontSize: 13, textAlign: 'center', marginTop: 30 }}>
-                👋 Bonjour ! Je peux vous aider sur vos factures, votre dossier, le calendrier, les contacts… Posez votre question.
+              <div style={{ color: '#64748B', fontSize: 13, textAlign: 'center', marginTop: 30, padding: '0 12px', lineHeight: 1.55 }}>
+                👋 Bonjour, je suis <strong style={{ color: '#1E293B' }}>Levy</strong> !<br/>
+                Je connais votre école et l&apos;app TalmidApp. Posez-moi votre question.
               </div>
             )}
             {messages.map((m, i) => (
@@ -144,7 +164,7 @@ export default function ChatbotWidget() {
             ))}
             {loading && (
               <div style={{ alignSelf: 'flex-start', background: '#fff', border: '1px solid #E2E8F0', padding: '9px 13px', borderRadius: 12, fontSize: 13, color: '#64748B' }}>
-                ⏳ L assistant réfléchit…
+                ⏳ Levy réfléchit…
               </div>
             )}
             {erreur && (
@@ -156,7 +176,7 @@ export default function ChatbotWidget() {
           <form onSubmit={e => { e.preventDefault(); envoyer() }}
             style={{ borderTop: '1px solid #E2E8F0', padding: 10, background: '#fff', display: 'flex', gap: 8 }}>
             <input value={input} onChange={e => setInput(e.target.value)}
-              placeholder="Votre question..."
+              placeholder="Votre question à Levy…"
               disabled={loading}
               style={{
                 flex: 1, padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8,
