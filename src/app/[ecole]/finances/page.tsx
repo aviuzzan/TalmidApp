@@ -50,7 +50,7 @@ export default function FinancesPage() {
     const y = d.getFullYear()
     return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`
   }
-  const ANNEES_DISPO = ['2024-2025', '2025-2026', '2026-2027', '2027-2028']
+  const [ANNEES_DISPO, setAnneesDispo] = useState<string[]>(['2025-2026', '2026-2027'])
   const [ANNEE, setANNEE] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('finances_annee') || detectAnnee()
@@ -62,6 +62,20 @@ export default function FinancesPage() {
     setANNEE(a)
     if (typeof window !== 'undefined') localStorage.setItem('finances_annee', a)
   }
+
+  // Charge la liste des annees depuis la table exercices (filtree par ecole)
+  useEffect(() => {
+    if (!ecole?.id) return
+    const s = createClient()
+    s.from('exercices').select('code').eq('ecole_id', ecole.id).order('code', { ascending: false }).then(({ data }) => {
+      const codes = Array.from(new Set((data || []).map((r: any) => r.code).filter(Boolean))) as string[]
+      if (codes.length) {
+        // Assure que l'annee courante (deja selectionnee par defaut) est dans la liste
+        const withCurrent = ANNEE && !codes.includes(ANNEE) ? [ANNEE, ...codes] : codes
+        setAnneesDispo(withCurrent)
+      }
+    })
+  }, [ecole?.id])
 
   const emptyTarif = { nom: '', montant: '', annee_scolaire: ANNEE, description: '' }
   const [tarifForm, setTarifForm] = useState(emptyTarif)

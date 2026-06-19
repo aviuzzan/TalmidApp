@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useI18n } from '@/lib/i18n'
 
 type Doc = {
   id: string
@@ -12,19 +13,20 @@ type Doc = {
   created_at: string
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  justificatif: 'Justificatif',
-  facture: 'Facture',
-  attestation: 'Attestation',
-  livret: 'Livret scolaire',
-  photo: 'Photo / certificat',
-  autre: 'Autre',
-}
-
 export default function PortailDocumentsPage() {
+  const { t } = useI18n()
   const [loading, setLoading] = useState(true)
   const [docs, setDocs] = useState<Doc[]>([])
   const [filter, setFilter] = useState<string>('tous')
+
+  const TYPE_LABEL: Record<string, string> = {
+    justificatif: t('portail.documents.type.justificatif'),
+    facture: t('portail.documents.type.facture'),
+    attestation: t('portail.documents.type.attestation'),
+    livret: t('portail.documents.type.livret'),
+    photo: t('portail.documents.type.photo'),
+    autre: t('portail.documents.type.autre'),
+  }
 
   useEffect(() => { load() }, [])
 
@@ -52,12 +54,12 @@ export default function PortailDocumentsPage() {
 
   function fmtSize(b: number | null) {
     if (!b) return '—'
-    if (b < 1024) return b + ' o'
-    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' Ko'
-    return (b / (1024 * 1024)).toFixed(1) + ' Mo'
+    if (b < 1024) return b + ' ' + t('portail.documents.size.bytes')
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' ' + t('portail.documents.size.kb')
+    return (b / (1024 * 1024)).toFixed(1) + ' ' + t('portail.documents.size.mb')
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading')}</div>
 
   const docsByType: Record<string, Doc[]> = {}
   for (const d of docs) {
@@ -69,17 +71,17 @@ export default function PortailDocumentsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <a href="/portail/demarches" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>← Démarches</a>
+      <a href="/portail/demarches" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>{t('portail.documents.back_link')}</a>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Mes documents</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('portail.documents.title')}</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>
-          Documents partagés par l&apos;école — {docs.length} document{docs.length > 1 ? 's' : ''}
+          {t('portail.documents.subtitle', { n: docs.length, s: docs.length > 1 ? 's' : '' })}
         </p>
       </div>
 
       {docs.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          Aucun document partagé pour le moment. L&apos;école pourra y ajouter vos justificatifs, factures, attestations...
+          {t('portail.documents.empty')}
         </div>
       ) : (
         <>
@@ -92,16 +94,16 @@ export default function PortailDocumentsPage() {
                   background: filter === 'tous' ? '#EFF6FF' : '#fff',
                   color: filter === 'tous' ? '#1E40AF' : '#64748B',
                   fontSize: 12, fontWeight: filter === 'tous' ? 600 : 400, cursor: 'pointer',
-                }}>Tous ({docs.length})</button>
-              {types.map(t => (
-                <button key={t} onClick={() => setFilter(t)}
+                }}>{t('portail.documents.filter.all', { n: docs.length })}</button>
+              {types.map(ty => (
+                <button key={ty} onClick={() => setFilter(ty)}
                   style={{
                     padding: '6px 12px', borderRadius: 16, border: '1px solid',
-                    borderColor: filter === t ? '#2563EB' : '#E2E8F0',
-                    background: filter === t ? '#EFF6FF' : '#fff',
-                    color: filter === t ? '#1E40AF' : '#64748B',
-                    fontSize: 12, fontWeight: filter === t ? 600 : 400, cursor: 'pointer',
-                  }}>{TYPE_LABEL[t] || t} ({docsByType[t].length})</button>
+                    borderColor: filter === ty ? '#2563EB' : '#E2E8F0',
+                    background: filter === ty ? '#EFF6FF' : '#fff',
+                    color: filter === ty ? '#1E40AF' : '#64748B',
+                    fontSize: 12, fontWeight: filter === ty ? 600 : 400, cursor: 'pointer',
+                  }}>{TYPE_LABEL[ty] || ty} ({docsByType[ty].length})</button>
               ))}
             </div>
           )}
@@ -116,14 +118,14 @@ export default function PortailDocumentsPage() {
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B', marginBottom: 3 }}>{d.nom}</div>
                   <div style={{ fontSize: 11, color: '#64748B' }}>
-                    {TYPE_LABEL[d.type] || d.type} · {fmtSize(d.taille)} · ajouté le {new Date(d.created_at).toLocaleDateString('fr-FR')}
+                    {TYPE_LABEL[d.type] || d.type} · {fmtSize(d.taille)} · {t('portail.documents.added_on', { date: new Date(d.created_at).toLocaleDateString('fr-FR') })}
                   </div>
                 </div>
                 <button onClick={() => download(d)}
                   style={{
                     background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7,
                     padding: '8px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  }}>Télécharger</button>
+                  }}>{t('portail.common.download')}</button>
               </div>
             ))}
           </div>
@@ -131,7 +133,7 @@ export default function PortailDocumentsPage() {
       )}
 
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 14, fontSize: 12, color: '#475569' }}>
-        Pour ajouter un document à votre dossier (justificatif, attestation, RIB...), contactez directement le secrétariat de l&apos;école.
+        {t('portail.documents.help_tip')}
       </div>
     </div>
   )

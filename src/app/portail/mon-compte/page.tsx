@@ -40,7 +40,7 @@ export default function MonComptePage() {
     setExporting(true); setExportError('')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    if (!session) { setExportError('Session expirée'); setExporting(false); return }
+    if (!session) { setExportError(t('portail.mon_compte.export.session_expired')); setExporting(false); return }
     try {
       const r = await fetch('/api/admin/exporter-famille', {
         method: 'POST',
@@ -52,7 +52,7 @@ export default function MonComptePage() {
       })
       if (!r.ok) {
         const j = await r.json()
-        setExportError(j.error || 'Erreur export')
+        setExportError(j.error || t('portail.mon_compte.export.error_default'))
         setExporting(false)
         return
       }
@@ -66,7 +66,7 @@ export default function MonComptePage() {
       a.remove()
       window.URL.revokeObjectURL(url)
     } catch (e: any) {
-      setExportError(e?.message || 'Erreur réseau')
+      setExportError(e?.message || t('portail.mon_compte.export.network_error'))
     }
     setExporting(false)
   }
@@ -74,9 +74,9 @@ export default function MonComptePage() {
   async function changerMotDePasse(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setOk('')
-    if (nouveau.length < 8) { setError('Le nouveau mot de passe doit contenir au moins 8 caractères.'); return }
-    if (nouveau !== confirme) { setError('Les deux nouveaux mots de passe ne correspondent pas.'); return }
-    if (!actuel) { setError('Veuillez saisir votre mot de passe actuel.'); return }
+    if (nouveau.length < 8) { setError(t('portail.mon_compte.pwd.min_length')); return }
+    if (nouveau !== confirme) { setError(t('portail.mon_compte.pwd.mismatch')); return }
+    if (!actuel) { setError(t('portail.mon_compte.pwd.current_required')); return }
 
     setSaving(true)
     const s = createClient()
@@ -85,7 +85,7 @@ export default function MonComptePage() {
     const { error: signErr } = await s.auth.signInWithPassword({ email, password: actuel })
     if (signErr) {
       setSaving(false)
-      setError('Le mot de passe actuel est incorrect.')
+      setError(t('portail.mon_compte.pwd.current_wrong'))
       return
     }
 
@@ -96,14 +96,14 @@ export default function MonComptePage() {
     })
     setSaving(false)
     if (updErr) {
-      setError(updErr.message || 'Erreur lors de la mise a jour du mot de passe.')
+      setError(updErr.message || t('portail.mon_compte.pwd.update_error'))
       return
     }
-    setOk('Votre mot de passe a bien ete modifie.')
+    setOk(t('portail.mon_compte.pwd.ok'))
     setActuel(''); setNouveau(''); setConfirme('')
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading')}</div>
 
   const lbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }
   const inp: React.CSSProperties = { width: '100%', padding: '10px 14px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#F8FAFC' }
@@ -112,7 +112,7 @@ export default function MonComptePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('portail.mon_compte.title')}</h1>
-        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Gérez les informations de connexion de votre espace famille</p>
+        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>{t('portail.mon_compte.subtitle')}</p>
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
@@ -122,7 +122,7 @@ export default function MonComptePage() {
           <div style={{ color: '#1E293B', fontWeight: 600 }}>{email || '-'}</div>
         </div>
         <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 10, marginBottom: 0 }}>
-          Pour modifier votre adresse e-mail, contactez l&apos;administration de l&apos;etablissement.
+          {t('portail.mon_compte.email_change_note')}
         </p>
       </div>
 
@@ -132,17 +132,17 @@ export default function MonComptePage() {
           <div>
             <label style={lbl}>{t('portail.mon_compte.current_password')}</label>
             <input required type="password" autoComplete="current-password" value={actuel}
-              onChange={e => setActuel(e.target.value)} style={inp} placeholder="Votre mot de passe actuel" />
+              onChange={e => setActuel(e.target.value)} style={inp} placeholder={t('portail.mon_compte.current_password_placeholder')} />
           </div>
           <div>
             <label style={lbl}>{t('portail.mon_compte.new_password')}</label>
             <input required type="password" autoComplete="new-password" value={nouveau}
-              onChange={e => setNouveau(e.target.value)} style={inp} placeholder="8 caractères minimum" />
+              onChange={e => setNouveau(e.target.value)} style={inp} placeholder={t('portail.mon_compte.new_password_placeholder')} />
           </div>
           <div>
             <label style={lbl}>{t('portail.mon_compte.confirm_password')}</label>
             <input required type="password" autoComplete="new-password" value={confirme}
-              onChange={e => setConfirme(e.target.value)} style={inp} placeholder="Retapez le nouveau mot de passe" />
+              onChange={e => setConfirme(e.target.value)} style={inp} placeholder={t('portail.mon_compte.confirm_password_placeholder')} />
           </div>
 
           {error && (
@@ -158,23 +158,22 @@ export default function MonComptePage() {
 
           <button type="submit" disabled={saving}
             style={{ marginTop: 2, padding: '12px 20px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1, width: 'fit-content' }}>
-            {saving ? 'Enregistrement...' : 'Modifier mon mot de passe'}
+            {saving ? t('portail.common.saving') : t('portail.mon_compte.btn_submit')}
           </button>
         </form>
       </div>
 
       <div style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#1E40AF' }}>
-        Si vous avez oublié votre mot de passe, déconnectez-vous puis utilisez le lien « Mot de passe oublié » sur la page de connexion.
+        {t('portail.mon_compte.forgot_password_help')}
       </div>
 
       {/* RGPD - Portabilité (Article 20) */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>
-          🛡️ Mes données personnelles
+          {t('portail.mon_compte.gdpr.title')}
         </div>
         <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, margin: '0 0 14px' }}>
-          Conformément à l&apos;article 20 du RGPD (droit à la portabilité), vous pouvez télécharger
-          l&apos;ensemble des données vous concernant ainsi que celles de votre famille au format JSON.
+          {t('portail.mon_compte.gdpr.desc')}
         </p>
         <button
           onClick={exporterMesDonnees}
@@ -185,7 +184,7 @@ export default function MonComptePage() {
             cursor: exporting || !familleId ? 'wait' : 'pointer',
             opacity: exporting || !familleId ? 0.6 : 1,
           }}>
-          {exporting ? 'Génération...' : '↓ Télécharger mes données'}
+          {exporting ? t('portail.mon_compte.export.generating') : t('portail.mon_compte.gdpr.btn_download')}
         </button>
         {exportError && (
           <div style={{ marginTop: 12, padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, color: '#DC2626', fontSize: 12 }}>
@@ -193,8 +192,7 @@ export default function MonComptePage() {
           </div>
         )}
         <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 14, marginBottom: 0, lineHeight: 1.5 }}>
-          Pour faire valoir vos autres droits (rectification, suppression, opposition), contactez
-          l&apos;administration de l&apos;établissement.
+          {t('portail.mon_compte.gdpr.other_rights')}
         </p>
       </div>
     </div>

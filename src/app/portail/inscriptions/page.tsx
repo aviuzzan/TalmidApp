@@ -342,8 +342,46 @@ function DossierTab({ router }: { router: any }) {
           )
         })()}
 
-        {/* DDR optionnelle (si eligible et ouverte) */}
-        {(reductionsOuvertes || !!reduction) && (
+        {/* DDR optionnelle (si eligible et ouverte) — branche dédiée "refuse" pour clarifier l'état définitif */}
+        {(reductionsOuvertes || !!reduction) && reduction?.statut === 'refuse' && (
+          <div style={{
+            background: '#fff',
+            border: '1px solid #FECACA',
+            borderRadius: 14,
+            padding: '16px 18px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            gap: 12,
+          }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+              background: '#FEF2F2',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20, fontWeight: 800, color: '#991B1B',
+            }}>
+              💸
+            </div>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{t('portail.inscriptions.ddr_card.title')}</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: '#991B1B', background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: 20, padding: '3px 10px',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {t('portail.inscriptions.ddr_card.refused.badge')}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
+                {t('portail.inscriptions.ddr_card.refused.explanation', { annee: anneeInscription })}
+              </div>
+            </div>
+          </div>
+        )}
+        {(reductionsOuvertes || !!reduction) && reduction?.statut !== 'refuse' && (
           <EtapeCard
             icone="💸"
             titre={t('portail.inscriptions.ddr_card.title')}

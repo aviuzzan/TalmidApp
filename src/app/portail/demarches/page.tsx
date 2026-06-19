@@ -1,27 +1,29 @@
 'use client'
+import { useI18n } from '@/lib/i18n'
 
 /**
  * Catégorie « Démarches & documents » du portail famille.
  * Page de regroupement : inscriptions N+1, documents, contact établissement.
  */
 export default function DemarchesPage() {
+  const { t } = useI18n()
   const items = [
     {
       icon: '📝',
-      title: 'Inscriptions année suivante',
-      desc: "Réinscription, demande de réduction, ajout d'un nouvel enfant et contrat de scolarisation.",
+      title: t('portail.demarches.item.inscriptions.title'),
+      desc: t('portail.demarches.item.inscriptions.desc'),
       href: '/portail/inscriptions',
     },
     {
       icon: '📄',
-      title: 'Mes documents',
-      desc: "Envoyer et consulter les documents demandés par l'école.",
+      title: t('portail.demarches.item.documents.title'),
+      desc: t('portail.demarches.item.documents.desc'),
       href: '/portail/documents',
     },
     {
       icon: '📞',
-      title: "Contact de l'établissement",
-      desc: "Coordonnées de l'école et de l'administration.",
+      title: t('portail.demarches.item.contact.title'),
+      desc: t('portail.demarches.item.contact.desc'),
       href: '/portail/contact',
     },
   ]
@@ -29,8 +31,8 @@ export default function DemarchesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>Démarches &amp; documents</h1>
-        <p style={{ color: '#64748B', fontSize: 13 }}>Inscriptions, documents et contact de l&apos;établissement</p>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>{t('portail.demarches.title')}</h1>
+        <p style={{ color: '#64748B', fontSize: 13 }}>{t('portail.demarches.subtitle')}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>

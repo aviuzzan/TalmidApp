@@ -16,6 +16,7 @@ export default function InscriptionsAdminPage() {
   const ecole = useEcole()
   const [onglet, setOnglet] = useState<Onglet>('tableau_bord')
   const [annee, setAnnee] = useState('')
+  const [anneesDispo, setAnneesDispo] = useState<string[]>([])
   const [config, setConfig] = useState<any>(null)
   const [stats, setStats] = useState({ pedagogique: 0, reduction: 0, contrats: 0, cheques_a_encaisser: 0 })
   const [dossiers, setDossiers] = useState<any[]>([])
@@ -25,6 +26,15 @@ export default function InscriptionsAdminPage() {
 
   useEffect(() => {
     if (ecole?.id) getExerciceInscription(createClient(), ecole.id).then(r => setAnnee(r.code))
+  }, [ecole?.id])
+
+  useEffect(() => {
+    if (!ecole?.id) return
+    const s = createClient()
+    s.from('exercices').select('code').eq('ecole_id', ecole.id).order('code').then(({ data }) => {
+      const codes = Array.from(new Set((data || []).map((r: any) => r.code).filter(Boolean))) as string[]
+      if (codes.length) setAnneesDispo(codes)
+    })
   }, [ecole?.id])
   useEffect(() => { if (annee) loadAll() }, [ecole.id, annee])
 
@@ -88,8 +98,11 @@ export default function InscriptionsAdminPage() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <select value={annee} onChange={e => setAnnee(e.target.value)}
             style={{ ...inp, width: 'auto', fontWeight: 600, color: '#1E293B' }}>
-            <option value="2026-2027">2026-2027</option>
-            <option value="2027-2028">2027-2028</option>
+            {(() => {
+              const list = anneesDispo.length > 0 ? anneesDispo : (annee ? [annee] : [])
+              const withCurrent = annee && !list.includes(annee) ? [...list, annee] : list
+              return withCurrent.map(code => <option key={code} value={code}>{code}</option>)
+            })()}
           </select>
           <button onClick={() => router.push(`/${ecole.slug}/parametres?tab=inscriptions`)}
             style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 9, padding: '9px 16px', fontSize: 13, color: '#475569', cursor: 'pointer', fontWeight: 500 }}>

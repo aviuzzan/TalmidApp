@@ -514,7 +514,30 @@ export default function DemandeReductionPage() {
     return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 13 }}>Redirection…</div>
   }
 
-  if (demande && ['soumis', 'en_etude', 'accepte', 'refuse'].includes(demande.statut)) {
+  // Cas spécifique : DDR refusée. Décision définitive pour l'année,
+  // la famille ne peut PAS rééditer le formulaire ni resoumettre. Écran dédié.
+  if (demande && demande.statut === 'refuse') {
+    return (
+      <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>← Retour</button>
+        <div style={{ fontSize: 48, marginBottom: 16, color: '#991B1B' }}>✕</div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>Demande refusée</h2>
+        <p style={{ color: '#64748B', fontSize: 14, margin: '8px 0 20px', lineHeight: 1.6 }}>
+          Votre demande de réduction pour l&apos;année {anneeInscription} a été refusée par la commission. Cette décision est définitive pour cette année. Le contrat de scolarisation est désormais ouvert au tarif normal.
+        </p>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', padding: '8px 20px', borderRadius: 20 }}>✕ Refusée</span>
+        <div style={{ marginTop: 28, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, fontSize: 12, color: '#64748B', lineHeight: 1.6 }}>
+          Pour toute question relative à cette décision, contactez l&apos;administration de l&apos;école.
+        </div>
+        <button onClick={() => router.push('/portail/inscriptions/contrat')}
+          style={{ marginTop: 20, background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 44 }}>
+          Aller au contrat de scolarisation →
+        </button>
+      </div>
+    )
+  }
+
+  if (demande && ['soumis', 'en_etude', 'accepte'].includes(demande.statut)) {
     const st = formatStatut(demande.statut)
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>

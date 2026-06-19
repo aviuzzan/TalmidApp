@@ -79,6 +79,16 @@ export default function ParametresPage() {
   const [tab, setTab] = useState<Tab>(initTab)
   const [cat, setCat] = useState<Cat>(catOfTab(initTab))
   const [annee, setAnnee] = useState(ANNEE_COURANTE)
+  const [anneesDispo, setAnneesDispo] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!ecole?.id) return
+    const s = createClient()
+    s.from('exercices').select('code').eq('ecole_id', ecole.id).order('code').then(({ data }) => {
+      const codes = Array.from(new Set((data || []).map((r: any) => r.code).filter(Boolean))) as string[]
+      if (codes.length) setAnneesDispo(codes)
+    })
+  }, [ecole?.id])
 
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
 
@@ -117,8 +127,11 @@ export default function ParametresPage() {
         {['tarifs', 'reductions_fn', 'config_reduction', 'config_paiement', 'frais_inscription', 'documents_ecole', 'documents_inscription'].includes(tab) && (
           <select value={annee} onChange={e => setAnnee(e.target.value)}
             style={{ ...inp, width: 'auto', fontWeight: 600, color: '#1E293B' }}>
-            <option value="2026-2027">2026-2027</option>
-            <option value="2027-2028">2027-2028</option>
+            {(() => {
+              const list = anneesDispo.length > 0 ? anneesDispo : [annee]
+              const withCurrent = annee && !list.includes(annee) ? [...list, annee] : list
+              return withCurrent.map(code => <option key={code} value={code}>{code}</option>)
+            })()}
           </select>
         )}
       </div>

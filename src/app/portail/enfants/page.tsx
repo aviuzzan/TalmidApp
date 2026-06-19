@@ -1,8 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useI18n } from '@/lib/i18n'
 
 export default function PortailEnfantsPage() {
+  const { t } = useI18n()
   const [enfants, setEnfants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -27,22 +29,26 @@ export default function PortailEnfantsPage() {
     load()
   }, [])
 
-  const REGIME: any = { demi_pension: 'Demi-pension', externe: 'Externe', interne: 'Interne' }
+  const REGIME: any = {
+    demi_pension: t('portail.enfants.regime.day_meal'),
+    externe: t('portail.enfants.regime.day'),
+    interne: t('portail.enfants.regime.boarder'),
+  }
 
-  if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>Chargement...</div>
+  if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>{t('portail.common.loading')}</div>
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>Mes enfants</h1>
-        <p style={{ color: '#64748B', fontSize: 13 }}>{enfants.length} élève{enfants.length > 1 ? 's' : ''} enregistré{enfants.length > 1 ? 's' : ''}</p>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>{t('portail.enfants.title')}</h1>
+        <p style={{ color: '#64748B', fontSize: 13 }}>{t('portail.enfants.count', { n: enfants.length, s: enfants.length > 1 ? 's' : '' })}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
         {[
-          { icon: '📊', label: 'Bulletins', href: '/portail/bulletins' },
-          { icon: '📚', label: 'Devoirs', href: '/portail/devoirs' },
-          { icon: '🏥', label: 'Santé', href: '/portail/sante' },
+          { icon: '📊', label: t('portail.enfants.quick.bulletins'), href: '/portail/bulletins' },
+          { icon: '📚', label: t('portail.enfants.quick.devoirs'), href: '/portail/devoirs' },
+          { icon: '🏥', label: t('portail.enfants.quick.sante'), href: '/portail/sante' },
         ].map(s => (
           <a key={s.href} href={s.href}
             style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, transition: 'border-color 0.15s' }}
@@ -56,7 +62,7 @@ export default function PortailEnfantsPage() {
 
       {enfants.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-          Aucun élève enregistré
+          {t('portail.enfants.empty')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -82,17 +88,17 @@ export default function PortailEnfantsPage() {
                   color: e.statut_inscription === 'inscrit' ? '#059669' : '#D97706',
                   borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 600,
                 }}>
-                  {e.statut_inscription === 'inscrit' ? '✓ Inscrit' : '⏳ En attente'}
+                  {e.statut_inscription === 'inscrit' ? t('portail.enfants.status.enrolled') : t('portail.enfants.status.pending')}
                 </span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
                 {[
-                  ['📚 Classe', e.classe ?? '—'],
-                  ['🍽 Régime', REGIME[e.regime] ?? e.regime ?? '—'],
-                  ['📅 Année', e.annee_scolaire ?? '—'],
-                  ['📅 Entrée', e.date_entree ? new Date(e.date_entree).toLocaleDateString('fr-FR') : '—'],
-                  ['🚌 Transport', e.transport ?? 'Aucun'],
+                  [t('portail.enfants.field.class'), e.classe ?? '—'],
+                  [t('portail.enfants.field.regime'), REGIME[e.regime] ?? e.regime ?? '—'],
+                  [t('portail.enfants.field.year'), e.annee_scolaire ?? '—'],
+                  [t('portail.enfants.field.entry'), e.date_entree ? new Date(e.date_entree).toLocaleDateString('fr-FR') : '—'],
+                  [t('portail.enfants.field.transport'), e.transport ?? t('portail.enfants.transport.none')],
                 ].map(([label, value]) => (
                   <div key={label} style={{ background: '#F8FAFC', borderRadius: 8, padding: '10px 12px' }}>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 3 }}>{label}</div>
@@ -111,6 +117,7 @@ export default function PortailEnfantsPage() {
 
 
 function PersonnesAutorisees({ enfantId, familleId }: { enfantId: string; familleId: string }) {
+  const { t } = useI18n()
   const [list, setList] = useState<any[]>([])
   const [form, setForm] = useState({ prenom: '', nom: '', lien: '', telephone: '' })
   const [adding, setAdding] = useState(false)
@@ -140,7 +147,7 @@ function PersonnesAutorisees({ enfantId, familleId }: { enfantId: string; famill
   }
 
   async function supprimer(id: string) {
-    if (!confirm('Retirer cette personne de la liste ?')) return
+    if (!confirm(t('portail.enfants.authorized.confirm_remove'))) return
     await createClient().from('enfant_personnes_autorisees').delete().eq('id', id)
     await load()
   }
@@ -150,28 +157,28 @@ function PersonnesAutorisees({ enfantId, familleId }: { enfantId: string; famill
   return (
     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>👤 Personnes autorisées à récupérer l&apos;enfant</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>{t('portail.enfants.authorized.title')}</div>
         <button onClick={() => setShowForm(v => !v)}
           style={{ background: showForm ? '#F1F5F9' : '#2563EB', color: showForm ? '#475569' : '#fff', border: showForm ? '1px solid #E2E8F0' : 'none', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-          {showForm ? 'Annuler' : '+ Ajouter'}
+          {showForm ? t('portail.common.cancel') : t('portail.common.add')}
         </button>
       </div>
 
       {showForm && (
         <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12, marginBottom: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-          <input style={inp} value={form.prenom} onChange={e => setForm(p => ({ ...p, prenom: e.target.value }))} placeholder="Prénom" />
-          <input style={inp} value={form.nom} onChange={e => setForm(p => ({ ...p, nom: e.target.value }))} placeholder="Nom *" />
-          <input style={inp} value={form.lien} onChange={e => setForm(p => ({ ...p, lien: e.target.value }))} placeholder="Lien (grand-mère, nounou...)" />
-          <input style={inp} value={form.telephone} onChange={e => setForm(p => ({ ...p, telephone: e.target.value }))} placeholder="Téléphone" />
+          <input style={inp} value={form.prenom} onChange={e => setForm(p => ({ ...p, prenom: e.target.value }))} placeholder={t('portail.enfants.authorized.placeholder.prenom')} />
+          <input style={inp} value={form.nom} onChange={e => setForm(p => ({ ...p, nom: e.target.value }))} placeholder={t('portail.enfants.authorized.placeholder.nom')} />
+          <input style={inp} value={form.lien} onChange={e => setForm(p => ({ ...p, lien: e.target.value }))} placeholder={t('portail.enfants.authorized.placeholder.lien')} />
+          <input style={inp} value={form.telephone} onChange={e => setForm(p => ({ ...p, telephone: e.target.value }))} placeholder={t('portail.enfants.authorized.placeholder.telephone')} />
           <button onClick={ajouter} disabled={adding || !form.nom.trim()}
             style={{ gridColumn: '1 / -1', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px', fontSize: 12, fontWeight: 600, cursor: adding ? 'not-allowed' : 'pointer', opacity: adding || !form.nom.trim() ? 0.6 : 1 }}>
-            {adding ? 'Enregistrement…' : 'Enregistrer'}
+            {adding ? t('portail.common.saving') : t('portail.common.save')}
           </button>
         </div>
       )}
 
       {list.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#94A3B8' }}>Aucune personne déclarée. Seuls les parents pourront récupérer l&apos;enfant.</div>
+        <div style={{ fontSize: 12, color: '#94A3B8' }}>{t('portail.enfants.authorized.empty')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {list.map(p => (
