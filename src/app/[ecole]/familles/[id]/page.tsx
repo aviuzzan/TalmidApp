@@ -236,12 +236,16 @@ export default function FamilleDetailPage() {
       .from('contrat_enfants')
       .select('contrat_id, contrats_scolarisation!inner(statut, annee_scolaire)')
       .eq('enfant_id', enfantId)
-    const contratActif = (contratsLies || []).find((c: any) =>
-      ['soumis', 'valide', 'accepte'].includes(c.contrats_scolarisation?.statut)
-    )
+    const contratActif: any = (contratsLies || []).find((c: any) => {
+      const cs = c.contrats_scolarisation
+      const csObj = Array.isArray(cs) ? cs[0] : cs
+      return ['soumis', 'valide', 'accepte'].includes(csObj?.statut)
+    })
     if (contratActif) {
-      const anneeContrat = contratActif.contrats_scolarisation?.annee_scolaire || '?'
-      const statutContrat = contratActif.contrats_scolarisation?.statut || '?'
+      const cs = contratActif.contrats_scolarisation
+      const csObj = Array.isArray(cs) ? cs[0] : cs
+      const anneeContrat = csObj?.annee_scolaire || '?'
+      const statutContrat = csObj?.statut || '?'
       const forcer = await confirm({
         title: 'Contrat de scolarisation actif',
         message: `Un contrat de scolarisation est actif pour cet enfant (annee ${anneeContrat}, statut "${statutContrat}"). Supprimer quand meme va casser le contrat et la facture liee. Continuer ?`,
