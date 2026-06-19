@@ -1,5 +1,6 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { portailExtraFr, portailExtraEn, portailExtraHe } from './i18n-portail-extra'
 
 /**
  * Infrastructure i18n pour TalmidApp.
@@ -18,7 +19,7 @@ export const LANGS: { code: Lang; label: string; flag: string; dir: 'ltr' | 'rtl
   { code: 'he', label: 'עברית', flag: '🇮🇱', dir: 'rtl' },
 ]
 
-const TRANSLATIONS: Record<Lang, Record<string, string>> = {
+const TRANSLATIONS_BASE: Record<Lang, Record<string, string>> = {
   fr: {
     'common.save': 'Enregistrer',
     'common.cancel': 'Annuler',
@@ -393,18 +394,37 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
   },
 }
 
+// Fusion : dictionnaire base + extension portail (165 cles)
+const TRANSLATIONS: Record<Lang, Record<string, string>> = {
+  fr: { ...TRANSLATIONS_BASE.fr, ...portailExtraFr },
+  en: { ...TRANSLATIONS_BASE.en, ...portailExtraEn },
+  he: { ...TRANSLATIONS_BASE.he, ...portailExtraHe },
+}
+
+// Helper d'interpolation : remplace {nom}, {annee}, {n}... par les valeurs fournies.
+function interpolate(template: string, vars?: Record<string, string | number>): string {
+  if (!vars) return template
+  return template.replace(/\{(\w+)\}/g, (_, k) => {
+    const v = vars[k]
+    return v === undefined || v === null ? `{${k}}` : String(v)
+  })
+}
+
 interface I18nContextValue {
   lang: Lang
   dir: 'ltr' | 'rtl'
   setLang: (l: Lang) => void
-  t: (key: string, fallback?: string) => string
+  t: (key: string, varsOrFallback?: Record<string, string | number> | string, fallback?: string) => string
 }
 
 const I18nContext = createContext<I18nContextValue>({
   lang: 'fr',
   dir: 'ltr',
   setLang: () => {},
-  t: (key, fallback) => fallback || key,
+  t: (key, varsOrFallback, fallback) => {
+    if (typeof varsOrFallback === 'string') return varsOrFallback || key
+    return fallback || key
+  },
 })
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -431,8 +451,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') localStorage.setItem('talmidapp_lang', l)
   }, [])
 
-  const t = useCallback((key: string, fallback?: string): string => {
-    return TRANSLATIONS[lang]?.[key] || TRANSLATIONS.fr[key] || fallback || key
+  const t = useCallback((key: string, varsOrFallback?: Record<string, string | number> | string, fallback?: string): string => {
+    // Surcharge : t('key') | t('key', 'fallback') | t('key', { var: val }) | t('key', { var: val }, 'fallback')
+    const isVars = typeof varsOrFallback === 'object' && varsOrFallback !== null
+    const vars = isVars ? (varsOrFallback as Record<string, string | number>) : undefined
+    const fb = isVars ? fallback : (varsOrFallback as string | undefined)
+    const template = TRANSLATIONS[lang]?.[key] || TRANSLATIONS.fr[key] || fb || key
+    return interpolate(template, vars)
   }, [lang])
 
   return (
