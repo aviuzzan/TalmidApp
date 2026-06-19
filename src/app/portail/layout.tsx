@@ -187,7 +187,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           fontSize: 12, color: '#1E293B',
         }}>
           <span aria-hidden style={{ fontSize: 14 }}>🏫</span>
-          <span style={{ color: '#64748B' }}>Vous êtes sur le portail de</span>
+          <span style={{ color: '#64748B' }}>{t('portail.layout.you_are_on')}</span>
           <strong style={{ color: '#1E40AF', fontWeight: 600 }}>{ecoleNom}</strong>
         </div>
       )}

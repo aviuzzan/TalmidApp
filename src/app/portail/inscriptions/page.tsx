@@ -7,6 +7,7 @@ import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import AideEtape from '@/components/portail/AideEtape'
+import { useI18n } from '@/lib/i18n'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -17,32 +18,33 @@ export default function PortailInscriptionsPage() {
   const initTab = (searchParams.get('tab') as SubTab) || 'dossier'
   const [tab, setTab] = useState<SubTab>(initTab)
 
+  const { t } = useI18n()
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', fontFamily: 'Inter, sans-serif', padding: '0 0 48px' }}>
       <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Année {anneeInscription}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('portail.inscriptions.title', { annee: anneeInscription })}</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>
-          Tout pour préparer la rentrée : admission de vos enfants, contrat de scolarisation et facture.
+          {t('portail.inscriptions.subtitle')}
         </p>
       </div>
 
       {/* Onglets */}
       <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 22, overflowX: 'auto' }}>
         {([
-          { id: 'dossier', label: '📋 Mes démarches' },
-          { id: 'facture', label: '💰 Facture' },
-          { id: 'documents', label: '📂 Documents école' },
-        ] as { id: SubTab; label: string }[]).map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          { id: 'dossier', label: t('portail.inscriptions.tab.dossier') },
+          { id: 'facture', label: t('portail.inscriptions.tab.invoice') },
+          { id: 'documents', label: t('portail.inscriptions.tab.documents') },
+        ] as { id: SubTab; label: string }[]).map(tabItem => (
+          <button key={tabItem.id} onClick={() => setTab(tabItem.id)}
             style={{
               padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: tab === t.id ? '#fff' : 'transparent',
-              color: tab === t.id ? '#1E293B' : '#64748B',
-              fontSize: 13, fontWeight: tab === t.id ? 600 : 400,
-              boxShadow: tab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              background: tab === tabItem.id ? '#fff' : 'transparent',
+              color: tab === tabItem.id ? '#1E293B' : '#64748B',
+              fontSize: 13, fontWeight: tab === tabItem.id ? 600 : 400,
+              boxShadow: tab === tabItem.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               whiteSpace: 'nowrap', minHeight: 38,
             }}>
-            {t.label}
+            {tabItem.label}
           </button>
         ))}
       </div>
@@ -56,6 +58,7 @@ export default function PortailInscriptionsPage() {
 
 // ── ONGLET 1 : DOSSIER (DDR + Contrat + Nouvel enfant) ──
 function DossierTab({ router }: { router: any }) {
+  const { t } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const parent = useParentCtx()
   const [famille, setFamille] = useState<any>(null)
@@ -100,8 +103,8 @@ function DossierTab({ router }: { router: any }) {
     setLoading(false)
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
-  if (!famille) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14 }}>Aucune famille liée à ce compte. Contactez l'école.</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
+  if (!famille) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14 }}>{t('portail.inscriptions.no_family_linked')}</div>
 
   const today = new Date().toISOString().split('T')[0]
   // Éligibilité DDR : 4 conditions cumulatives
@@ -132,11 +135,11 @@ function DossierTab({ router }: { router: any }) {
 
   async function renoncerDDR() {
     if (!famille) return
-    if (!confirm(`Confirmez-vous renoncer à la demande de réduction pour ${anneeInscription} ?\n\nVous serez basculé(e) au tarif normal.\nCette décision est définitive pour cette année.`)) return
+    if (!confirm(t('portail.inscriptions.ddr_waive_confirm', { annee: anneeInscription }))) return
     const s = createClient()
     const nouveau = { ...renoncements, [anneeInscription]: { renonce_le: new Date().toISOString() } }
     const { error } = await s.from('familles').update({ renoncements_ddr: nouveau }).eq('id', famille.id)
-    if (error) { alert('Erreur : ' + error.message); return }
+    if (error) { alert(t('portail.inscriptions.error_prefix') + ' ' + error.message); return }
     setFamille({ ...famille, renoncements_ddr: nouveau })
   }
   const contratSoumis = contrat && ['soumis', 'valide'].includes(contrat.statut)
@@ -146,7 +149,7 @@ function DossierTab({ router }: { router: any }) {
       {!parent.estPrincipal && (
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#1E40AF', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 16 }}>ℹ️</span>
-          <div>Les démarches (admission, demande de réduction, contrat) sont gérées par le <strong>parent principal</strong> de la famille. Vous pouvez en suivre l&apos;avancement ci-dessous.</div>
+          <div>{t('portail.inscriptions.not_principal_notice')}</div>
         </div>
       )}
 
@@ -163,13 +166,13 @@ function DossierTab({ router }: { router: any }) {
         const etape2 = auMoinsUnAdmis && !contrat ? 'todo' : contrat && !contratSoumisOuValide ? 'inprogress' : contratSoumisOuValide ? 'done' : 'locked'
         const etape3 = contratValide ? 'done' : contratSoumisOuValide ? 'inprogress' : 'locked'
         const etapes = [
-          { label: 'Admission', sub: enfants.length > 0 ? `${nbAdmis}/${enfants.length} validée${nbAdmis > 1 ? 's' : ''}` : 'À demander', etat: etape1 },
-          { label: `Inscription ${anneeInscription}`, sub: contratSoumisOuValide ? 'Contrat envoyé' : 'À signer', etat: etape2 },
-          { label: 'Facture', sub: contratValide ? 'Émise' : 'En attente', etat: etape3 },
+          { label: t('portail.inscriptions.stepper.admission'), sub: enfants.length > 0 ? t('portail.inscriptions.stepper.admission_count', { n: nbAdmis, total: enfants.length, s: nbAdmis > 1 ? 's' : '' }) : t('portail.inscriptions.stepper.admission_todo'), etat: etape1 },
+          { label: t('portail.inscriptions.stepper.registration', { annee: anneeInscription }), sub: contratSoumisOuValide ? t('portail.inscriptions.stepper.registration_sent') : t('portail.inscriptions.stepper.registration_todo'), etat: etape2 },
+          { label: t('portail.inscriptions.stepper.invoice'), sub: contratValide ? t('portail.inscriptions.stepper.invoice_issued') : t('portail.inscriptions.stepper.invoice_pending'), etat: etape3 },
         ]
         return (
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 14px', marginBottom: 22 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12, paddingLeft: 4 }}>Votre parcours rentrée</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12, paddingLeft: 4 }}>{t('portail.inscriptions.stepper.title')}</div>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, position: 'relative' }}>
               {etapes.map((et, i) => {
                 const isDone = et.etat === 'done'
@@ -205,7 +208,7 @@ function DossierTab({ router }: { router: any }) {
       {enfants.length > 0 && (
         <div style={{ marginBottom: 22 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span>🎓</span> Vos enfants
+            <span>🎓</span> {t('portail.inscriptions.children_heading')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {enfants.map(enfant => {
@@ -215,12 +218,12 @@ function DossierTab({ router }: { router: any }) {
               const enAttenteAdm = adm === 'soumis' || adm === 'en_etude'
               const refuse = adm === 'refuse'
               // Etat & libelle
-              let badgeBg = '#F1F5F9', badgeColor = '#64748B', badgeLabel = 'Statut inconnu'
-              if (dansContrat) { badgeBg = '#ECFDF5'; badgeColor = '#065F46'; badgeLabel = '✓ Réinscrit ' + anneeInscription }
-              else if (admis) { badgeBg = '#EFF6FF'; badgeColor = '#1E40AF'; badgeLabel = '✓ Admis — à réinscrire' }
-              else if (enAttenteAdm) { badgeBg = '#FFF7ED'; badgeColor = '#9A3412'; badgeLabel = '⏳ Admission en cours d\'étude' }
-              else if (refuse) { badgeBg = '#FEF2F2'; badgeColor = '#991B1B'; badgeLabel = '✕ Admission refusée' }
-              else { badgeBg = '#F1F5F9'; badgeColor = '#64748B'; badgeLabel = 'Admission à demander' }
+              let badgeBg = '#F1F5F9', badgeColor = '#64748B', badgeLabel = t('portail.inscriptions.badge.unknown_status')
+              if (dansContrat) { badgeBg = '#ECFDF5'; badgeColor = '#065F46'; badgeLabel = t('portail.inscriptions.badge.reenrolled', { annee: anneeInscription }) }
+              else if (admis) { badgeBg = '#EFF6FF'; badgeColor = '#1E40AF'; badgeLabel = t('portail.inscriptions.badge.admitted_to_reenroll') }
+              else if (enAttenteAdm) { badgeBg = '#FFF7ED'; badgeColor = '#9A3412'; badgeLabel = t('portail.inscriptions.badge.admission_pending') }
+              else if (refuse) { badgeBg = '#FEF2F2'; badgeColor = '#991B1B'; badgeLabel = t('portail.inscriptions.badge.admission_refused') }
+              else { badgeBg = '#F1F5F9'; badgeColor = '#64748B'; badgeLabel = t('portail.inscriptions.badge.admission_to_request') }
               return (
                 <div key={enfant.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>{enfant.prenom?.[0]?.toUpperCase()}</div>
@@ -243,23 +246,23 @@ function DossierTab({ router }: { router: any }) {
           <div style={{ background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)', border: '1px solid #FDE68A', borderRadius: 16, padding: '20px 22px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
               <span style={{ fontSize: 22 }}>⚠️</span>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#92400E' }}>Une étape avant de pouvoir signer le contrat</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#92400E' }}>{t('portail.inscriptions.ddr_lock.title')}</div>
             </div>
             <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.55, marginBottom: 14 }}>
-              Votre tranche vous donne droit à un examen de votre situation par la commission. Pour signer le contrat, vous devez choisir :
+              {t('portail.inscriptions.ddr_lock.intro')}
             </div>
             <ul style={{ margin: '0 0 14px', paddingLeft: 18, fontSize: 13, color: '#78350F', lineHeight: 1.7 }}>
-              <li><strong>Soit déposer une demande de réduction</strong> et attendre la réponse de la commission.</li>
-              <li><strong>Soit renoncer à la réduction</strong> et signer le contrat au tarif normal.</li>
+              <li dangerouslySetInnerHTML={{ __html: t('portail.inscriptions.ddr_lock.option_submit') }} />
+              <li dangerouslySetInnerHTML={{ __html: t('portail.inscriptions.ddr_lock.option_waive') }} />
             </ul>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button onClick={() => router.push('/portail/inscriptions/reduction')}
                 style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 44 }}>
-                💸 Déposer une demande de réduction
+                {t('portail.inscriptions.ddr_lock.btn_submit')}
               </button>
               <button onClick={renoncerDDR}
                 style={{ background: '#fff', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>
-                Je renonce, tarif normal
+                {t('portail.inscriptions.ddr_lock.btn_waive')}
               </button>
             </div>
           </div>
@@ -269,20 +272,20 @@ function DossierTab({ router }: { router: any }) {
         {(() => {
           const ouvertContrat = (inscriptionsOuvertes && !contratBloqueParDDR) || !!contrat
           const titreContrat = contratSoumis
-            ? `Contrat ${anneeInscription} signé`
+            ? t('portail.inscriptions.hero.title_signed', { annee: anneeInscription })
             : enfants.length === 1
-              ? `Réinscrire ${enfants[0]?.prenom} pour ${anneeInscription}`
+              ? t('portail.inscriptions.hero.title_one', { prenom: enfants[0]?.prenom, annee: anneeInscription })
               : enfants.length > 1
-                ? `Réinscrire vos ${enfants.length} enfants pour ${anneeInscription}`
-                : `Inscrire votre enfant pour ${anneeInscription}`
+                ? t('portail.inscriptions.hero.title_many', { n: enfants.length, annee: anneeInscription })
+                : t('portail.inscriptions.hero.title_first', { annee: anneeInscription })
           const sousTitre = contratSoumis
-            ? `Statut : ${formatStatut(contrat?.statut).label}`
+            ? t('portail.inscriptions.hero.sub_status', { statut: formatStatut(contrat?.statut).label })
             : contratBloqueParDDR
-              ? `Disponible après votre choix sur la demande de réduction`
+              ? t('portail.inscriptions.hero.sub_blocked_ddr')
               : config?.date_cloture_inscription
-                ? `À signer avant le ${new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}`
-                : `Signez le contrat de scolarisation pour préparer la rentrée`
-          const actionLabel = contrat ? 'Voir mon contrat' : 'Remplir le contrat'
+                ? t('portail.inscriptions.hero.sub_deadline', { date: new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR') })
+                : t('portail.inscriptions.hero.sub_default')
+          const actionLabel = contrat ? t('portail.inscriptions.hero.btn_view') : t('portail.inscriptions.hero.btn_fill')
           return (
             <div style={{
               background: contratSoumis
@@ -308,7 +311,7 @@ function DossierTab({ router }: { router: any }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, position: 'relative' }}>
                 <span style={{ fontSize: 22 }}>{contratSoumis ? '✅' : '📝'}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: contratSoumis || contratBloqueParDDR ? 0.6 : 0.85 }}>
-                  {contratSoumis ? 'Inscription validée' : contratBloqueParDDR ? 'En attente' : 'Action principale'}
+                  {contratSoumis ? t('portail.inscriptions.hero.eyebrow_signed') : contratBloqueParDDR ? t('portail.inscriptions.hero.eyebrow_blocked') : t('portail.inscriptions.hero.eyebrow_main')}
                 </span>
               </div>
               <h2 style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, margin: '0 0 8px', position: 'relative' }}>
@@ -332,7 +335,7 @@ function DossierTab({ router }: { router: any }) {
                 </button>
               )}
               {!ouvertContrat && !contratSoumis && (
-                <div style={{ fontSize: 12, opacity: 0.7, position: 'relative' }}>Inscriptions actuellement fermées</div>
+                <div style={{ fontSize: 12, opacity: 0.7, position: 'relative' }}>{t('portail.inscriptions.hero.closed')}</div>
               )}
             </div>
           )
@@ -342,27 +345,27 @@ function DossierTab({ router }: { router: any }) {
         {(reductionsOuvertes || !!reduction) && (
           <EtapeCard
             icone="💸"
-            titre="Demande de réduction"
-            desc="Facultatif — déposez votre dossier avant la date limite"
+            titre={t('portail.inscriptions.ddr_card.title')}
+            desc={t('portail.inscriptions.ddr_card.desc')}
             optional
             status={reduction && ['soumis', 'en_etude', 'accepte'].includes(reduction.statut) ? 'done' : reduction?.statut === 'brouillon' ? 'inprogress' : 'todo'}
             ouvert={reductionsOuvertes || !!reduction}
-            dateLimite={config?.date_cloture_reduction ? `Avant le ${new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR')}` : null}
+            dateLimite={config?.date_cloture_reduction ? t('portail.inscriptions.ddr_card.date_before', { date: new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR') }) : null}
             statutLabel={reduction ? formatStatut(reduction.statut).label : null}
             statutColor={reduction ? formatStatut(reduction.statut).color : null}
             onAction={() => router.push('/portail/inscriptions/reduction')}
-            actionLabel={reduction ? 'Voir mon dossier' : 'Déposer une demande'}
+            actionLabel={reduction ? t('portail.inscriptions.ddr_card.btn_view') : t('portail.inscriptions.ddr_card.btn_submit')}
             aide={
               <AideEtape
-                titreEtape="Demande de réduction"
-                aQuoiCaSert="Vous permet de demander à la commission de l'école une réduction sur les frais de scolarité, en fonction de votre situation financière. Le tarif accordé est ensuite appliqué automatiquement dans votre contrat."
+                titreEtape={t('portail.inscriptions.ddr_card.help_title')}
+                aQuoiCaSert={t('portail.inscriptions.ddr_card.help_what')}
                 preparation={[
-                  "Votre dernier avis d'imposition",
-                  "Vos justificatifs de revenus (salaires, allocations, APL...)",
-                  "Vos quittances de loyer ou taxe foncière",
-                  "Tout document utile à l'étude de votre dossier",
+                  t('portail.inscriptions.ddr_card.help_prep1'),
+                  t('portail.inscriptions.ddr_card.help_prep2'),
+                  t('portail.inscriptions.ddr_card.help_prep3'),
+                  t('portail.inscriptions.ddr_card.help_prep4'),
                 ]}
-                duree="20 à 30 minutes"
+                duree={t('portail.inscriptions.ddr_card.help_duration')}
                 couleur="#7C3AED"
               />
             }
@@ -385,25 +388,25 @@ function DossierTab({ router }: { router: any }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
                 {enfants.length > 0
-                  ? `Demander l'admission d'un nouvel enfant`
-                  : 'Demander l\'admission de votre premier enfant'}
+                  ? t('portail.inscriptions.admission_card.title_more')
+                  : t('portail.inscriptions.admission_card.title_first')}
               </span>
               <AideEtape
-                titreEtape="Demande d'admission"
-                aQuoiCaSert="Demande d'entrée dans l'école pour un enfant qui n'y est pas encore — nouveau-né, petit frère/petite sœur, ou enfant venant d'un autre établissement. Vous remplissez son état civil + classe souhaitée + médecin + urgences. L'école étudie et accepte (ou refuse). Une fois admis, vous pourrez l'inclure dans votre contrat de réinscription annuel."
+                titreEtape={t('portail.inscriptions.admission_card.help_title')}
+                aQuoiCaSert={t('portail.inscriptions.admission_card.help_what')}
                 preparation={[
-                  "L'état civil de l'enfant (nom, prénom, date de naissance)",
-                  "La classe souhaitée pour la rentrée",
-                  "Les coordonnées des contacts d'urgence et du médecin",
+                  t('portail.inscriptions.admission_card.help_prep1'),
+                  t('portail.inscriptions.admission_card.help_prep2'),
+                  t('portail.inscriptions.admission_card.help_prep3'),
                 ]}
-                duree="10 à 15 minutes"
+                duree={t('portail.inscriptions.admission_card.help_duration')}
                 couleur="#1E293B"
               />
             </div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 3, lineHeight: 1.5 }}>
               {enfants.length > 0
-                ? <>Pour un enfant qui n&apos;est pas {enfants.map(e => e.prenom).join(' ni ')}. Vous pourrez l&apos;inclure dans votre contrat dès que l&apos;école aura validé son admission.</>
-                : <>Démarche à faire une seule fois par enfant. Une fois admis, vous le réinscrirez chaque année avec un contrat.</>}
+                ? t('portail.inscriptions.admission_card.desc_more', { prenoms: enfants.map(e => e.prenom).join(' ni ') })
+                : t('portail.inscriptions.admission_card.desc_first')}
             </div>
           </div>
           <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
@@ -413,23 +416,23 @@ function DossierTab({ router }: { router: any }) {
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
               flexShrink: 0, whiteSpace: 'nowrap', minHeight: 40,
             }}>
-            + Demande d&apos;admission
+            {t('portail.inscriptions.admission_card.btn')}
           </button>
         </div>
       </div>
 
       {((config?.date_cloture_reduction && (reductionsOuvertes || !!reduction)) || config?.date_cloture_inscription) && (
         <div style={{ marginTop: 28, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.05em' }}>DATES CLÉS</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.05em' }}>{t('portail.inscriptions.dates.heading')}</div>
           {config.date_cloture_reduction && (reductionsOuvertes || !!reduction) && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B', marginBottom: 8 }}>
-              <span>Clôture demandes de réduction</span>
+              <span>{t('portail.inscriptions.dates.ddr_close')}</span>
               <span style={{ fontWeight: 600, color: '#1E293B' }}>{new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR')}</span>
             </div>
           )}
           {config.date_cloture_inscription && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B' }}>
-              <span>Clôture contrats de scolarisation</span>
+              <span>{t('portail.inscriptions.dates.contract_close')}</span>
               <span style={{ fontWeight: 600, color: '#1E293B' }}>{new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}</span>
             </div>
           )}
@@ -441,6 +444,7 @@ function DossierTab({ router }: { router: any }) {
 
 // ── ONGLET 2 : FACTURE (année courante) ──
 function FactureTab() {
+  const { t } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
@@ -475,11 +479,11 @@ function FactureTab() {
     load()
   }, [])
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
   if (!facture) return (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-      Aucune facture pour l'année {anneeInscription}.<br /><br />
-      <span style={{ fontSize: 12 }}>La facture sera générée automatiquement après la validation de votre contrat de scolarisation par l'école.</span>
+      {t('portail.inscriptions.invoice.empty', { annee: anneeInscription })}<br /><br />
+      <span style={{ fontSize: 12 }}>{t('portail.inscriptions.invoice.empty_help')}</span>
     </div>
   )
 
@@ -487,9 +491,9 @@ function FactureTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
-          { label: 'Total facturé', value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-          { label: 'Total réglé', value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-          { label: 'Reste à régler', value: `${(facture.statut === 'annule' ? 0 : Number(facture.solde_restant)).toLocaleString('fr-FR')} €`, color: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
+          { label: t('portail.factures.total_invoiced'), value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+          { label: t('portail.factures.total_paid'), value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
+          { label: t('portail.factures.remaining_to_pay'), value: `${(facture.statut === 'annule' ? 0 : Number(facture.solde_restant)).toLocaleString('fr-FR')} €`, color: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
         ].map(s => (
           <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -500,16 +504,16 @@ function FactureTab() {
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" style={{ background: '#2563EB', color: '#fff', textDecoration: 'none', borderRadius: 6, padding: '5px 11px', fontSize: 11, fontWeight: 600, marginRight: 10 }}>📥 PDF</a>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>Facture {facture.numero}</span>
-          <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>Émise le {new Date(facture.date_emission).toLocaleDateString('fr-FR')}</span>
+          <a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" style={{ background: '#2563EB', color: '#fff', textDecoration: 'none', borderRadius: 6, padding: '5px 11px', fontSize: 11, fontWeight: 600, marginRight: 10 }}>{t('portail.inscriptions.invoice.pdf_short')}</a>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{t('portail.factures.invoice_no', { numero: facture.numero })}</span>
+          <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{t('portail.factures.issued_on', { date: new Date(facture.date_emission).toLocaleDateString('fr-FR') })}</span>
         </div>
         {(() => {
           const m: any = {
-            en_attente: { label: '⏳ En attente de paiement', color: '#D97706', bg: '#FFFBEB' },
-            partiel: { label: '◑ Partiellement réglée', color: '#2563EB', bg: '#EFF6FF' },
-            solde: { label: '✓ Soldée', color: '#059669', bg: '#ECFDF5' },
-            annule: { label: '✕ Annulée', color: '#DC2626', bg: '#FEF2F2' },
+            en_attente: { label: t('portail.factures.status.waiting'), color: '#D97706', bg: '#FFFBEB' },
+            partiel: { label: t('portail.factures.status.partial'), color: '#2563EB', bg: '#EFF6FF' },
+            solde: { label: t('portail.factures.status.settled'), color: '#059669', bg: '#ECFDF5' },
+            annule: { label: t('portail.factures.status.cancelled'), color: '#DC2626', bg: '#FEF2F2' },
           }
           const s = m[facture.statut] || { label: facture.statut, color: '#64748B', bg: '#F1F5F9' }
           return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 600 }}>{s.label}</span>
@@ -519,43 +523,37 @@ function FactureTab() {
       {facture.statut === 'en_attente' && (
         <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 18 }}>💡</span>
-          <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
-            <strong>Paiement en attente.</strong> Votre facture vient d'être émise. L'école vous informera prochainement du moyen de règlement (chèques, prélèvement SEPA, ou virement). Aucune action n'est requise pour l'instant.
-          </div>
+          <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.inscriptions.invoice.banner_waiting') }} />
         </div>
       )}
       {facture.statut === 'partiel' && Number(facture.solde_restant) > 0 && (
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 18 }}>ℹ️</span>
-          <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.5 }}>
-            <strong>Reste à régler : {Number(facture.solde_restant).toLocaleString('fr-FR')} €.</strong> Vos prochains règlements apparaîtront automatiquement dans l'historique ci-dessous.
-          </div>
+          <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.inscriptions.invoice.banner_partial', { montant: Number(facture.solde_restant).toLocaleString('fr-FR') }) }} />
         </div>
       )}
       {facture.statut === 'annule' && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 18 }}>⚠️</span>
-          <div style={{ fontSize: 13, color: '#991B1B', lineHeight: 1.5 }}>
-            <strong>Cette facture a été annulée par l'école.</strong> Si vous avez une question, contactez l'administration.
-          </div>
+          <div style={{ fontSize: 13, color: '#991B1B', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.inscriptions.invoice.banner_cancelled') }} />
         </div>
       )}
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>📋 Détail</div>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>{t('portail.inscriptions.invoice.detail_heading')}</div>
         {lignes.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucune ligne</div>
+          <div style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>{t('portail.factures.no_line')}</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ background: '#F8FAFC' }}>
-              <tr>{['Élève', 'Description', 'Montant'].map(h => (
+              <tr>{[t('portail.factures.col.student'), t('portail.factures.col.description'), t('portail.factures.col.amount')].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
               ))}</tr>
             </thead>
             <tbody>
               {lignes.map(l => (
                 <tr key={l.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : 'Famille'}</td>
+                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : t('portail.factures.line.family')}</td>
                   <td style={{ padding: '12px 16px', color: '#475569', fontSize: 13 }}>{l.description}</td>
                   <td style={{ padding: '12px 16px', fontWeight: 700, color: '#1E293B' }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
                 </tr>
@@ -567,10 +565,10 @@ function FactureTab() {
 
       {reglements.length > 0 && (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>💳 Règlements</div>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>{t('portail.factures.payments.history')}</div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ background: '#F8FAFC' }}>
-              <tr>{['Date', 'Mode', 'Référence', 'Montant'].map(h => (
+              <tr>{[t('portail.factures.col.date'), t('portail.factures.col.mode'), t('portail.factures.col.reference'), t('portail.factures.col.amount')].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
               ))}</tr>
             </thead>
@@ -593,6 +591,7 @@ function FactureTab() {
 
 // ── ONGLET 3 : DOCUMENTS ÉCOLE ──
 function DocumentsTab() {
+  const { t } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const [docs, setDocs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -616,40 +615,40 @@ function DocumentsTab() {
     load()
   }, [])
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
 
   const TYPES: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-    circulaire: { label: 'Circulaire', icon: '📢', color: '#2563EB', bg: '#EFF6FF' },
-    liste_affaires: { label: "Liste d'affaires", icon: '📝', color: '#7C3AED', bg: '#F5F3FF' },
-    calendrier: { label: 'Calendrier', icon: '📅', color: '#059669', bg: '#ECFDF5' },
-    reglement: { label: 'Règlement', icon: '📜', color: '#92400E', bg: '#FEF3C7' },
-    autre: { label: 'Document', icon: '📄', color: '#64748B', bg: '#F1F5F9' },
+    circulaire: { label: t('portail.inscriptions.docs.type.circulaire'), icon: '📢', color: '#2563EB', bg: '#EFF6FF' },
+    liste_affaires: { label: t('portail.inscriptions.docs.type.liste_affaires'), icon: '📝', color: '#7C3AED', bg: '#F5F3FF' },
+    calendrier: { label: t('portail.inscriptions.docs.type.calendrier'), icon: '📅', color: '#059669', bg: '#ECFDF5' },
+    reglement: { label: t('portail.inscriptions.docs.type.reglement'), icon: '📜', color: '#92400E', bg: '#FEF3C7' },
+    autre: { label: t('portail.inscriptions.docs.type.autre'), icon: '📄', color: '#64748B', bg: '#F1F5F9' },
   }
 
   if (docs.length === 0) return (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-      Aucun document partagé par l'école pour l'année {anneeInscription}.<br /><br />
-      <span style={{ fontSize: 12 }}>L'établissement publiera ici la circulaire de rentrée, la liste des affaires, etc.</span>
+      {t('portail.inscriptions.docs.empty', { annee: anneeInscription })}<br /><br />
+      <span style={{ fontSize: 12 }}>{t('portail.inscriptions.docs.empty_help')}</span>
     </div>
   )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {docs.map(d => {
-        const t = TYPES[d.type_doc] || TYPES.autre
+        const ty = TYPES[d.type_doc] || TYPES.autre
         return (
           <a key={d.id} href={d.fichier_url} target="_blank" rel="noopener noreferrer"
             style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: t.bg, color: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{t.icon}</div>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: ty.bg, color: ty.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{ty.icon}</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B' }}>{d.titre}</div>
               {d.description && <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{d.description}</div>}
               <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                <span style={{ background: t.bg, color: t.color, borderRadius: 5, padding: '1px 8px', fontWeight: 600 }}>{t.label}</span>
+                <span style={{ background: ty.bg, color: ty.color, borderRadius: 5, padding: '1px 8px', fontWeight: 600 }}>{ty.label}</span>
                 {d.nom_fichier && <span style={{ marginLeft: 8 }}>{d.nom_fichier}</span>}
               </div>
             </div>
-            <span style={{ fontSize: 12, color: '#2563EB', fontWeight: 600 }}>Ouvrir →</span>
+            <span style={{ fontSize: 12, color: '#2563EB', fontWeight: 600 }}>{t('portail.common.open')}</span>
           </a>
         )
       })}
@@ -666,6 +665,7 @@ function EtapeCard({ icone, titre, desc, status, ouvert, dateLimite, statutLabel
   optional?: boolean; highlight?: boolean
   aide?: React.ReactNode
 }) {
+  const { t } = useI18n()
   const isDone = status === 'done'
   const isProgress = status === 'inprogress'
   return (
@@ -687,7 +687,7 @@ function EtapeCard({ icone, titre, desc, status, ouvert, dateLimite, statutLabel
       <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{titre}</span>
-          {optional && <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>FACULTATIF</span>}
+          {optional && <span style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>{t('portail.inscriptions.optional_badge')}</span>}
           {aide}
         </div>
         <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>{desc}</div>
@@ -708,7 +708,7 @@ function EtapeCard({ icone, titre, desc, status, ouvert, dateLimite, statutLabel
           {actionLabel}
         </button>
       )}
-      {!ouvert && !isDone && <span style={{ fontSize: 12, color: '#CBD5E1', flexShrink: 0 }}>Fermé</span>}
+      {!ouvert && !isDone && <span style={{ fontSize: 12, color: '#CBD5E1', flexShrink: 0 }}>{t('portail.inscriptions.closed')}</span>}
     </div>
   )
 }
