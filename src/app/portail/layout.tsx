@@ -22,6 +22,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
   const [inscriptionCtx, setInscriptionCtx] = useState<{ anneeInscription: string; exerciceInscriptionId: string | null }>({ anneeInscription: '', exerciceInscriptionId: null })
   const [parentCtx, setParentCtx] = useState<ParentCtx>({ parentSlot: 'parent1', estSeparee: false, estPrincipal: true, partPct: 100 })
   const [modulesActifs, setModulesActifs] = useState<string[] | null>(null) // null = tous actifs
+  const [ecoleNom, setEcoleNom] = useState<string>('')
 
   useEffect(() => {
     async function check() {
@@ -55,11 +56,14 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         setInscriptionCtx({ anneeInscription: insc.code, exerciceInscriptionId: insc.exercice_id })
         const { data: ecoleConf } = await supabase
           .from('ecoles')
-          .select('portail_modules_actifs')
+          .select('nom, portail_modules_actifs')
           .eq('id', profile.ecole_id)
           .single()
-        if (ecoleConf && Array.isArray((ecoleConf as any).portail_modules_actifs)) {
-          setModulesActifs((ecoleConf as any).portail_modules_actifs)
+        if (ecoleConf) {
+          if (Array.isArray((ecoleConf as any).portail_modules_actifs)) {
+            setModulesActifs((ecoleConf as any).portail_modules_actifs)
+          }
+          setEcoleNom((ecoleConf as any).nom || '')
         }
       }
 
@@ -174,6 +178,19 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           </button>
         </div>
       </header>
+
+      {/* Sous-header : nom de l'ecole pour rappeler ou est le parent */}
+      {ecoleNom && (
+        <div className="portail-ecole-band" style={{
+          background: '#F1F5F9', borderBottom: '1px solid #E2E8F0',
+          padding: '8px 32px', display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 12, color: '#1E293B',
+        }}>
+          <span aria-hidden style={{ fontSize: 14 }}>🏫</span>
+          <span style={{ color: '#64748B' }}>Vous êtes sur le portail de</span>
+          <strong style={{ color: '#1E40AF', fontWeight: 600 }}>{ecoleNom}</strong>
+        </div>
+      )}
 
       <nav className="portail-nav" style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', display: 'flex', gap: 4, overflowX: 'auto' }}>
         {navItems.map(item => (
