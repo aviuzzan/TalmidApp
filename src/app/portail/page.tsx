@@ -54,7 +54,7 @@ export default function PortailPage() {
       // Fiches pedagogiques en 2eme passe car depend de la liste des enfants
       const enfantIds = (enfantsList || []).map((e: any) => e.id)
       const { data: fichesPedago } = enfantIds.length > 0
-        ? await supabase.from('inscriptions_pedagogiques').select('id, enfant_id, urgence_1_nom, medecin_nom, statut').in('enfant_id', enfantIds)
+        ? await supabase.from('inscriptions_pedagogiques').select('id, enfant_id, urgence_1_nom, medecin_nom, statut').in('enfant_id', enfantIds).eq('annee_scolaire', anneeInscription)
         : { data: [] }
 
       // Tranche famille (pour check éligibilité DDR sur la pastille "réductions ouvertes")

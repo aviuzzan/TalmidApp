@@ -927,3 +927,63 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
 [dir="rtl"] table td { text-align: right; }
 /* Icones decoratifs apres le texte en LTR doivent passer avant en RTL */
 [dir="rtl"] .icon-after { margin-right: 0; margin-left: 6px; }
+
+/* ===== PASSE MOBILE PORTAIL 2026-06-19 ===== */
+/* Objectif : impeccable sur 320 / 375 / 414 px sans regression desktop.
+   Les overrides s'appuient uniquement sur des classes utilitaires
+   (.portail-*) — pas de !important sur des styles inline.            */
+
+/* 1. Layout portail : padding ecrase pour 320-480px */
+@media (max-width: 480px) {
+  .portail-main { padding: 14px 10px !important; }
+  .portail-ecole-band { padding: 6px 10px !important; font-size: 11px !important; }
+}
+
+/* 2. Tous les enfants directs de .portail-main avec maxWidth inline : ramener a 100% */
+@media (max-width: 768px) {
+  .portail-main > div[style*="maxWidth: 720"],
+  .portail-main > div[style*="maxWidth: 700"],
+  .portail-main > div[style*="maxWidth: 600"],
+  .portail-main > div[style*="maxWidth: 640"],
+  .portail-main > div[style*="maxWidth: 520"] {
+    max-width: 100% !important;
+  }
+}
+
+/* 3. Touch target minimum sur TOUS les boutons portail (covers <a> liens-boutons aussi) */
+@media (max-width: 768px) {
+  .portail-main button:not(.portail-no-min),
+  .portail-main a[href][role="button"],
+  .portail-header button,
+  .portail-nav a {
+    min-height: 44px;
+  }
+}
+
+/* 4. Word-break sur valeurs longues (emails, IBAN, monospace) */
+@media (max-width: 640px) {
+  .portail-main [style*="fontFamily: 'monospace'"],
+  .portail-main a[href^="mailto:"],
+  .portail-main a[href^="tel:"] {
+    word-break: break-all;
+  }
+}
+
+/* 5. Header sticky : eviter empilement qui mange tout l'ecran */
+@media (max-width: 480px) {
+  .portail-header { height: auto !important; padding: 8px 14px !important; }
+  .portail-nav a { padding: 12px 12px !important; font-size: 12px !important; }
+}
+
+/* 6. Recapitulatif solde factures : wrap sur petits ecrans */
+@media (max-width: 480px) {
+  .portail-recap-row { flex-wrap: wrap !important; gap: 10px !important; }
+}
+
+/* 7. Stepper inscriptions : reduire la police plutot que d'empiler */
+@media (max-width: 480px) {
+  .portail-stepper-row { gap: 4px !important; }
+  .portail-stepper-row > div { gap: 4px !important; }
+  .portail-stepper-row > div > div:nth-child(2) { font-size: 10px !important; line-height: 1.1 !important; }
+  .portail-stepper-row > div > div:nth-child(3) { font-size: 9px !important; }
+}

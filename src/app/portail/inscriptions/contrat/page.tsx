@@ -94,13 +94,13 @@ export default function ContratPage() {
       s.from('classes').select('id, nom, secteur_id, secteurs(id, nom)').eq('ecole_id', profile.ecole_id).order('nom'),
       s.from('tarifs_secteur').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).order('ordre'),
       s.from('modes_reglement_ecole').select('*').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
-      s.from('contrat_paiement_config').select('*').eq('ecole_id', profile.ecole_id).single(),
+      s.from('contrat_paiement_config').select('*').eq('ecole_id', profile.ecole_id).maybeSingle(),
       s.from('dates_encaissement').select('*').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
       s.from('reductions_famille_nombreuse').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).order('nb_enfants'),
-      s.from('demandes_reduction').select('tarif_accorde, statut, id').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).eq('statut', 'accepte').single(),
-      s.from('contrats_scolarisation').select('*, contrat_enfants(*)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
-      s.from('demandes_reduction').select('statut').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
-      s.from('mandats_sepa').select('*').eq('famille_id', profile.famille_id).eq('ecole_id', profile.ecole_id).eq('actif', true).single(),
+      s.from('demandes_reduction').select('tarif_accorde, statut, id').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).eq('statut', 'accepte').maybeSingle(),
+      s.from('contrats_scolarisation').select('*, contrat_enfants(*)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+      s.from('demandes_reduction').select('statut').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+      s.from('mandats_sepa').select('*').eq('famille_id', profile.famille_id).eq('ecole_id', profile.ecole_id).eq('actif', true).maybeSingle(),
     ])
 
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? [])
@@ -151,6 +151,7 @@ export default function ContratPage() {
       if (enfantIds2.length > 0) {
         const { data: fp } = await s.from('inscriptions_pedagogiques')
           .select('enfant_id, statut').in('enfant_id', enfantIds2)
+          .eq('annee_scolaire', anneeInscription)
         ;(fp || []).forEach((f: any) => { enfAdmStatuts[f.enfant_id] = f.statut })
         setAdmissions(enfAdmStatuts)
       }
@@ -391,7 +392,11 @@ export default function ContratPage() {
 
       // Mandat SEPA
       if (modeReglement === 'sepa') {
-        const rum = `BH-${famille?.numero || familleId.slice(0, 8)}-${new Date().getFullYear()}`
+        // Prefixe RUM : 2 premieres lettres significatives du nom de l'ecole, sinon 'EC' (Etablissement)
+        const ecoleNomBrut = (ecoleInfo?.nom || '').toUpperCase()
+        const lettresEcole = ecoleNomBrut.replace(/[^A-Z]/g, '').slice(0, 2)
+        const prefixe = lettresEcole.length >= 2 ? lettresEcole : 'EC'
+        const rum = `${prefixe}-${famille?.numero || familleId.slice(0, 8)}-${new Date().getFullYear()}`
         const mandatPayload = { famille_id: familleId, ecole_id: ecoleId, contrat_id: contratId, iban: sepaIban.replace(/\s/g, '').toUpperCase(), bic: sepaBic.toUpperCase(), titulaire_compte: sepaTitulaire, rib_url: sepaRibUploaded?.url || null, rum, date_signature: new Date().toISOString().split('T')[0], actif: true }
         if (mandatExistant) {
           await s.from('mandats_sepa').update(mandatPayload).eq('id', mandatExistant.id)

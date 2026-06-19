@@ -37,12 +37,12 @@ export default function PortailInscriptionsPage() {
         ] as { id: SubTab; label: string }[]).map(tabItem => (
           <button key={tabItem.id} onClick={() => setTab(tabItem.id)}
             style={{
-              padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              padding: '11px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
               background: tab === tabItem.id ? '#fff' : 'transparent',
               color: tab === tabItem.id ? '#1E293B' : '#64748B',
               fontSize: 13, fontWeight: tab === tabItem.id ? 600 : 400,
               boxShadow: tab === tabItem.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              whiteSpace: 'nowrap', minHeight: 38,
+              whiteSpace: 'nowrap', minHeight: 44,
             }}>
             {tabItem.label}
           </button>
@@ -96,6 +96,7 @@ function DossierTab({ router }: { router: any }) {
       const { data: fp } = await s.from('inscriptions_pedagogiques')
         .select('enfant_id, statut')
         .in('enfant_id', ids)
+        .eq('annee_scolaire', anneeInscription)
       const map: Record<string, string> = {}
       ;(fp || []).forEach((f: any) => { map[f.enfant_id] = f.statut })
       setAdmissions(map)
@@ -173,7 +174,7 @@ function DossierTab({ router }: { router: any }) {
         return (
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 14px', marginBottom: 22 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12, paddingLeft: 4 }}>{t('portail.inscriptions.stepper.title')}</div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, position: 'relative' }}>
+            <div className="portail-stepper-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, position: 'relative' }}>
               {etapes.map((et, i) => {
                 const isDone = et.etat === 'done'
                 const isProg = et.etat === 'inprogress'

@@ -173,7 +173,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
             {email[0]?.toUpperCase()}
           </div>
           <LangSwitcher compact />
-          <button onClick={logout} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 12, color: '#475569', fontWeight: 500 }}>
+          <button onClick={logout} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '10px 14px', minHeight: 40, cursor: 'pointer', fontSize: 12, color: '#475569', fontWeight: 500 }}>
             {t('portail.logout')}
           </button>
         </div>

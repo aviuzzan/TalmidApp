@@ -4,9 +4,11 @@ import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
+import { useI18n } from '@/lib/i18n'
 
 export default function PortailFacturesPage() {
   const { anneeInscription } = useAnneeInscription()
+  const { t } = useI18n()
   const parent = useParentCtx()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
@@ -93,7 +95,7 @@ export default function PortailFacturesPage() {
     }
   }
 
-  if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>Chargement...</div>
+  if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>{t('portail.common.loading')}</div>
 
   // Si la facture est annulee, rien n'est du ni a regler
   const isAnnulee = facture?.statut === 'annule'
@@ -108,34 +110,41 @@ export default function PortailFacturesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>Mes factures</h1>
-          {facture && <a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" style={{ background: '#2563EB', color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600 }}>📥 Télécharger PDF</a>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>{t('portail.factures.title')}</h1>
+          {facture && <a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" style={{ background: '#2563EB', color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{t('portail.factures.download_pdf')}</a>}
         </div>
-        <p style={{ color: '#64748B', fontSize: 13 }}>Année scolaire {anneeInscription}</p>
+        <p style={{ color: '#64748B', fontSize: 13 }}>{t('portail.factures.school_year_line', { annee: anneeInscription })}</p>
       </div>
 
       {parent.estSeparee && (
         <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#7C2D12', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 16 }}>👥</span>
-          <div>Vous consultez <strong>votre part ({parent.partPct}%)</strong> de la facture famille. L&apos;autre parent gère la sienne de son côté — son mode et sa fréquence de règlement ne vous sont pas visibles.</div>
+          <div dangerouslySetInnerHTML={{ __html: t('portail.factures.separated_notice', { pct: parent.partPct }) }} />
         </div>
       )}
 
       {/* Avoirs visibles meme si pas de facture pour l'annee selectionnee (un avoir peut etre emis sur N et applique sur N+1) */}
       {avoirs.length > 0 && !parent.estSeparee && (
-        <div style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: 12, overflow: 'auto' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #DCFCE7', background: '#F0FDF4', fontWeight: 600, fontSize: 14, color: '#065F46' }}>
-            🎁 Mes avoirs & notes de crédit
+            {t('portail.factures.credits.heading')}
           </div>
           <div style={{ padding: '12px 20px', fontSize: 12, color: '#475569' }}>
-            Ces avoirs sont émis par l&apos;école à votre nom. Ils sont déduits automatiquement de vos factures lorsque l&apos;école les impute. Pour toute question, contactez l&apos;administration.
+            {t('portail.factures.credits.intro')}
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ background: '#F8FAFC' }}>
                 <tr>
-                  {['N°', 'Émis le', 'Motif', 'Montant', 'Disponible', 'Statut'].map(h => (
+                  {[
+                    t('portail.factures.credits.col.number'),
+                    t('portail.factures.credits.col.issued_on'),
+                    t('portail.factures.credits.col.reason'),
+                    t('portail.factures.credits.col.amount'),
+                    t('portail.factures.credits.col.available'),
+                    t('portail.factures.credits.col.status'),
+                  ].map(h => (
                     <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
@@ -164,7 +173,7 @@ export default function PortailFacturesPage() {
 
       {!facture ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
-          Aucune facture pour l'année {anneeInscription.replace('-', '/')}
+          {t('portail.factures.empty', { annee: anneeInscription.replace('-', '/') })}
         </div>
       ) : (
         <>
@@ -172,9 +181,9 @@ export default function PortailFacturesPage() {
           {parent.estSeparee ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
               {[
-                { label: 'Ma part', value: `${maPart.toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
-                { label: 'Réglé par moi', value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
-                { label: 'Mon solde', value: `${monSolde.toLocaleString('fr-FR')} €`, color: monSolde > 0 ? '#DC2626' : '#059669', bg: monSolde > 0 ? '#FEF2F2' : '#ECFDF5' },
+                { label: t('portail.factures.sep.my_share'), value: `${maPart.toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+                { label: t('portail.factures.sep.paid_by_me'), value: `${regleMoi.toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
+                { label: t('portail.factures.sep.my_balance'), value: `${monSolde.toLocaleString('fr-FR')} €`, color: monSolde > 0 ? '#DC2626' : '#059669', bg: monSolde > 0 ? '#FEF2F2' : '#ECFDF5' },
               ].map(s => (
                 <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '18px 22px' }}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -185,13 +194,13 @@ export default function PortailFacturesPage() {
           ) : (
             <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '18px 22px' }}>
               {[
-                { label: 'Total facturé', value: isAnnulee ? 0 : Number(facture.total_facture), color: '#1E293B', bold: true },
-                ...(totalAvoirsImputes > 0 ? [{ label: 'Avoirs / réductions', value: -totalAvoirsImputes, color: '#059669', bold: false }] : []),
-                ...(totalAvoirsImputes > 0 ? [{ label: 'Net à régler', value: isAnnulee ? 0 : totalFactureNet, color: '#1E293B', bold: true, separator: true }] : []),
-                { label: 'Total réglé', value: isAnnulee ? 0 : (Number(facture.total_regle) - totalAvoirsImputes), color: '#059669', bold: false },
-                { label: 'Reste à régler', value: isAnnulee ? 0 : Number(facture.solde_restant), color: !isAnnulee && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bold: true, highlight: true },
+                { label: t('portail.factures.total_invoiced'), value: isAnnulee ? 0 : Number(facture.total_facture), color: '#1E293B', bold: true },
+                ...(totalAvoirsImputes > 0 ? [{ label: t('portail.factures.credits_deduction'), value: -totalAvoirsImputes, color: '#059669', bold: false }] : []),
+                ...(totalAvoirsImputes > 0 ? [{ label: t('portail.factures.net_to_pay'), value: isAnnulee ? 0 : totalFactureNet, color: '#1E293B', bold: true, separator: true }] : []),
+                { label: t('portail.factures.total_paid'), value: isAnnulee ? 0 : (Number(facture.total_regle) - totalAvoirsImputes), color: '#059669', bold: false },
+                { label: t('portail.factures.remaining_to_pay'), value: isAnnulee ? 0 : Number(facture.solde_restant), color: !isAnnulee && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bold: true, highlight: true },
               ].map((row: any, idx: number) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: row.separator ? '1px solid #E2E8F0' : 'none', marginTop: row.separator ? 6 : 0, paddingTop: row.separator ? 12 : 8 }}>
+                <div key={idx} className="portail-recap-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: row.separator ? '1px solid #E2E8F0' : 'none', marginTop: row.separator ? 6 : 0, paddingTop: row.separator ? 12 : 8 }}>
                   <div style={{ fontSize: row.highlight ? 15 : 13, fontWeight: row.bold ? 700 : 500, color: row.highlight ? '#1E293B' : '#475569' }}>{row.label}</div>
                   <div style={{ fontSize: row.highlight ? 22 : 16, fontWeight: row.bold ? 800 : 600, color: row.color }}>{Number(row.value).toLocaleString('fr-FR')} €</div>
                 </div>
@@ -202,18 +211,18 @@ export default function PortailFacturesPage() {
           {/* Statut */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>Facture {facture.numero}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>Émise le {new Date(facture.date_emission).toLocaleDateString('fr-FR')}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{t('portail.factures.invoice_no', { numero: facture.numero })}</span>
+              <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{t('portail.factures.issued_on', { date: new Date(facture.date_emission).toLocaleDateString('fr-FR') })}</span>
             </div>
             {(() => {
               const map: any = {
-                en_attente: { label: '⏳ En attente de paiement', color: '#D97706', bg: '#FFFBEB' },
-                partiel: { label: '◑ Partiellement réglée', color: '#2563EB', bg: '#EFF6FF' },
-                paye: { label: '✓ Payée', color: '#059669', bg: '#ECFDF5' },
-                payee: { label: '✓ Payée', color: '#059669', bg: '#ECFDF5' },
-                solde: { label: '✓ Soldée', color: '#059669', bg: '#ECFDF5' },
-                annule: { label: '✕ Annulée', color: '#64748B', bg: '#F1F5F9' },
-                annulee: { label: '✕ Annulée', color: '#64748B', bg: '#F1F5F9' },
+                en_attente: { label: t('portail.factures.status.waiting'), color: '#D97706', bg: '#FFFBEB' },
+                partiel: { label: t('portail.factures.status.partial'), color: '#2563EB', bg: '#EFF6FF' },
+                paye: { label: t('portail.factures.status.paid'), color: '#059669', bg: '#ECFDF5' },
+                payee: { label: t('portail.factures.status.paid'), color: '#059669', bg: '#ECFDF5' },
+                solde: { label: t('portail.factures.status.settled'), color: '#059669', bg: '#ECFDF5' },
+                annule: { label: t('portail.factures.status.cancelled'), color: '#64748B', bg: '#F1F5F9' },
+                annulee: { label: t('portail.factures.status.cancelled'), color: '#64748B', bg: '#F1F5F9' },
               }
               const s = map[String(facture.statut || '').toLowerCase()] || { label: facture.statut, color: '#64748B', bg: '#F1F5F9' }
               return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 600 }}>{s.label}</span>
@@ -223,9 +232,7 @@ export default function PortailFacturesPage() {
           {facture.statut === 'en_attente' && (
             <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
               <span style={{ fontSize: 18 }}>💡</span>
-              <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
-                <strong>Paiement en attente.</strong> Votre facture vient d'être émise. L'école vous informera prochainement du moyen de règlement (chèques, prélèvement SEPA, ou virement). Aucune action n'est requise de votre part pour l'instant.
-              </div>
+              <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.factures.banner_waiting') }} />
             </div>
           )}
 
@@ -233,16 +240,16 @@ export default function PortailFacturesPage() {
             <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>
-                  💳 Payer en ligne — {Number(facture.solde_restant).toLocaleString('fr-FR')} €
+                  {t('portail.factures.pay_online.title', { montant: Number(facture.solde_restant).toLocaleString('fr-FR') })}
                 </div>
                 <div style={{ fontSize: 12, color: '#64748B' }}>
-                  Confirmation immédiate, justificatif envoyé par email.
+                  {t('portail.factures.pay_online.subtitle')}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {stripeActif && (
                   <button onClick={() => payerEnLigne('stripe')} disabled={paying} className="btn-primary" style={{ minHeight: 44, fontSize: 13, fontWeight: 700, flex: '1 1 200px' }}>
-                    {paying ? 'Redirection…' : `💳 Carte bancaire`}
+                    {paying ? t('portail.factures.pay_online.redirecting') : t('portail.factures.pay_online.card')}
                   </button>
                 )}
                 {gocardlessActif && (
@@ -251,7 +258,7 @@ export default function PortailFacturesPage() {
                     borderRadius: 8, padding: '11px 18px', minHeight: 44, fontSize: 13, fontWeight: 700,
                     cursor: paying ? 'not-allowed' : 'pointer', flex: '1 1 200px',
                   }}>
-                    {paying ? 'Redirection…' : `🏦 Prélèvement SEPA`}
+                    {paying ? t('portail.factures.pay_online.redirecting') : t('portail.factures.pay_online.sepa')}
                   </button>
                 )}
                 {paypalActif && (
@@ -260,7 +267,7 @@ export default function PortailFacturesPage() {
                     borderRadius: 8, padding: '11px 18px', minHeight: 44, fontSize: 13, fontWeight: 800,
                     cursor: paying ? 'not-allowed' : 'pointer', flex: '1 1 200px',
                   }}>
-                    {paying ? 'Redirection…' : 'PayPal'}
+                    {paying ? t('portail.factures.pay_online.redirecting') : 'PayPal'}
                   </button>
                 )}
               </div>
@@ -269,74 +276,83 @@ export default function PortailFacturesPage() {
           {facture.statut === 'partiel' && Number(facture.solde_restant) > 0 && (
             <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
               <span style={{ fontSize: 18 }}>ℹ️</span>
-              <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.5 }}>
-                <strong>Reste à régler : {Number(facture.solde_restant).toLocaleString('fr-FR')} €.</strong> Vos prochains règlements apparaîtront automatiquement dans l'historique ci-dessous.
-              </div>
+              <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.factures.banner_partial', { montant: Number(facture.solde_restant).toLocaleString('fr-FR') }) }} />
             </div>
           )}
           {facture.statut === 'annule' && (
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
               <span style={{ fontSize: 18 }}>⚠️</span>
-              <div style={{ fontSize: 13, color: '#991B1B', lineHeight: 1.5 }}>
-                <strong>Cette facture a été annulée par l'école.</strong> Si vous avez une question, contactez l'administration.
-              </div>
+              <div style={{ fontSize: 13, color: '#991B1B', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.factures.banner_cancelled') }} />
             </div>
           )}
 
           {/* Détail */}
-          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>📋 Détail par élève</div>
+          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'auto' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>{t('portail.factures.detail_per_student')}</div>
             {lignes.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucune ligne</div>
+              <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>{t('portail.factures.no_line')}</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#F8FAFC' }}>
-                  <tr>
-                    {['Élève', 'Description', 'Montant'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lignes.map((l, i) => (
-                    <tr key={l.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                      <td style={{ padding: '12px 16px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : 'Famille'}</td>
-                      <td style={{ padding: '12px 16px', color: '#475569', fontSize: 13 }}>{l.description}</td>
-                      <td style={{ padding: '12px 16px', fontWeight: 700, color: '#1E293B' }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
+              <div className="portail-table-wrap">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ background: '#F8FAFC' }}>
+                    <tr>
+                      {[
+                        t('portail.factures.col.student'),
+                        t('portail.factures.col.description'),
+                        t('portail.factures.col.amount'),
+                      ].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {lignes.map((l, i) => (
+                      <tr key={l.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                        <td style={{ padding: '12px 16px', fontWeight: 500 }}>{l.enfants ? `${l.enfants.prenom || ''} ${l.enfants.nom || ''}`.trim() : t('portail.factures.line.family')}</td>
+                        <td style={{ padding: '12px 16px', color: '#475569', fontSize: 13 }}>{l.description}</td>
+                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#1E293B' }}>{Number(l.montant).toLocaleString('fr-FR')} €</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
           {/* Règlements */}
-          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>💳 {parent.estSeparee ? 'Mes règlements' : 'Historique des règlements'}</div>
+          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'auto' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', fontWeight: 600, fontSize: 14 }}>{parent.estSeparee ? t('portail.factures.payments.my') : t('portail.factures.payments.history')}</div>
             {reglements.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun règlement enregistré</div>
+              <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>{t('portail.factures.payments.empty')}</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#F8FAFC' }}>
-                  <tr>
-                    {['Date', 'Mode', 'Référence', 'Montant'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {reglements.map(r => (
-                    <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                      <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span>
-                      </td>
-                      <td style={{ padding: '12px 16px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
-                      <td style={{ padding: '12px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
+              <div className="portail-table-wrap">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ background: '#F8FAFC' }}>
+                    <tr>
+                      {[
+                        t('portail.factures.col.date'),
+                        t('portail.factures.col.mode'),
+                        t('portail.factures.col.reference'),
+                        t('portail.factures.col.amount'),
+                      ].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {reglements.map(r => (
+                      <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                        <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span>
+                        </td>
+                        <td style={{ padding: '12px 16px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
+                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>

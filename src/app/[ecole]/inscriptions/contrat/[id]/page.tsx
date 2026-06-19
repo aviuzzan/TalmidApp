@@ -34,14 +34,23 @@ export default function ContratAdminDetailPage() {
 
   async function valider() {
     if (!contrat) return
+    // Garde anti-double-clic : si une validation est déjà en cours, on bloque.
+    if (validating) return
+    // Deuxième garde par état BDD : si le contrat est déjà validé, on refuse
+    // (protège contre une race condition ou un état UI désynchronisé).
+    if (contrat.statut === 'valide') {
+      alert('Contrat déjà validé')
+      return
+    }
     setValidating(true)
+    try {
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     const { error } = await s
       .from('contrats_scolarisation')
       .update({ statut: 'valide', valide_le: new Date().toISOString(), valide_par: session?.user.id })
       .eq('id', contratId)
-    if (error) { alert('Erreur : ' + error.message); setValidating(false); return }
+    if (error) { alert('Erreur : ' + error.message); return }
 
     // Créer / mettre à jour la scolarité de chaque enfant pour l'exercice cible
     // (modèle AGATE : la scolarité par année est la source de vérité)
@@ -107,8 +116,10 @@ export default function ContratAdminDetailPage() {
     }
 
     setContrat({ ...contrat, statut: 'valide' })
-    setValidating(false)
     alert('Contrat validé.' + factureMsg)
+    } finally {
+      setValidating(false)
+    }
   }
 
   async function annuler() {

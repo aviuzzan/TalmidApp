@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getAnneeCouranteSync } from '@/lib/annee-courante'
 
 type Prof = { id: string; prenom: string; nom: string; ecole_id: string }
 type Classe = { id: string; nom: string; ordre: number; matieres: string[] }
@@ -27,9 +28,21 @@ export default function PortailProfPage() {
   const [creneaux, setCreneaux] = useState<Creneau[]>([])
   const [tab, setTab] = useState<'edt' | 'classes'>('edt')
   const [selectedClasse, setSelectedClasse] = useState<string | null>(null)
-  const [annee, setAnnee] = useState('2026-2027')
+  const [annee, setAnnee] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('talmid_prof_annee')
+      if (stored) return stored
+    }
+    return getAnneeCouranteSync()
+  })
+  const [anneesDispo, setAnneesDispo] = useState<string[]>([])
 
-  useEffect(() => { load() }, [annee])
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('talmid_prof_annee', annee)
+    }
+    load()
+  }, [annee])
 
   async function load() {
     setLoading(true)
@@ -71,6 +84,25 @@ export default function PortailProfPage() {
     const { data: ecoleRec } = await s.from('ecoles')
       .select('id, nom, slug').eq('id', profRec.ecole_id).single()
     setEcole(ecoleRec as Ecole)
+
+    // Liste des annees scolaires depuis les exercices de l'ecole du prof
+    try {
+      const { data: exs } = await s.from('exercices')
+        .select('code').eq('ecole_id', profRec.ecole_id).order('code')
+      const codes = Array.from(new Set((exs ?? []).map((e: any) => e.code).filter(Boolean)))
+      if (codes.length > 0) {
+        setAnneesDispo(codes)
+        // Si l'annee selectionnee n'est pas dans la liste, on bascule sur la derniere
+        if (!codes.includes(annee)) {
+          setAnnee(codes[codes.length - 1])
+        }
+      } else {
+        // Fallback : annee courante calculee
+        setAnneesDispo([getAnneeCouranteSync()])
+      }
+    } catch {
+      setAnneesDispo([getAnneeCouranteSync()])
+    }
 
     // Ses classes (via professeur_classes)
     const { data: pcs } = await s.from('professeur_classes')
@@ -138,8 +170,9 @@ export default function PortailProfPage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={annee} onChange={e => setAnnee(e.target.value)} style={{ ...inp, width: 'auto' }}>
-            <option value="2026-2027">2026-2027</option>
-            <option value="2027-2028">2027-2028</option>
+            {(anneesDispo.length > 0 ? anneesDispo : [annee]).map(code => (
+              <option key={code} value={code}>{code}</option>
+            ))}
           </select>
           <button onClick={logout} style={btnSec}>Déconnexion</button>
         </div>
