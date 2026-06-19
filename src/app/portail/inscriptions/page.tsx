@@ -19,17 +19,17 @@ export default function PortailInscriptionsPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', fontFamily: 'Inter, sans-serif', padding: '0 0 48px' }}>
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Année {anneeInscription}</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>
-          Tout pour préparer la rentrée : votre dossier d'inscription, votre facture et les documents partagés par l'école.
+          Tout pour préparer la rentrée : admission de vos enfants, contrat de scolarisation et facture.
         </p>
       </div>
 
       {/* Onglets */}
       <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 22, overflowX: 'auto' }}>
         {([
-          { id: 'dossier', label: '📋 Dossier d\'inscription' },
+          { id: 'dossier', label: '📋 Mes démarches' },
           { id: 'facture', label: '💰 Facture' },
           { id: 'documents', label: '📂 Documents école' },
         ] as { id: SubTab; label: string }[]).map(t => (
@@ -64,6 +64,7 @@ function DossierTab({ router }: { router: any }) {
   const [contrat, setContrat] = useState<any>(null)
   const [reduction, setReduction] = useState<any>(null)
   const [contratsEnfants, setContratsEnfants] = useState<any[]>([])
+  const [admissions, setAdmissions] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
@@ -85,6 +86,17 @@ function DossierTab({ router }: { router: any }) {
     setFamille(fam); setEnfants(enf ?? []); setConfig(cfg)
     setReduction(red); setContrat(cont)
     setContratsEnfants(cont?.contrat_enfants?.map((c: any) => c.enfant_id) ?? [])
+
+    // Charger l'etat d'admission par enfant (statut de la fiche inscriptions_pedagogiques)
+    const ids = (enf || []).map((e: any) => e.id)
+    if (ids.length > 0) {
+      const { data: fp } = await s.from('inscriptions_pedagogiques')
+        .select('enfant_id, statut')
+        .in('enfant_id', ids)
+      const map: Record<string, string> = {}
+      ;(fp || []).forEach((f: any) => { map[f.enfant_id] = f.statut })
+      setAdmissions(map)
+    }
     setLoading(false)
   }
 
@@ -134,28 +146,89 @@ function DossierTab({ router }: { router: any }) {
       {!parent.estPrincipal && (
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#1E40AF', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 16 }}>ℹ️</span>
-          <div>Les démarches d&apos;inscription (demande de réduction, contrat, ajout d&apos;un nouvel enfant) sont gérées par le <strong>parent principal</strong> de la famille. Vous pouvez en suivre l&apos;avancement ci-dessous.</div>
+          <div>Les démarches (admission, demande de réduction, contrat) sont gérées par le <strong>parent principal</strong> de la famille. Vous pouvez en suivre l&apos;avancement ci-dessous.</div>
         </div>
       )}
+
+      {/* WORKFLOW STEPPER : Admission → Validation école → Inscription → Validation → Facture */}
+      {(() => {
+        const nbAdmis = enfants.filter(e => admissions[e.id] === 'accepte' || admissions[e.id] === 'valide').length
+        const nbEnAttente = enfants.filter(e => admissions[e.id] === 'soumis' || admissions[e.id] === 'en_etude').length
+        const auMoinsUnAdmis = nbAdmis > 0
+        const contratStatutActuel = contrat?.statut
+        const contratSoumisOuValide = ['soumis', 'valide', 'accepte'].includes(contratStatutActuel)
+        const contratValide = ['valide', 'accepte'].includes(contratStatutActuel)
+        // Etat des etapes
+        const etape1 = nbAdmis === enfants.length && enfants.length > 0 ? 'done' : nbEnAttente > 0 ? 'inprogress' : 'todo'
+        const etape2 = auMoinsUnAdmis && !contrat ? 'todo' : contrat && !contratSoumisOuValide ? 'inprogress' : contratSoumisOuValide ? 'done' : 'locked'
+        const etape3 = contratValide ? 'done' : contratSoumisOuValide ? 'inprogress' : 'locked'
+        const etapes = [
+          { label: 'Admission', sub: enfants.length > 0 ? `${nbAdmis}/${enfants.length} validée${nbAdmis > 1 ? 's' : ''}` : 'À demander', etat: etape1 },
+          { label: `Inscription ${anneeInscription}`, sub: contratSoumisOuValide ? 'Contrat envoyé' : 'À signer', etat: etape2 },
+          { label: 'Facture', sub: contratValide ? 'Émise' : 'En attente', etat: etape3 },
+        ]
+        return (
+          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 14px', marginBottom: 22 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12, paddingLeft: 4 }}>Votre parcours rentrée</div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, position: 'relative' }}>
+              {etapes.map((et, i) => {
+                const isDone = et.etat === 'done'
+                const isProg = et.etat === 'inprogress'
+                const isLocked = et.etat === 'locked'
+                const couleur = isDone ? '#10B981' : isProg ? '#F59E0B' : isLocked ? '#CBD5E1' : '#94A3B8'
+                const bg = isDone ? '#10B981' : isProg ? '#FEF3C7' : isLocked ? '#F1F5F9' : '#fff'
+                return (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 6, position: 'relative', minWidth: 0 }}>
+                    {/* Trait de liaison vers etape suivante */}
+                    {i < etapes.length - 1 && (
+                      <div style={{ position: 'absolute', top: 14, left: '60%', right: '-40%', height: 2, background: isDone ? '#10B981' : '#E2E8F0', zIndex: 0 }} />
+                    )}
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%',
+                      background: bg, border: `2px solid ${couleur}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 800,
+                      color: isDone ? '#fff' : couleur,
+                      zIndex: 1, position: 'relative',
+                    }}>{isDone ? '✓' : i + 1}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isLocked ? '#94A3B8' : '#1E293B', lineHeight: 1.2 }}>{et.label}</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', lineHeight: 1.3 }}>{et.sub}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Mes enfants */}
       {enfants.length > 0 && (
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
             <span>🎓</span> Vos enfants
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {enfants.map(enfant => {
               const dansContrat = contratsEnfants.includes(enfant.id)
+              const adm = admissions[enfant.id]
+              const admis = adm === 'accepte' || adm === 'valide'
+              const enAttenteAdm = adm === 'soumis' || adm === 'en_etude'
+              const refuse = adm === 'refuse'
+              // Etat & libelle
+              let badgeBg = '#F1F5F9', badgeColor = '#64748B', badgeLabel = 'Statut inconnu'
+              if (dansContrat) { badgeBg = '#ECFDF5'; badgeColor = '#065F46'; badgeLabel = '✓ Réinscrit ' + anneeInscription }
+              else if (admis) { badgeBg = '#EFF6FF'; badgeColor = '#1E40AF'; badgeLabel = '✓ Admis — à réinscrire' }
+              else if (enAttenteAdm) { badgeBg = '#FFF7ED'; badgeColor = '#9A3412'; badgeLabel = '⏳ Admission en cours d\'étude' }
+              else if (refuse) { badgeBg = '#FEF2F2'; badgeColor = '#991B1B'; badgeLabel = '✕ Admission refusée' }
+              else { badgeBg = '#F1F5F9'; badgeColor = '#64748B'; badgeLabel = 'Admission à demander' }
               return (
-                <div key={enfant.id} style={{ background: '#fff', border: `1px solid ${dansContrat ? 'rgba(16,185,129,0.3)' : '#E2E8F0'}`, borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: '#fff' }}>{enfant.prenom?.[0]?.toUpperCase()}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
-                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Élève inscrit</div>
+                <div key={enfant.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>{enfant.prenom?.[0]?.toUpperCase()}</div>
+                  <div style={{ flex: '1 1 140px', minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
+                    {enfant.classe && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{enfant.classe}</div>}
                   </div>
-                  {dansContrat
-                    ? <span style={{ fontSize: 12, fontWeight: 600, color: '#10B981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 20, padding: '4px 12px' }}>✓ Réinscrit</span>
-                    : <span style={{ fontSize: 12, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 20, padding: '4px 12px', fontWeight: 600 }}>En attente</span>}
+                  <span style={{ fontSize: 11, fontWeight: 600, color: badgeColor, background: badgeBg, borderRadius: 20, padding: '4px 10px', whiteSpace: 'nowrap' }}>{badgeLabel}</span>
                 </div>
               )
             })}
@@ -296,7 +369,7 @@ function DossierTab({ router }: { router: any }) {
           />
         )}
 
-        {/* Ajouter un autre enfant — secondaire, discret, en bas */}
+        {/* Demander l'admission d'un nouvel enfant — secondaire, discret, en bas */}
         <div style={{
           background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14,
           padding: '14px 16px', display: 'flex', flexWrap: 'wrap',
@@ -312,12 +385,12 @@ function DossierTab({ router }: { router: any }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
                 {enfants.length > 0
-                  ? `Ajouter un autre enfant que ${enfants.map(e => e.prenom).join(', ')}`
-                  : 'Ajouter votre premier enfant'}
+                  ? `Demander l'admission d'un nouvel enfant`
+                  : 'Demander l\'admission de votre premier enfant'}
               </span>
               <AideEtape
-                titreEtape="Ajouter un autre enfant"
-                aQuoiCaSert="Permet d'ajouter un enfant qui n'a pas encore de fiche dans l'école — un nouveau-né, un petit frère/petite sœur, ou un enfant qui arrive d'un autre établissement. Vous l'inscrirez dans le contrat dès que l'école aura confirmé son ajout."
+                titreEtape="Demande d'admission"
+                aQuoiCaSert="Demande d'entrée dans l'école pour un enfant qui n'y est pas encore — nouveau-né, petit frère/petite sœur, ou enfant venant d'un autre établissement. Vous remplissez son état civil + classe souhaitée + médecin + urgences. L'école étudie et accepte (ou refuse). Une fois admis, vous pourrez l'inclure dans votre contrat de réinscription annuel."
                 preparation={[
                   "L'état civil de l'enfant (nom, prénom, date de naissance)",
                   "La classe souhaitée pour la rentrée",
@@ -328,7 +401,9 @@ function DossierTab({ router }: { router: any }) {
               />
             </div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 3, lineHeight: 1.5 }}>
-              Vous pourrez l&apos;inscrire dans le contrat dès que l&apos;école aura confirmé son ajout.
+              {enfants.length > 0
+                ? <>Pour un enfant qui n&apos;est pas {enfants.map(e => e.prenom).join(' ni ')}. Vous pourrez l&apos;inclure dans votre contrat dès que l&apos;école aura validé son admission.</>
+                : <>Démarche à faire une seule fois par enfant. Une fois admis, vous le réinscrirez chaque année avec un contrat.</>}
             </div>
           </div>
           <button onClick={() => router.push('/portail/inscriptions/pedagogique')}
@@ -338,7 +413,7 @@ function DossierTab({ router }: { router: any }) {
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
               flexShrink: 0, whiteSpace: 'nowrap', minHeight: 40,
             }}>
-            + Ajouter
+            + Demande d&apos;admission
           </button>
         </div>
       </div>

@@ -87,19 +87,21 @@ export default function PortailPage() {
           sub: ctrSigne ? undefined : 'Inscription pas encore validée par l\'école',
         })
       }
-      // 2) Fiche pedagogique par enfant (urgences + medecin requis OU statut accepte)
+      // 2) Admission par enfant (workflow Demande > Validation ecole)
       ;(enfantsList || []).forEach((enf: any) => {
         const fp = (fichesPedago || []).find((f: any) => f.enfant_id === enf.id)
         const acceptee = fp?.statut === 'accepte' || fp?.statut === 'valide'
-        const champsOk = !!(fp && fp.urgence_1_nom && fp.medecin_nom)
-        const complete = acceptee || champsOk
-        taches.push({
-          label: complete ? `Fiche pédagogique de ${enf.prenom} validée` : `Compléter la fiche pédagogique de ${enf.prenom}`,
-          fait: complete,
-          href: '/portail/inscriptions',
-          urgent: !complete && enf.statut_inscription !== 'sorti',
-          sub: complete ? undefined : (fp ? 'Manque contact d\'urgence ou médecin traitant' : 'Aucune fiche pédagogique remplie'),
-        })
+        const enAttente = fp?.statut === 'soumis' || fp?.statut === 'en_etude'
+        const refusee = fp?.statut === 'refuse'
+        if (acceptee) {
+          taches.push({ label: `${enf.prenom} admis(e) à l'école`, fait: true, href: '/portail/inscriptions' })
+        } else if (enAttente) {
+          taches.push({ label: `Admission de ${enf.prenom} en cours d'étude`, fait: false, href: '/portail/inscriptions', sub: 'L\'école examine votre demande' })
+        } else if (refusee) {
+          taches.push({ label: `Admission de ${enf.prenom} refusée`, fait: false, urgent: true, href: '/portail/inscriptions', sub: 'Contactez l\'école' })
+        } else if (enf.statut_inscription !== 'sorti') {
+          taches.push({ label: `Demander l'admission de ${enf.prenom}`, fait: false, urgent: true, href: '/portail/inscriptions/pedagogique', sub: 'Aucune demande d\'admission encore déposée' })
+        }
       })
       // 3) Documents obligatoires
       const idsFournis = new Set((docsFournis || []).map((d: any) => d.document_id))

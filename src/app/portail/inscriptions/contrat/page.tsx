@@ -47,6 +47,7 @@ export default function ContratPage() {
 
   // Enfants contrat
   const [enfantsContrat, setEnfantsContrat] = useState<any[]>([])
+  const [admissions, setAdmissions] = useState<Record<string, string>>({})
 
   // Règlement
   const [modeReglement, setModeReglement] = useState('')
@@ -144,11 +145,26 @@ export default function ContratPage() {
 
     // Pré-sélectionner enfants
     if (enf?.length && !cont) {
+      // Statut admission par enfant
+      const enfantIds2 = (enf || []).map((e: any) => e.id)
+      const enfAdmStatuts: Record<string, string> = {}
+      if (enfantIds2.length > 0) {
+        const { data: fp } = await s.from('inscriptions_pedagogiques')
+          .select('enfant_id, statut').in('enfant_id', enfantIds2)
+        ;(fp || []).forEach((f: any) => { enfAdmStatuts[f.enfant_id] = f.statut })
+        setAdmissions(enfAdmStatuts)
+      }
+
       // Tranche effective : tranche de la famille, sinon première tranche présente dans les tarifs
       const trancheFamilleLoad = fam?.tranche_id
         || Array.from(new Set((tar ?? []).map((t: any) => t.tranche_id).filter(Boolean)))[0]
         || null
-      setEnfantsContrat(enf.map((e: any) => {
+      // Pre-cocher seulement les enfants dont l'admission est validee
+      const enfAdmis = (enf || []).filter((e: any) => {
+        const adm = enfAdmStatuts[e.id]
+        return adm === 'accepte' || adm === 'valide' || !adm // si pas de fiche encore = enfant historique deja inscrit
+      })
+      setEnfantsContrat(enfAdmis.map((e: any) => {
         const cls2 = e.classes
         const secteurId = cls2?.secteur_id || ''
         const tarifsApp = (tar ?? []).filter((t: any) => {
@@ -519,25 +535,38 @@ export default function ContratPage() {
       </Section>
 
       {/* ── ENFANTS ── */}
-      <Section title="2. Enfants à (ré)inscrire *">
+      <Section title="2. Enfants à inclure dans le contrat *">
+        <div style={{ fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
+          Cochez les enfants à inscrire pour {anneeInscription}. Si l&apos;un d&apos;eux ne reste pas à l&apos;école (déménagement, changement d&apos;établissement…), décochez-le.
+        </div>
         {enfants.map((enfant: any) => {
           const enf = enfantsContrat.find(e => e.enfant_id === enfant.id) || { classe_id: '', postes: [], sous_total: 0 }
           const isSelected = enfantsContrat.some(e => e.enfant_id === enfant.id)
           const cls = classes.find((c: any) => c.id === enf.classe_id)
           const tarifsDispos = getTarifsForSecteur(cls?.secteur_id || '')
+          const adm = admissions[enfant.id]
+          const enAttenteAdm = adm === 'soumis' || adm === 'en_etude'
+          const refuseAdm = adm === 'refuse'
+          const peutReinscrire = !enAttenteAdm && !refuseAdm
           return (
-            <div key={enfant.id} style={{ border: `2px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color 0.15s' }}>
-              <div style={{ padding: '12px 16px', background: isSelected ? '#EFF6FF' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input type="checkbox" checked={isSelected} onChange={() => toggleEnfantContrat(enfant.id)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }} />
+            <div key={enfant.id} style={{ border: `2px solid ${isSelected ? '#2563EB' : enAttenteAdm ? '#FDE68A' : '#E2E8F0'}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color 0.15s', opacity: peutReinscrire ? 1 : 0.85 }}>
+              <div style={{ padding: '12px 16px', background: isSelected ? '#EFF6FF' : enAttenteAdm ? '#FFFBEB' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input type="checkbox" checked={isSelected} disabled={!peutReinscrire} onChange={() => peutReinscrire && toggleEnfantContrat(enfant.id)} style={{ width: 18, height: 18, cursor: peutReinscrire ? 'pointer' : 'not-allowed', accentColor: '#2563EB', flexShrink: 0 }} />
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{enfant.prenom?.[0]}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
-                    {enfant.statut_inscription === 'en_attente' && (
-                      <span style={{ background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em' }}>⏳ En attente</span>
+                    {enAttenteAdm && (
+                      <span style={{ background: '#FFFBEB', color: '#9A3412', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>⏳ Admission en cours d&apos;étude</span>
+                    )}
+                    {refuseAdm && (
+                      <span style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>✕ Admission refusée</span>
                     )}
                   </div>
-                  {enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>Classe actuelle : {enfant.classes.nom}</div>}
+                  {enAttenteAdm && (
+                    <div style={{ fontSize: 11, color: '#9A3412', marginTop: 3 }}>Vous pourrez l&apos;ajouter au contrat dès que l&apos;école aura validé son admission.</div>
+                  )}
+                  {!enAttenteAdm && !refuseAdm && enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>Classe actuelle : {enfant.classes.nom}</div>}
                 </div>
                 {enf.sous_total > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{enf.sous_total.toLocaleString('fr-FR')} €</div>}
               </div>

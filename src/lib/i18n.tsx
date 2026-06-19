@@ -60,7 +60,7 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     'portail.nav.demarches': 'Démarches',
     'portail.nav.finances': 'Finances',
     'portail.nav.messaging': 'Messagerie',
-    'portail.nav.next_year': 'Année N+1',
+    'portail.nav.next_year': 'Rentrée à venir',
     'portail.nav.documents': 'Documents',
     'portail.nav.account': 'Mon compte',
     'portail.nav.family_space': 'Espace Famille',
