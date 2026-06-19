@@ -13,9 +13,10 @@ import { portailExtraFr, portailExtraEn, portailExtraHe } from './i18n-portail-e
 
 export type Lang = 'fr' | 'en' | 'he'
 
+// NB : anglais garde les traductions dans le dictionnaire mais n'apparait pas
+// dans le selecteur. Si on veut le reactiver il suffit de remettre la ligne.
 export const LANGS: { code: Lang; label: string; flag: string; dir: 'ltr' | 'rtl' }[] = [
   { code: 'fr', label: 'Français', flag: '🇫🇷', dir: 'ltr' },
-  { code: 'en', label: 'English', flag: '🇬🇧', dir: 'ltr' },
   { code: 'he', label: 'עברית', flag: '🇮🇱', dir: 'rtl' },
 ]
 
@@ -433,7 +434,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const stored = localStorage.getItem('talmidapp_lang') as Lang | null
-    if (stored && ['fr', 'en', 'he'].includes(stored)) {
+    // Si un user avait choisi 'en' avant qu'on retire l'anglais du selecteur,
+    // on le rebascule sur FR pour qu'il ne reste pas coince.
+    if (stored === 'en') {
+      localStorage.setItem('talmidapp_lang', 'fr')
+      setLangState('fr')
+    } else if (stored && ['fr', 'he'].includes(stored)) {
       setLangState(stored)
     }
   }, [])
