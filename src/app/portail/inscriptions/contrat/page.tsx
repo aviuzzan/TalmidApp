@@ -249,7 +249,9 @@ export default function ContratPage() {
 
   const reductionFN = reductionAccordee ? 0 : getReductionFN()
   const montantAssuranceAnnuel = (ecoleInfo?.assurance_montant_annuel != null ? Number(ecoleInfo.assurance_montant_annuel) : 12) || 12
-  const totalAssurance = (ecoleInfo?.assurance_proposee !== false && assuranceEcole) ? montantAssuranceAnnuel * Math.max(1, nbEnfantsAvecClasse) : 0
+  // L'assurance est facturée par enfant inscrit (avec classe choisie).
+  // Si aucun enfant n'a encore de classe → 0 € (pas d'assurance fantôme).
+  const totalAssurance = (ecoleInfo?.assurance_proposee !== false && assuranceEcole) ? montantAssuranceAnnuel * nbEnfantsAvecClasse : 0
 
   // Si DDR validée : le tarif accordé couvre uniquement les postes 'inclus_dans_reduction'
   // (enseignement + demi-pension). Les options (transport, navette, etc.) restent à charge.
@@ -614,7 +616,7 @@ export default function ContratPage() {
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
             <input type="radio" checked={assuranceEcole} onChange={() => { ks(); setAssuranceEcole(true) }} />
             <div>Assurance proposée par l'établissement
-              <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>{montantAssuranceAnnuel} € × {Math.max(1, nbEnfantsAvecClasse)} = {totalAssurance} €</span>
+              <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>{montantAssuranceAnnuel} € × {nbEnfantsAvecClasse} = {totalAssurance} €</span>
             </div>
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: !assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${!assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>

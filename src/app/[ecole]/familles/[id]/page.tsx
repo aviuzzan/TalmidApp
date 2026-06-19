@@ -230,6 +230,27 @@ export default function FamilleDetailPage() {
       return
     }
 
+    // Garde UX : verifier si l'enfant est reference dans un contrat de scolarisation actif
+    // (soumis / valide / accepte). L'admin peut forcer mais doit confirmer explicitement.
+    const { data: contratsLies } = await supabase
+      .from('contrat_enfants')
+      .select('contrat_id, contrats_scolarisation!inner(statut, annee_scolaire)')
+      .eq('enfant_id', enfantId)
+    const contratActif = (contratsLies || []).find((c: any) =>
+      ['soumis', 'valide', 'accepte'].includes(c.contrats_scolarisation?.statut)
+    )
+    if (contratActif) {
+      const anneeContrat = contratActif.contrats_scolarisation?.annee_scolaire || '?'
+      const statutContrat = contratActif.contrats_scolarisation?.statut || '?'
+      const forcer = await confirm({
+        title: 'Contrat de scolarisation actif',
+        message: `Un contrat de scolarisation est actif pour cet enfant (annee ${anneeContrat}, statut "${statutContrat}"). Supprimer quand meme va casser le contrat et la facture liee. Continuer ?`,
+        danger: true,
+        confirmLabel: 'Forcer la suppression',
+      })
+      if (!forcer) return
+    }
+
     const ok = await confirm({
       title: 'Supprimer cet eleve ?',
       message: estValide
