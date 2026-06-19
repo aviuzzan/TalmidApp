@@ -445,7 +445,7 @@ export default function ContratPage() {
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '32px 28px', textAlign: 'center' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Démarche réservée au parent principal</h2>
-        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>Cette démarche d&apos;inscription est gérée par le parent principal de la famille. Vous pouvez en suivre l&apos;avancement depuis la page « Année N+1 ».</p>
+        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>Cette démarche est gérée par le parent principal de la famille. Vous pouvez en suivre l&apos;avancement depuis la page « Année {anneeInscription} ».</p>
         <button onClick={() => router.push('/portail/inscriptions')} style={{ marginTop: 18, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Retour</button>
       </div>
     </div>
@@ -573,7 +573,7 @@ export default function ContratPage() {
               {isSelected && (
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label style={lbl}>Classe souhaitée 2026/2027 *</label>
+                    <label style={lbl}>Classe souhaitée {anneeInscription} *</label>
                     <select style={inp} value={enf.classe_id || ''} onChange={e => setEnfantClasse(enfant.id, e.target.value)}>
                       <option value="">Choisir une classe</option>
                       {classes.map((c: any) => <option key={c.id} value={c.id}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}</option>)}

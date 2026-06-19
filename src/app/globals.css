@@ -899,3 +899,31 @@ input, select, textarea, button { font-family: 'Inter', sans-serif; }
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ============================================================
+   RTL (hebrew) — support direction droite-a-gauche
+   ============================================================ */
+[dir="rtl"] {
+  text-align: right;
+}
+[dir="rtl"] .portail-header,
+[dir="rtl"] .portail-nav {
+  direction: rtl;
+}
+/* Inverse les marges/paddings asymetriques courants */
+[dir="rtl"] [style*="margin-left"] { margin-left: 0 !important; margin-right: var(--rtl-fallback, 0) !important; }
+[dir="rtl"] [style*="padding-left"] { padding-left: 0 !important; padding-right: var(--rtl-fallback, 0) !important; }
+/* Inputs gardent le sens LTR si numerique/email (UX naturelle) */
+[dir="rtl"] input[type="email"],
+[dir="rtl"] input[type="tel"],
+[dir="rtl"] input[type="number"],
+[dir="rtl"] input[type="date"],
+[dir="rtl"] input[type="url"] {
+  direction: ltr;
+  text-align: left;
+}
+/* Tableaux: les en-tetes restent alignes a droite en RTL */
+[dir="rtl"] table th { text-align: right; }
+[dir="rtl"] table td { text-align: right; }
+/* Icones decoratifs apres le texte en LTR doivent passer avant en RTL */
+[dir="rtl"] .icon-after { margin-right: 0; margin-left: 6px; }

@@ -25,7 +25,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'administratif', nom: 'Passages de classe', description: 'Réaffecter les élèves vers leur classe suivante', icone: '🎒', href: 'passages-de-classe' },
     { code: 'administratif', nom: 'Comptes parents', description: 'Création et gestion des accès parents', icone: '👥', href: 'comptes-parents' },
     { code: 'inscriptions', nom: 'Demandes de nouvelles inscriptions', description: 'Nouvelles familles : demandes reçues par lien et leur traitement', icone: '📨', href: 'demandes-inscription' },
-    { code: 'inscriptions', nom: 'Inscriptions N+1', description: 'Dossiers DDR, contrats, validations', icone: '📝', href: 'inscriptions' },
+    { code: 'inscriptions', nom: 'Rentrée à venir', description: 'Demandes d\'admission, DDR, contrats, validations', icone: '📝', href: 'inscriptions' },
   ],
   finances: [
     { code: 'facturation', nom: 'Tableau de bord', description: 'Vue d\'ensemble : KPI, encaissements, impayés', icone: '📊', href: 'finances/dashboard' },

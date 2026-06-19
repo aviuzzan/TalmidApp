@@ -71,7 +71,7 @@ export default function BoutonReinscription({ familleId, ecoleSlug, exercicesDis
           borderRadius: 8, padding: '9px 16px', fontWeight: 600, fontSize: 13,
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
         }}>
-        🔄 Réinscrire pour N+1
+        🔄 Réinscrire pour la rentrée à venir
       </button>
 
       {open && (
