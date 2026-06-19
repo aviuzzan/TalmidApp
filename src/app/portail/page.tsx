@@ -80,11 +80,11 @@ export default function PortailPage() {
         const ctrStatut = (contrat as any)?.statut
         const ctrSigne = ctrStatut === 'valide' || ctrStatut === 'signe' || ctrStatut === 'accepte'
         taches.push({
-          label: ctrSigne ? `Contrat ${anneeInscription} signé` : `Signer le contrat ${anneeInscription}`,
+          label: ctrSigne ? t('portail.checklist.contract_signed', { annee: anneeInscription }) : t('portail.checklist.contract_to_sign', { annee: anneeInscription }),
           fait: ctrSigne,
           href: '/portail/inscriptions',
           urgent: !ctrSigne,
-          sub: ctrSigne ? undefined : 'Inscription pas encore validée par l\'école',
+          sub: ctrSigne ? undefined : t('portail.checklist.contract_pending_school'),
         })
       }
       // 2) Admission par enfant (workflow Demande > Validation ecole)
@@ -94,13 +94,13 @@ export default function PortailPage() {
         const enAttente = fp?.statut === 'soumis' || fp?.statut === 'en_etude'
         const refusee = fp?.statut === 'refuse'
         if (acceptee) {
-          taches.push({ label: `${enf.prenom} admis(e) à l'école`, fait: true, href: '/portail/inscriptions' })
+          taches.push({ label: t('portail.checklist.child_admitted', { prenom: enf.prenom }), fait: true, href: '/portail/inscriptions' })
         } else if (enAttente) {
-          taches.push({ label: `Admission de ${enf.prenom} en cours d'étude`, fait: false, href: '/portail/inscriptions', sub: 'L\'école examine votre demande' })
+          taches.push({ label: t('portail.checklist.child_admission_pending', { prenom: enf.prenom }), fait: false, href: '/portail/inscriptions', sub: t('portail.checklist.child_admission_pending_sub') })
         } else if (refusee) {
-          taches.push({ label: `Admission de ${enf.prenom} refusée`, fait: false, urgent: true, href: '/portail/inscriptions', sub: 'Contactez l\'école' })
+          taches.push({ label: t('portail.checklist.child_admission_refused', { prenom: enf.prenom }), fait: false, urgent: true, href: '/portail/inscriptions', sub: t('portail.checklist.child_admission_refused_sub') })
         } else if (enf.statut_inscription !== 'sorti') {
-          taches.push({ label: `Demander l'admission de ${enf.prenom}`, fait: false, urgent: true, href: '/portail/inscriptions/pedagogique', sub: 'Aucune demande d\'admission encore déposée' })
+          taches.push({ label: t('portail.checklist.child_admission_to_request', { prenom: enf.prenom }), fait: false, urgent: true, href: '/portail/inscriptions/pedagogique', sub: t('portail.checklist.child_admission_to_request_sub') })
         }
       })
       // 3) Documents obligatoires
@@ -108,7 +108,7 @@ export default function PortailPage() {
       ;(docsConfig || []).filter((d: any) => d.obligatoire).forEach((d: any) => {
         const fait = idsFournis.has(d.id)
         taches.push({
-          label: fait ? `Document fourni : ${d.nom}` : `Fournir le document : ${d.nom}`,
+          label: fait ? t('portail.checklist.doc_provided', { nom: d.nom }) : t('portail.checklist.doc_to_provide', { nom: d.nom }),
           fait,
           href: '/portail/documents',
           urgent: !fait,
@@ -118,20 +118,20 @@ export default function PortailPage() {
       if (trancheEligibleDDR && cfg?.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now) {
         const ddrFaite = !!ddr && (ddr as any).statut !== 'brouillon'
         taches.push({
-          label: ddrFaite ? `Demande de réduction soumise (statut : ${(ddr as any).statut})` : 'Faire votre demande de réduction',
+          label: ddrFaite ? t('portail.checklist.ddr_submitted', { statut: (ddr as any).statut }) : t('portail.checklist.ddr_to_submit'),
           fait: ddrFaite,
           href: '/portail/inscriptions/reduction',
           urgent: !ddrFaite,
-          sub: ddrFaite ? undefined : 'Vous êtes éligible — pensez à la faire avant la clôture',
+          sub: ddrFaite ? undefined : t('portail.checklist.ddr_to_submit_sub'),
         })
       }
       // 5) Reglement si solde > 0 et facture en attente
       if (facture && (facture as any).statut === 'en_attente' && Number((facture as any).solde_restant) > 0) {
         taches.push({
-          label: `Régler la facture (reste ${Number((facture as any).solde_restant).toLocaleString('fr-FR')} €)`,
+          label: t('portail.checklist.pay_invoice', { montant: Number((facture as any).solde_restant).toLocaleString('fr-FR') }),
           fait: false,
           href: '/portail/factures',
-          sub: 'En attente du moyen de règlement choisi par l\'école',
+          sub: t('portail.checklist.pay_invoice_sub'),
         })
       }
 
@@ -150,13 +150,13 @@ export default function PortailPage() {
     load()
   }, [])
 
-  if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>Chargement...</div>
+  if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>{t('portail.common.loading')}</div>
 
   if (!data?.famille) return (
     <div style={{ textAlign: 'center', padding: '60px 24px' }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>👋</div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Bienvenue sur TalmidApp</h2>
-      <p style={{ color: '#64748B', fontSize: 14 }}>Votre compte n'est pas encore lié à une famille. Contactez l'administration.</p>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>{t('portail.home.welcome_no_family.title')}</h2>
+      <p style={{ color: '#64748B', fontSize: 14 }}>{t('portail.home.welcome_no_family.desc')}</p>
     </div>
   )
 
@@ -178,19 +178,20 @@ export default function PortailPage() {
       }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
-            Bonjour, famille {data.famille.nom} 👋
+            {t('portail.home.hello_family', { nom: data.famille.nom })}
           </h1>
-          <p style={{ opacity: 0.8, fontSize: 14 }}>{t('portail.school_year')} {anneeInscription}</p>
+          <p style={{ opacity: 0.8, fontSize: 14 }}>{t('portail.home.school_year')} {anneeInscription}</p>
         </div>
         <div style={{ fontSize: 48, opacity: 0.3 }}>🏫</div>
       </div>
 
       {/* Checklist "Vos taches" */}
       {data.taches && data.taches.length > 0 && (() => {
-        const restantes = data.taches.filter((t: any) => !t.fait)
+        const restantes = data.taches.filter((tache: any) => !tache.fait)
         const total = data.taches.length
         const faites = total - restantes.length
         const toutBon = restantes.length === 0
+        const sPlural = restantes.length > 1 ? 's' : ''
         return (
           <div style={{
             background: toutBon ? '#F0FDF4' : '#FFF7ED',
@@ -204,45 +205,45 @@ export default function PortailPage() {
               <div style={{ fontSize: 24 }}>{toutBon ? '✅' : '📋'}</div>
               <div style={{ flex: 1, minWidth: 200 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: toutBon ? '#065F46' : '#9A3412' }}>
-                  {toutBon ? 'Votre dossier est complet 🎉' : 'Vos tâches à réaliser'}
+                  {toutBon ? t('portail.checklist.complete.title') : t('portail.checklist.todo.title')}
                 </div>
                 <div style={{ fontSize: 12, color: toutBon ? '#065F46' : '#9A3412', opacity: 0.85, marginTop: 2 }}>
                   {toutBon
-                    ? 'Vous n\'avez plus rien à faire pour le moment. L\'école vous contactera si besoin.'
-                    : `${faites}/${total} éléments complétés — il vous reste ${restantes.length} action${restantes.length > 1 ? 's' : ''}`}
+                    ? t('portail.checklist.complete.desc')
+                    : t('portail.checklist.progress', { faites, total, n: restantes.length, s: sPlural })}
                 </div>
               </div>
             </div>
             <div style={{ background: '#fff' }}>
-              {data.taches.map((t: any, i: number) => (
-                <div key={i} onClick={() => t.href && router.push(t.href)}
+              {data.taches.map((tache: any, i: number) => (
+                <div key={i} onClick={() => tache.href && router.push(tache.href)}
                   style={{
                     padding: '12px 18px', borderBottom: i < data.taches.length - 1 ? '1px solid #F1F5F9' : 'none',
-                    display: 'flex', alignItems: 'flex-start', gap: 12, cursor: t.href ? 'pointer' : 'default',
+                    display: 'flex', alignItems: 'flex-start', gap: 12, cursor: tache.href ? 'pointer' : 'default',
                     background: '#fff', transition: 'background 0.1s',
                   }}
-                  onMouseEnter={e => { if (t.href) e.currentTarget.style.background = '#F8FAFC' }}
+                  onMouseEnter={e => { if (tache.href) e.currentTarget.style.background = '#F8FAFC' }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#fff' }}>
                   <div style={{
                     fontSize: 18, marginTop: 1,
-                    color: t.fait ? '#10B981' : t.urgent ? '#DC2626' : '#94A3B8',
-                  }}>{t.fait ? '✓' : t.urgent ? '⚠' : '○'}</div>
+                    color: tache.fait ? '#10B981' : tache.urgent ? '#DC2626' : '#94A3B8',
+                  }}>{tache.fait ? '✓' : tache.urgent ? '⚠' : '○'}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{
-                      fontSize: 13, fontWeight: t.fait ? 500 : 600,
-                      color: t.fait ? '#94A3B8' : '#1E293B',
-                      textDecoration: t.fait ? 'line-through' : 'none',
-                    }}>{t.label}</div>
-                    {t.sub && !t.fait && (
-                      <div style={{ fontSize: 11, color: t.urgent ? '#991B1B' : '#64748B', marginTop: 2 }}>{t.sub}</div>
+                      fontSize: 13, fontWeight: tache.fait ? 500 : 600,
+                      color: tache.fait ? '#94A3B8' : '#1E293B',
+                      textDecoration: tache.fait ? 'line-through' : 'none',
+                    }}>{tache.label}</div>
+                    {tache.sub && !tache.fait && (
+                      <div style={{ fontSize: 11, color: tache.urgent ? '#991B1B' : '#64748B', marginTop: 2 }}>{tache.sub}</div>
                     )}
                   </div>
-                  {t.href && !t.fait && (
+                  {tache.href && !tache.fait && (
                     <div style={{
                       fontSize: 11, fontWeight: 600,
-                      color: t.urgent ? '#DC2626' : '#2563EB',
+                      color: tache.urgent ? '#DC2626' : '#2563EB',
                       whiteSpace: 'nowrap', flexShrink: 0, paddingTop: 1,
-                    }}>{t.urgent ? 'À faire →' : 'Voir →'}</div>
+                    }}>{tache.urgent ? t('portail.checklist.action_todo') : t('portail.checklist.action_view')}</div>
                   )}
                 </div>
               ))}
@@ -254,14 +255,14 @@ export default function PortailPage() {
       {/* Bandeau "Inscriptions ouvertes" — si l'école a une fenêtre active */}
       {data.inscriptionsOuvertes && (() => {
         const cfg = data.cfg || {}
-        const titre = cfg.bandeau_titre?.trim() || `Période d'inscriptions ${data.anneeInscription} ouverte`
+        const titre = cfg.bandeau_titre?.trim() || t('portail.home.registrations_open.default_title', { annee: data.anneeInscription })
         const today = new Date().toISOString().split('T')[0]
         const dateLimite = cfg.date_cloture_inscription && cfg.date_cloture_inscription >= today
           ? new Date(cfg.date_cloture_inscription).toLocaleDateString('fr-FR')
           : null
         const messageDefaut = dateLimite
-          ? `Vous pouvez inscrire vos enfants pour l'année ${data.anneeInscription} jusqu'au ${dateLimite}. Nous restons à votre disposition pour toute question.`
-          : `Vous pouvez inscrire vos enfants pour l'année ${data.anneeInscription}.`
+          ? t('portail.home.registrations_open.msg_with_deadline', { annee: data.anneeInscription, date: dateLimite })
+          : t('portail.home.registrations_open.msg_no_deadline', { annee: data.anneeInscription })
         const message = cfg.bandeau_message?.trim() || messageDefaut
         return (
           <div style={{
@@ -288,7 +289,7 @@ export default function PortailPage() {
                 cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 boxShadow: '0 2px 6px rgba(16,185,129,0.35)',
               }}>
-              Démarrer les démarches →
+              {t('portail.home.registrations_open.cta')}
             </button>
           </div>
         )
@@ -297,9 +298,9 @@ export default function PortailPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
-          { icon: '🎓', label: 'Élèves inscrits', value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
-          { icon: '📄', label: parent.estSeparee ? 'Ma part' : `Facture ${anneeInscription}`, value: factureActive ? `${(parent.estSeparee ? maPart : Number(factureActive.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
-          { icon: '💳', label: parent.estSeparee ? 'Mon solde' : 'Solde restant', value: factureActive ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '🎓', label: t('portail.home.stats.students'), value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
+          { icon: '📄', label: parent.estSeparee ? t('portail.home.stats.my_share') : t('portail.home.stats.invoice_year', { annee: anneeInscription }), value: factureActive ? `${(parent.estSeparee ? maPart : Number(factureActive.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
+          { icon: '💳', label: parent.estSeparee ? t('portail.home.stats.my_balance') : t('portail.home.stats.remaining_balance'), value: factureActive ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
         ].map(s => (
           <div key={s.label} onClick={s.action} style={{
             background: s.bg, borderRadius: 12, padding: '20px 24px', cursor: 'pointer',
@@ -317,11 +318,11 @@ export default function PortailPage() {
       {/* Quick links */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         {[
-          { icon: '🎓', title: 'Mes enfants', desc: 'Consulter les informations de vos enfants', href: '/portail/enfants' },
-          { icon: '💰', title: 'Mes factures', desc: 'Voir vos factures et règlements', href: '/portail/factures' },
-          { icon: '📝', key: 'insc', title: `Rentrée ${anneeInscription}`, desc: `Préparer la rentrée ${anneeInscription}`, href: '/portail/inscriptions' },
-          { icon: '📄', title: 'Documents', desc: 'Envoyer et consulter vos documents', href: '/portail/documents' },
-          { icon: '📞', title: 'Contact', desc: 'Coordonnées de l\'établissement', href: '/portail/contact' },
+          { icon: '🎓', title: t('portail.home.links.children.title'), desc: t('portail.home.links.children.desc'), href: '/portail/enfants' },
+          { icon: '💰', title: t('portail.home.links.invoices.title'), desc: t('portail.home.links.invoices.desc'), href: '/portail/factures' },
+          { icon: '📝', key: 'insc', title: t('portail.home.links.back_to_school.title', { annee: anneeInscription }), desc: t('portail.home.links.back_to_school.desc', { annee: anneeInscription }), href: '/portail/inscriptions' },
+          { icon: '📄', title: t('portail.home.links.documents.title'), desc: t('portail.home.links.documents.desc'), href: '/portail/documents' },
+          { icon: '📞', title: t('portail.home.links.contact.title'), desc: t('portail.home.links.contact.desc'), href: '/portail/contact' },
         ].map(item => {
           const bloque = (item as any).key === 'insc' && data && data.inscriptionsOuvertes === false
           return (
@@ -338,7 +339,7 @@ export default function PortailPage() {
             <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{item.icon}</div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#1E293B', marginBottom: 2 }}>{item.title}</div>
-              <div style={{ fontSize: 12, color: '#64748B' }}>{bloque ? 'Ouverture prochainement' : item.desc}</div>
+              <div style={{ fontSize: 12, color: '#64748B' }}>{bloque ? t('portail.home.links.opening_soon') : item.desc}</div>
             </div>
             <div style={{ marginLeft: 'auto', color: '#94A3B8', fontSize: 18 }}>→</div>
           </a>
