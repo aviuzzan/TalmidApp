@@ -7,6 +7,7 @@ import { formatStatut } from '@/lib/inscriptions'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
+import { useToast } from '@/components/ui/Toast'
 
 type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'cheques'
 
@@ -23,10 +24,32 @@ export default function InscriptionsAdminPage() {
   const [tranchesEcole, setTranchesEcole] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Verrou acces finances : masque l'onglet "Échéances" et son contenu (montants, encaissements)
+  // pour les profils sans acces_finances. Aligne le comportement de cette page sur le layout
+  // /finances qui redirige les non-autorisés. Ici on filtre l'onglet plutôt que de rediriger
+  // car la page sert aussi à d'autres usages (pédagogique, réductions, contrats).
+  const [accesFinances, setAccesFinances] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (ecole?.id) getExerciceInscription(createClient(), ecole.id).then(r => setAnnee(r.code))
   }, [ecole?.id])
+
+  useEffect(() => {
+    async function checkAcces() {
+      const s = createClient()
+      const { data: { session } } = await s.auth.getSession()
+      if (!session) { setAccesFinances(false); return }
+      const { data: p } = await s.from('profiles')
+        .select('role, acces_finances')
+        .eq('id', session.user.id)
+        .single()
+      const ok = p?.role === 'super_admin' || p?.acces_finances === true
+      setAccesFinances(!!ok)
+      // Si l'utilisateur est sur l'onglet cheques mais perd l'accès, bascule vers tableau_bord.
+      if (!ok) setOnglet(cur => cur === 'cheques' ? 'tableau_bord' : cur)
+    }
+    checkAcces()
+  }, [])
 
   useEffect(() => {
     if (!ecole?.id) return
@@ -85,7 +108,8 @@ export default function InscriptionsAdminPage() {
     { id: 'contrats', label: 'Contrats', icon: '📝', count: stats.contrats },
     // Le badge reflete uniquement les vrais cheques a encaisser (la vue interne propose
     // des onglets pour les autres modes : virement, prelevement, espece, carte).
-    { id: 'cheques', label: 'Échéances', icon: '🏦', count: stats.cheques_a_encaisser },
+    // Onglet masqué si l'utilisateur n'a pas l'accès finances (cf. verrou /finances/**).
+    ...(accesFinances !== false ? [{ id: 'cheques' as Onglet, label: 'Échéances', icon: '🏦', count: stats.cheques_a_encaisser }] : []),
   ]
 
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
@@ -320,8 +344,17 @@ export default function InscriptionsAdminPage() {
       )}
 
       {/* ── CHÈQUES ── */}
-      {onglet === 'cheques' && (
+      {onglet === 'cheques' && accesFinances === true && (
         <ChequesList ecoleId={ecole.id} annee={annee} />
+      )}
+      {onglet === 'cheques' && accesFinances === false && (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 36 }}>🔒</div>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginTop: 10 }}>Accès aux données financières non accordé</h2>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>
+            Vous n&apos;avez pas accès aux données financières. Contactez l&apos;administrateur pour activer cet accès.
+          </p>
+        </div>
       )}
     </div>
   )
@@ -850,17 +883,42 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
 }
 
 function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+  const toast = useToast()
   const [cheques, setCheques] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  // Verrou acces_finances : on bloque tout le composant si l'utilisateur n'a pas accès.
+  // (defense-in-depth, l'onglet est aussi masqué côté page).
+  const [accesFinances, setAccesFinances] = useState<boolean | null>(null)
   // Filtre dynamique alimenté par modes_reglement_ecole. Valeur vide = tous les modes.
   const [modeActif, setModeActif] = useState<string>('')
   const [modesEcole, setModesEcole] = useState<{ type: string; label: string }[]>([])
+  // Modal d'édition d'une échéance (chantier 1)
+  const [editing, setEditing] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState<{ date_echeance: string; montant: string; numero_cheque: string; mode_paiement: string }>({ date_echeance: '', montant: '', numero_cheque: '', mode_paiement: '' })
+  const [editSaving, setEditSaving] = useState(false)
+
+  // Verrou acces finances : on lit profiles.acces_finances pour l'utilisateur connecté.
+  // super_admin a toujours accès. Sinon, accès uniquement si acces_finances === true.
+  useEffect(() => {
+    async function check() {
+      const s = createClient()
+      const { data: { session } } = await s.auth.getSession()
+      if (!session) { setAccesFinances(false); return }
+      const { data: p } = await s.from('profiles')
+        .select('role, acces_finances')
+        .eq('id', session.user.id)
+        .single()
+      setAccesFinances(p?.role === 'super_admin' || p?.acces_finances === true)
+    }
+    check()
+  }, [])
 
   // On charge TOUTES les echeances de l'ecole une fois, puis on filtre cote client
   // par mode_paiement (egal au "type" / slug du mode_reglement_ecole choisi a la signature
   // du contrat). La famille de modes (cheque vs virement vs sepa...) est definie par l'ecole.
   const [allCheques, setAllCheques] = useState<any[]>([])
-  useEffect(() => {
+
+  function reload() {
     setLoading(true)
     createClient()
       .from('cheques_prevus')
@@ -868,10 +926,15 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
       .eq('ecole_id', ecoleId)
       .order('date_echeance')
       .then(({ data }) => { setAllCheques(data ?? []); setLoading(false) })
-  }, [ecoleId])
+  }
+  useEffect(() => {
+    if (accesFinances !== true) return
+    reload()
+  }, [ecoleId, accesFinances])
 
   // Charger la liste des modes de reglement activés pour l'école (pour alimenter le filtre)
   useEffect(() => {
+    if (accesFinances !== true) return
     createClient()
       .from('modes_reglement_ecole')
       .select('type, label')
@@ -879,7 +942,7 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
       .eq('actif', true)
       .order('ordre')
       .then(({ data }) => { setModesEcole(data ?? []) })
-  }, [ecoleId])
+  }, [ecoleId, accesFinances])
 
   useEffect(() => {
     if (!modeActif) { setCheques(allCheques); return }
@@ -887,15 +950,157 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
     setCheques(allCheques.filter(c => c.mode_paiement === modeActif))
   }, [allCheques, modeActif])
 
+  /**
+   * Encaisser une échéance = créer un règlement réel pour la facture liée au contrat,
+   * puis marquer l'échéance comme encaissée.
+   *
+   * Trouver la facture :
+   *   - cheques_prevus a famille_id + contrat_id + (via le contrat) annee_scolaire.
+   *   - factures n'a PAS de colonne contrat_id : on cherche par (famille_id, annee_scolaire).
+   *   - Si plusieurs factures matchent : on prend la plus récente (date_emission desc).
+   *
+   * Idempotence : avant l'INSERT, on vérifie qu'il n'existe pas déjà un règlement avec
+   * (facture_id + mode_paiement + reference == numero_cheque) pour éviter le doublon
+   * si l'admin reclique. Si trouvé, on synchronise juste le statut de l'échéance.
+   *
+   * Rollback logique : si l'INSERT échoue, on n'écrase pas le statut de l'échéance.
+   *
+   * Recalcul du statut facture : géré par la vue `factures_solde` (idéalement par un
+   * trigger reglement_after_insert). Au cas où il n'existe pas, on recalcule ici.
+   */
   async function encaisser(id: string) {
-    await createClient().from('cheques_prevus').update({ statut: 'encaisse', encaisse_le: new Date().toISOString().split('T')[0] }).eq('id', id)
-    setAllCheques(p => p.map(c => c.id === id ? { ...c, statut: 'encaisse' } : c))
+    const ech = allCheques.find(c => c.id === id)
+    if (!ech) { toast.error('Échéance introuvable'); return }
+    if (!ech.contrat_id) { toast.error('Impossible : aucun contrat rattaché à cette échéance'); return }
+    if (!ech.famille_id) { toast.error('Impossible : aucune famille rattachée à cette échéance'); return }
+
+    const s = createClient()
+    const today = new Date().toISOString().split('T')[0]
+    const anneeContrat = ech.contrats_scolarisation?.annee_scolaire || annee
+
+    // 1) Trouver la facture liée. Pas de FK directe : on passe par (famille, annee_scolaire).
+    // Si plusieurs factures matchent (rare), on prend la plus récente.
+    const { data: factures, error: errFact } = await s
+      .from('factures')
+      .select('id, montant_total, statut, annee_scolaire, date_emission')
+      .eq('famille_id', ech.famille_id)
+      .eq('annee_scolaire', anneeContrat)
+      .order('date_emission', { ascending: false })
+      .limit(5)
+    if (errFact) { toast.error('Erreur recherche facture : ' + errFact.message); return }
+    const facture = (factures && factures.length > 0) ? factures[0] : null
+    if (!facture) {
+      toast.error("Impossible : aucune facture rattachée au contrat de cette échéance")
+      return
+    }
+
+    // 2) Idempotence : règlement déjà existant pour (facture, mode, reference) ?
+    let reglementExistant: { id: string } | null = null
+    if (ech.numero_cheque) {
+      const { data: dejaLa } = await s
+        .from('reglements')
+        .select('id')
+        .eq('facture_id', facture.id)
+        .eq('mode_paiement', ech.mode_paiement || 'cheque')
+        .eq('reference', ech.numero_cheque)
+        .maybeSingle()
+      reglementExistant = dejaLa || null
+    }
+
+    // 3) Créer le règlement si pas de doublon
+    if (!reglementExistant) {
+      const { error: errIns } = await s.from('reglements').insert({
+        ecole_id: ecoleId,
+        facture_id: facture.id,
+        famille_id: ech.famille_id,
+        montant: Number(ech.montant) || 0,
+        date_reglement: today,
+        mode_paiement: ech.mode_paiement || 'cheque',
+        reference: ech.numero_cheque || null,
+        notes: `Encaissement échéance contrat #${ech.contrat_id}`,
+      })
+      if (errIns) {
+        // Rollback logique : on ne touche pas au statut de l'échéance.
+        toast.error('Encaissement impossible : ' + errIns.message)
+        return
+      }
+    }
+
+    // 4) Marquer l'échéance encaissée
+    const { error: errEch } = await s
+      .from('cheques_prevus')
+      .update({ statut: 'encaisse', encaisse_le: today })
+      .eq('id', id)
+    if (errEch) {
+      toast.error('Règlement créé mais MAJ échéance échouée : ' + errEch.message)
+      reload()
+      return
+    }
+
+    // 5) Recalcul statut facture (fallback si pas de trigger). On lit factures_solde
+    // (vue calculée) et on met à jour factures.statut en conséquence.
+    try {
+      const { data: sol } = await s
+        .from('factures_solde')
+        .select('total_facture, total_regle, solde_restant')
+        .eq('id', facture.id)
+        .maybeSingle()
+      if (sol) {
+        const restant = Number((sol as any).solde_restant) || 0
+        const regle = Number((sol as any).total_regle) || 0
+        const total = Number((sol as any).total_facture) || 0
+        let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
+        if (restant <= 0.01 && total > 0) statut = 'paye'
+        else if (regle > 0) statut = 'partiel'
+        await s.from('factures').update({ statut }).eq('id', facture.id)
+      }
+    } catch {
+      // Pas bloquant : la vue n'existe peut-être pas selon l'environnement.
+    }
+
+    setAllCheques(p => p.map(c => c.id === id ? { ...c, statut: 'encaisse', encaisse_le: today } : c))
+    toast.success(reglementExistant ? 'Échéance marquée encaissée (règlement déjà existant)' : 'Échéance encaissée et règlement créé')
   }
 
   // Valider la reception physique d'un cheque : il devient alors visible/exploitable
   async function marquerRecu(id: string) {
-    await createClient().from('cheques_prevus').update({ statut: 'prevu' }).eq('id', id)
+    const { error } = await createClient().from('cheques_prevus').update({ statut: 'prevu' }).eq('id', id)
+    if (error) { toast.error(error.message); return }
     setAllCheques(p => p.map(c => c.id === id ? { ...c, statut: 'prevu' } : c))
+  }
+
+  // Ouvre le modal d'édition. Bouton dispo uniquement si statut === 'prevu' || 'attente_reception'.
+  function ouvrirEdition(c: any) {
+    setEditing(c)
+    setEditForm({
+      date_echeance: c.date_echeance || '',
+      montant: String(c.montant ?? ''),
+      numero_cheque: c.numero_cheque || '',
+      mode_paiement: c.mode_paiement || '',
+    })
+  }
+
+  async function sauverEdition(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editing) return
+    const montantNum = Number(editForm.montant)
+    if (!editForm.date_echeance) { toast.error('Date d\'échéance requise'); return }
+    if (!isFinite(montantNum) || montantNum <= 0) { toast.error('Montant invalide'); return }
+    setEditSaving(true)
+    const { error } = await createClient()
+      .from('cheques_prevus')
+      .update({
+        date_echeance: editForm.date_echeance,
+        montant: montantNum,
+        numero_cheque: editForm.numero_cheque || null,
+        mode_paiement: editForm.mode_paiement || null,
+      })
+      .eq('id', editing.id)
+    setEditSaving(false)
+    if (error) { toast.error('Échec sauvegarde : ' + error.message); return }
+    toast.success('Échéance mise à jour')
+    setEditing(null)
+    reload()
   }
 
   const today = new Date().toISOString().split('T')[0]
@@ -918,6 +1123,18 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   // Sinon (virement, sepa, carte, especes...), elle n'a pas de sens.
   const showAttenteReception = !modeActif || isChequeMode
 
+  if (accesFinances === null) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
+  if (accesFinances === false) {
+    return (
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 36 }}>🔒</div>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginTop: 10 }}>Accès aux données financières non accordé</h2>
+        <p style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>
+          Vous n&apos;avez pas accès aux données financières. Contactez l&apos;administrateur pour activer cet accès.
+        </p>
+      </div>
+    )
+  }
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
 
   const Section = ({ title, list, color, showEncaisser, showRecu }: any) => (
@@ -928,7 +1145,10 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
         </span>
       </div>
       {list.length === 0 ? <div style={{ padding: 20, textAlign: 'center', color: '#94A3B8', fontSize: 12 }}>Aucun</div>
-        : list.map((c: any, i: number) => (
+        : list.map((c: any, i: number) => {
+          // Bouton "Modifier" dispo uniquement avant encaissement, sinon ça fausserait la compta.
+          const peutEditer = c.statut === 'prevu' || c.statut === 'attente_reception'
+          return (
           <div key={c.id} style={{ display: 'flex', alignItems: 'center', padding: '11px 20px', borderBottom: i < list.length - 1 ? '1px solid #F8FAFC' : 'none', gap: 14 }}>
             <div title={numLabel} style={{ width: 28, height: 28, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#64748B', flexShrink: 0 }}>{c.numero_cheque}</div>
             <div style={{ flex: 1 }}>
@@ -939,6 +1159,12 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
               </div>
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{c.montant?.toLocaleString('fr-FR')}€</div>
+            {peutEditer && (
+              <button onClick={() => ouvrirEdition(c)} title="Modifier l'échéance"
+                style={{ fontSize: 12, color: '#64748B', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', fontWeight: 600 }}>
+                ✏️ Modifier
+              </button>
+            )}
             {showEncaisser && (
               <button onClick={() => encaisser(c.id)}
                 style={{ fontSize: 12, color: '#10B981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}>
@@ -952,7 +1178,7 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
               </button>
             )}
           </div>
-        ))
+        )})
       }
     </div>
   )
@@ -989,6 +1215,70 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
           Aucun {itemLabel} enregistré pour ce mode.
         </div>
       )}
+
+      {/* Modal édition d'une échéance */}
+      {editing && (() => {
+        const editIsCheque = (editForm.mode_paiement || '').startsWith('cheque')
+        const refLabel = editIsCheque ? 'N° chèque' : 'Référence'
+        return (
+          <div onClick={() => !editSaving && setEditing(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+            <form onClick={e => e.stopPropagation()} onSubmit={sauverEdition}
+              style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: '#1E293B', margin: '0 0 4px' }}>Modifier l&apos;échéance</h3>
+              <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 18px' }}>
+                {editing.familles?.nom || 'Famille'} · {editing.contrats_scolarisation?.annee_scolaire || ''}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Date d&apos;échéance</label>
+                  <input type="date" required value={editForm.date_echeance}
+                    onChange={e => setEditForm(f => ({ ...f, date_echeance: e.target.value }))}
+                    style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Montant (€)</label>
+                  <input type="number" step="0.01" required value={editForm.montant}
+                    onChange={e => setEditForm(f => ({ ...f, montant: e.target.value }))}
+                    style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{refLabel}</label>
+                  <input type="text" value={editForm.numero_cheque}
+                    onChange={e => setEditForm(f => ({ ...f, numero_cheque: e.target.value }))}
+                    placeholder={editIsCheque ? 'Ex: 1234567' : 'Référence libre'}
+                    style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Mode de paiement</label>
+                  <select value={editForm.mode_paiement}
+                    onChange={e => setEditForm(f => ({ ...f, mode_paiement: e.target.value }))}
+                    style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}>
+                    <option value="">—</option>
+                    {modesEcole.map(m => (
+                      <option key={m.type} value={m.type}>{m.label}</option>
+                    ))}
+                    {/* Si le mode courant n'est pas dans modesEcole (mode désactivé entre temps), on l'expose quand même */}
+                    {editForm.mode_paiement && !modesEcole.some(m => m.type === editForm.mode_paiement) && (
+                      <option value={editForm.mode_paiement}>{labelModePaiement(editForm.mode_paiement)} (inactif)</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
+                <button type="button" onClick={() => setEditing(null)} disabled={editSaving}
+                  style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 9, padding: '9px 16px', fontSize: 13, cursor: editSaving ? 'not-allowed' : 'pointer', fontWeight: 500 }}>
+                  Annuler
+                </button>
+                <button type="submit" disabled={editSaving}
+                  style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 16px', fontSize: 13, cursor: editSaving ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: editSaving ? 0.6 : 1 }}>
+                  {editSaving ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )
+      })()}
     </div>
   )
 }
