@@ -73,6 +73,7 @@ export default function ParametresPage() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const initTab: Tab = tabParam === 'inscriptions' ? 'tarifs'
+    : tabParam === 'tarifs' ? 'tarifs'
     : tabParam === 'sepa' ? 'sepa'
     : tabParam === 'notifications' ? 'notifications'
     : 'classes'

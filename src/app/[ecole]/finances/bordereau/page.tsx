@@ -45,9 +45,13 @@ export default function BordereauPage() {
   async function load() {
     setLoading(true)
     const s = createClient()
+    // Bordereau de remise = uniquement de vrais chèques physiques à apporter à la banque.
+    // La table cheques_prevus stocke aussi virements / prélèvements / espèces / carte
+    // depuis le chantier "hhh" : on filtre durement par mode_paiement = cheque (ou cheque_caution).
     let q = s.from('cheques_prevus')
       .select('*, familles(nom, numero, parent1_nom, parent1_prenom)')
       .eq('ecole_id', ecole.id)
+      .in('mode_paiement', ['cheque', 'cheque_caution'])
       .order('date_echeance', { ascending: true })
     if (filter === 'prevu') q = q.eq('statut', 'prevu')
     if (dateFrom) q = q.gte('date_echeance', dateFrom)

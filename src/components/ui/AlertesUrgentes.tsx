@@ -56,9 +56,12 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
           .gt('solde_restant', 0)
           .lte('date_emission', il30Joursj)
           .neq('statut', 'annule'),
+        // Alerte "chèques à encaisser ce mois" -> uniquement les vrais chèques (l'action
+        // pointe vers le bordereau de remise qui n'accepte que des chèques physiques).
         s.from('cheques_prevus').select('id, familles!inner(ecole_id)', { count: 'exact', head: true })
           .eq('familles.ecole_id', ecoleId)
           .eq('statut', 'prevu')
+          .in('mode_paiement', ['cheque', 'cheque_caution'])
           .gte('date_echeance', moisDebut).lte('date_echeance', moisFin),
       ])
 

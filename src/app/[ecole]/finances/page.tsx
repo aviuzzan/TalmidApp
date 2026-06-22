@@ -5,12 +5,21 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { labelModePaiement } from '@/lib/statuts'
+import { labelModePaiement, labelStatutFacture, couleurStatutFacture } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
+import { getAnneeCouranteSync } from '@/lib/annee-courante'
 
-type Tab = 'tarifs' | 'factures' | 'paiements'
-const MODES_PAIEMENT = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
+type Tab = 'factures' | 'paiements'
+// Fallback si la table modes_reglement_ecole est vide ou indisponible.
+const MODES_PAIEMENT_FALLBACK: { code: string; libelle: string }[] = [
+  { code: 'especes', libelle: 'Espèces' },
+  { code: 'cheque', libelle: 'Chèque' },
+  { code: 'virement', libelle: 'Virement' },
+  { code: 'cb', libelle: 'Carte bancaire' },
+  { code: 'sepa', libelle: 'Prélèvement SEPA' },
+  { code: 'autre', libelle: 'Autre' },
+]
 
 export default function FinancesPage() {
   const { t } = useI18n()
@@ -19,11 +28,13 @@ export default function FinancesPage() {
   const toast = useToast()
   const confirm = useConfirm()
   const [tab, setTab] = useState<Tab>('factures')
-  const [tarifs, setTarifs] = useState<any[]>([])
   const [factures, setFactures] = useState<any[]>([])
   const [duAdates, setDuAdates] = useState<Record<string, DuADateResult>>({})
   const [reglements, setReglements] = useState<any[]>([])
   const [familles, setFamilles] = useState<any[]>([])
+  // Modes de règlement actifs pour cette école (dynamique, depuis modes_reglement_ecole).
+  // value = code persisté en BDD ; libelle = affichage humain.
+  const [modesEcole, setModesEcole] = useState<{ code: string; libelle: string }[]>([])
   // Filtres paiements
   const [filtreFamille, setFiltreFamille] = useState<string>('')
   const [filtreMode, setFiltreMode] = useState<string>('')
@@ -34,28 +45,21 @@ export default function FinancesPage() {
   const emptyPaiement = {
     famille_id: '', facture_id: '', montant: '',
     date_reglement: new Date().toISOString().slice(0, 10),
-    mode_paiement: 'Chèque', reference: '', notes: '',
+    mode_paiement: 'cheque', reference: '', notes: '',
   }
   const [paiementForm, setPaiementForm] = useState<any>(emptyPaiement)
   const [loading, setLoading] = useState(true)
-  const [showTarifForm, setShowTarifForm] = useState(false)
   const [showFactureForm, setShowFactureForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Détection auto de l'année scolaire courante (sept → août)
-  function detectAnnee(): string {
-    const d = new Date()
-    const m = d.getMonth() + 1
-    const y = d.getFullYear()
-    return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`
-  }
-  const [ANNEES_DISPO, setAnneesDispo] = useState<string[]>(['2025-2026', '2026-2027'])
+  // L'année scolaire courante est calculée par le helper centralisé (@/lib/annee-courante).
+  const [ANNEES_DISPO, setAnneesDispo] = useState<string[]>([])
   const [ANNEE, setANNEE] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('finances_annee') || detectAnnee()
+      return localStorage.getItem('finances_annee') || getAnneeCouranteSync()
     }
-    return detectAnnee()
+    return getAnneeCouranteSync()
   })
 
   function changeAnnee(a: string) {
@@ -77,8 +81,34 @@ export default function FinancesPage() {
     })
   }, [ecole?.id])
 
-  const emptyTarif = { nom: '', montant: '', annee_scolaire: ANNEE, description: '' }
-  const [tarifForm, setTarifForm] = useState(emptyTarif)
+  // Charge les modes de règlement actifs configurés pour cette école.
+  // Colonnes réelles (cf. modes_reglement_ecole) : `type` (code persisté) et `label` (libellé humain).
+  // En cas d'échec ou de table vide, on retombe sur MODES_PAIEMENT_FALLBACK pour ne pas casser l'UI.
+  useEffect(() => {
+    if (!ecole?.id) return
+    const s = createClient()
+    s.from('modes_reglement_ecole')
+      .select('type, label')
+      .eq('ecole_id', ecole.id)
+      .eq('actif', true)
+      .order('ordre')
+      .then(({ data, error }) => {
+        if (error || !data || data.length === 0) {
+          setModesEcole(MODES_PAIEMENT_FALLBACK)
+          return
+        }
+        setModesEcole(data.map((r: any) => ({ code: r.type, libelle: r.label })))
+      })
+  }, [ecole?.id])
+
+  // Quand les modes sont chargés, on s'assure que le mode par défaut du formulaire est valide.
+  useEffect(() => {
+    if (modesEcole.length === 0) return
+    setPaiementForm((p: any) => {
+      if (p.mode_paiement && modesEcole.find(m => m.code === p.mode_paiement)) return p
+      return { ...p, mode_paiement: modesEcole[0].code }
+    })
+  }, [modesEcole])
 
   const emptyFacture = { famille_id: '', annee_scolaire: ANNEE, notes: '' }
   const [factureForm, setFactureForm] = useState(emptyFacture)
@@ -86,13 +116,11 @@ export default function FinancesPage() {
   const supabase = createClient()
 
   const load = useCallback(async () => {
-    const [{ data: t }, { data: f }, { data: fam }, { data: regs }] = await Promise.all([
-      supabase.from('tarifs').select('*').eq('annee_scolaire', ANNEE).order('nom'),
+    const [{ data: f }, { data: fam }, { data: regs }] = await Promise.all([
       supabase.from('factures_solde').select('*, familles(nom, numero)').eq('annee_scolaire', ANNEE).order('date_emission', { ascending: false }),
       supabase.from('familles').select('id, nom, numero').order('nom'),
       supabase.from('reglements').select('*, familles(nom, numero), factures(numero)').order('date_reglement', { ascending: false }),
     ])
-    setTarifs(t ?? [])
     setFactures(f ?? [])
     setFamilles(fam ?? [])
     setReglements(regs ?? [])
@@ -110,27 +138,6 @@ export default function FinancesPage() {
   }, [ANNEE])
 
   useEffect(() => { load() }, [load])
-
-  async function saveTarif(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true); setError('')
-    const { error: err } = await supabase.from('tarifs').insert({
-      nom: tarifForm.nom,
-      montant: parseFloat(tarifForm.montant),
-      annee_scolaire: tarifForm.annee_scolaire,
-      description: tarifForm.description || null,
-    })
-    if (err) { setError(err.message); setSaving(false); return }
-    setShowTarifForm(false); setTarifForm(emptyTarif); load(); setSaving(false)
-  }
-
-  async function deleteTarif(id: string) {
-    const ok = await confirm({ title: 'Supprimer ce tarif ?', danger: true })
-    if (!ok) return
-    const { error } = await supabase.from('tarifs').delete().eq('id', id)
-    if (error) { toast.error('Suppression impossible : ' + error.message); return }
-    toast.success('Tarif supprimé')
-    load()
-  }
 
   async function savePaiement(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setError('')
@@ -176,19 +183,15 @@ export default function FinancesPage() {
   }
 
   function statutBadge(statut: string) {
-    const map: any = {
-      en_attente: ['#D97706', '#FFFBEB', 'En attente'],
-      partiel: ['#2563EB', '#EFF6FF', 'Partiellement réglée'],
-      paye: ['#059669', '#ECFDF5', 'Payée'],
-      payee: ['#059669', '#ECFDF5', 'Payée'],
-      solde: ['#059669', '#ECFDF5', 'Soldée'],
-      annule: ['#64748B', '#F1F5F9', 'Annulée'],
-      annulee: ['#64748B', '#F1F5F9', 'Annulée'],
-      brouillon: ['#475569', '#F1F5F9', 'Brouillon'],
-      verrouillee: ['#4338CA', '#EEF2FF', 'Verrouillée'],
+    // Cas spécial : `solde` n'est pas couvert par labelStatutFacture (qui ne connaît que payée/partielle/...).
+    // On l'aligne sur 'paye' visuellement pour cohérence.
+    const c = String(statut || '').toLowerCase()
+    if (c === 'solde') {
+      return <span style={{ background: '#ECFDF5', color: '#065F46', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>Soldée</span>
     }
-    const [c, bg, label] = map[String(statut || '').toLowerCase()] ?? ['#64748B', '#F1F5F9', statut]
-    return <span style={{ background: bg, color: c, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{label}</span>
+    const { bg, fg } = couleurStatutFacture(statut)
+    const label = labelStatutFacture(statut)
+    return <span style={{ background: bg, color: fg, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{label}</span>
   }
 
   const inp = { width: '100%', padding: '9px 12px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, color: '#1E293B', fontSize: 13, outline: 'none' }
@@ -205,8 +208,16 @@ export default function FinancesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.finances.title')}</h1>
-          <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & Règlements — {ANNEE}</p>
+          <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & règlements</p>
         </div>
+        <button
+          onClick={() => router.push(`/${ecole.slug}/parametres?tab=tarifs`)}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: '#2563EB', fontSize: 12, fontWeight: 500, padding: 0,
+          }}>
+          Gérer les tarifs →
+        </button>
       </div>
 
       {/* Stats */}
@@ -223,26 +234,21 @@ export default function FinancesPage() {
         ))}
       </div>
 
-      {/* Tabs unifiés : tabs inline (Factures/Paiements/Tarifs) + liens vers pages séparées (Dashboard/Relances/Bordereau/Analytique/SEPA) */}
+      {/* Tabs inline : Factures / Paiements. Les autres écrans finances (dashboard, relances,
+          bordereau, analytique, SEPA) sont accessibles depuis la sidebar gauche. */}
       <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #E2E8F0', flexWrap: 'wrap', overflowX: 'auto' }}>
         {[
-          { id: 'factures',  label: `📄 Factures (${factures.length})`, type: 'inline' as const },
-          { id: 'paiements', label: `💸 Paiements (${reglements.length})`, type: 'inline' as const },
-          { id: 'tarifs',    label: `💰 Tarifs (${tarifs.length})`, type: 'inline' as const },
-          { id: 'dashboard', label: '📊 Tableau de bord',       type: 'page' as const, href: 'finances/dashboard' },
-          { id: 'relances',  label: '🔔 Relances impayés',       type: 'page' as const, href: 'finances/relances' },
-          { id: 'bordereau', label: '🧾 Bordereau chèques',      type: 'page' as const, href: 'finances/bordereau' },
-          { id: 'analytique',label: '📈 Compta analytique',      type: 'page' as const, href: 'finances/analytique' },
-          { id: 'sepa',      label: '🏦 Export SEPA',            type: 'page' as const, href: 'inscriptions/sepa' },
+          { id: 'factures',  label: `📄 Factures (${factures.length})` },
+          { id: 'paiements', label: `💸 Paiements (${reglements.length})` },
         ].map(t => {
-          const isInlineActive = t.type === 'inline' && tab === t.id
+          const isActive = tab === t.id
           return (
-            <button key={t.id} onClick={() => t.type === 'inline' ? setTab(t.id as Tab) : router.push(`/${ecole.slug}/${t.href}`)}
+            <button key={t.id} onClick={() => setTab(t.id as Tab)}
               style={{ padding: '10px 18px', border: 'none', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
-                fontWeight: isInlineActive ? 600 : 400,
+                fontWeight: isActive ? 600 : 400,
                 background: 'transparent',
-                color: isInlineActive ? '#2563EB' : '#64748B',
-                borderBottom: isInlineActive ? '2px solid #2563EB' : '2px solid transparent',
+                color: isActive ? '#2563EB' : '#64748B',
+                borderBottom: isActive ? '2px solid #2563EB' : '2px solid transparent',
                 marginBottom: -2,
               }}>
               {t.label}
@@ -253,9 +259,6 @@ export default function FinancesPage() {
 
       {/* Toolbar d'actions — sur sa propre ligne, séparée des tabs */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        {tab === 'tarifs' && (
-          <button className="btn-primary" onClick={() => { setTarifForm({ ...emptyTarif, annee_scolaire: ANNEE }); setShowTarifForm(true) }}>+ Nouveau tarif</button>
-        )}
         {tab === 'factures' && (
           <>
             <button onClick={() => router.push(`/${ecole.slug}/finances/avoirs`)}
@@ -329,29 +332,6 @@ export default function FinancesPage() {
         </div>
       )}
 
-      {/* Tarifs tab */}
-      {tab === 'tarifs' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {tarifs.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: '40px 24px', color: '#94A3B8' }}>
-              Aucun tarif configuré pour {ANNEE} — cliquez sur "Nouveau tarif"
-            </div>
-          ) : tarifs.map(t => (
-            <div key={t.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{t.nom}</div>
-                {t.description && <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{t.description}</div>}
-                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{t.annee_scolaire}</div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#2563EB' }}>{Number(t.montant).toLocaleString('fr-FR')} €</div>
-                <button onClick={() => deleteTarif(t.id)} className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }}>🗑️</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Paiements tab */}
       {tab === 'paiements' && (() => {
         const reglementsFiltres = reglements.filter(r => {
@@ -377,7 +357,9 @@ export default function FinancesPage() {
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>Mode</label>
                 <select style={inp} value={filtreMode} onChange={e => setFiltreMode(e.target.value)}>
                   <option value="">Tous</option>
-                  {MODES_PAIEMENT.map(m => <option key={m} value={m}>{m}</option>)}
+                  {(modesEcole.length > 0 ? modesEcole : MODES_PAIEMENT_FALLBACK).map(m => (
+                    <option key={m.code} value={m.code}>{m.libelle}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -480,7 +462,9 @@ export default function FinancesPage() {
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Mode de paiement *</label>
                 <select required style={inp} value={paiementForm.mode_paiement}
                   onChange={e => setPaiementForm((p: any) => ({ ...p, mode_paiement: e.target.value }))}>
-                  {MODES_PAIEMENT.map(m => <option key={m} value={m}>{m}</option>)}
+                  {(modesEcole.length > 0 ? modesEcole : MODES_PAIEMENT_FALLBACK).map(m => (
+                    <option key={m.code} value={m.code}>{m.libelle}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -496,43 +480,6 @@ export default function FinancesPage() {
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
                 <button type="button" onClick={() => setShowPaiementForm(false)} className="btn-secondary">Annuler</button>
                 <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal nouveau tarif */}
-      {showTarifForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 480, width: '100%', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700 }}>💰 Nouveau tarif</h2>
-              <button onClick={() => setShowTarifForm(false)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#64748B' }}>✕</button>
-            </div>
-            <form onSubmit={saveTarif} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Année scolaire</label>
-                <select style={inp} value={tarifForm.annee_scolaire} onChange={e => setTarifForm(p => ({ ...p, annee_scolaire: e.target.value }))}>
-                  {ANNEES_DISPO.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Nom du tarif *</label>
-                <input style={inp} value={tarifForm.nom} onChange={e => setTarifForm(p => ({ ...p, nom: e.target.value }))} placeholder="Ex: Scolarité Kita, Scolarité CP..." required />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Montant annuel (€) *</label>
-                <input style={inp} type="number" min="0" step="0.01" value={tarifForm.montant} onChange={e => setTarifForm(p => ({ ...p, montant: e.target.value }))} placeholder="Ex: 3600" required />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Description</label>
-                <input style={inp} value={tarifForm.description} onChange={e => setTarifForm(p => ({ ...p, description: e.target.value }))} placeholder="Optionnel" />
-              </div>
-              {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#DC2626', fontSize: 13 }}>{error}</div>}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowTarifForm(false)}>Annuler</button>
-                <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Enregistrement...' : '✓ Enregistrer'}</button>
               </div>
             </form>
           </div>
