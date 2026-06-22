@@ -99,6 +99,9 @@ export default function PortailPage() {
           taches.push({ label: t('portail.checklist.child_admission_pending', { prenom: enf.prenom }), fait: false, href: '/portail/inscriptions', sub: t('portail.checklist.child_admission_pending_sub') })
         } else if (refusee) {
           taches.push({ label: t('portail.checklist.child_admission_refused', { prenom: enf.prenom }), fait: false, urgent: true, href: '/portail/inscriptions', sub: t('portail.checklist.child_admission_refused_sub') })
+        } else if (enf.statut_inscription === 'inscrit') {
+          // Enfant deja membre historique de l'ecole : pas d'admission a demander,
+          // la reinscription se fait via le contrat (deja en tete de checklist).
         } else if (enf.statut_inscription !== 'sorti') {
           taches.push({ label: t('portail.checklist.child_admission_to_request', { prenom: enf.prenom }), fait: false, urgent: true, href: '/portail/inscriptions/pedagogique', sub: t('portail.checklist.child_admission_to_request_sub') })
         }
