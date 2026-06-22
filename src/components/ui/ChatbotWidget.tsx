@@ -82,38 +82,96 @@ export default function ChatbotWidget() {
 
   return (
     <>
-      {/* Bouton flottant - pill avec texte Demandez a Levy */}
+      {/* Bouton flottant - icone circulaire discrete (Levy) */}
       {!open && (
-        <button onClick={() => setOpen(true)}
-          aria-label="Ouvrir Levy l assistant virtuel"
-          style={{
-            position: 'fixed', bottom: 22, right: 22, zIndex: 998,
-            height: 50, padding: '0 18px 0 14px', borderRadius: 25,
-            background: 'linear-gradient(135deg, #2563EB, #1E40AF)', border: 'none',
-            color: '#fff', cursor: 'pointer',
-            boxShadow: '0 8px 24px rgba(37,99,235,0.45)',
-            display: 'flex', alignItems: 'center', gap: 9,
-            transition: 'transform 0.18s, box-shadow 0.18s',
-          }}
-          onMouseEnter={e => {
-            const el = e.currentTarget
-            el.style.transform = 'translateY(-2px)'
-            el.style.boxShadow = '0 12px 32px rgba(37,99,235,0.55)'
-          }}
-          onMouseLeave={e => {
-            const el = e.currentTarget
-            el.style.transform = 'translateY(0)'
-            el.style.boxShadow = '0 8px 24px rgba(37,99,235,0.45)'
-          }}>
-          <span style={{ fontSize: 20, lineHeight: 1 }}>💬</span>
-          <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>Demandez à Levy</span>
-        </button>
+        <>
+          <style>{`
+            .levy-fab {
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              z-index: 998;
+              width: 56px;
+              height: 56px;
+              border-radius: 50%;
+              background: linear-gradient(135deg, #2563EB, #1E40AF);
+              border: none;
+              color: #fff;
+              cursor: pointer;
+              box-shadow: 0 6px 18px rgba(37,99,235,0.4);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: transform 0.18s, box-shadow 0.18s, opacity 0.18s;
+              opacity: 0.88;
+              padding: 0;
+            }
+            .levy-fab:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 10px 24px rgba(37,99,235,0.55);
+              opacity: 1;
+            }
+            .levy-fab:focus-visible {
+              outline: 2px solid #1E40AF;
+              outline-offset: 3px;
+              opacity: 1;
+            }
+            .levy-fab-icon {
+              font-size: 24px;
+              line-height: 1;
+            }
+            .levy-fab-tooltip {
+              position: absolute;
+              right: calc(100% + 10px);
+              top: 50%;
+              transform: translateY(-50%);
+              background: #1E293B;
+              color: #fff;
+              font-size: 12px;
+              font-weight: 600;
+              padding: 6px 10px;
+              border-radius: 6px;
+              white-space: nowrap;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.18s;
+            }
+            .levy-fab:hover .levy-fab-tooltip,
+            .levy-fab:focus-visible .levy-fab-tooltip {
+              opacity: 1;
+            }
+            @media (max-width: 640px) {
+              .levy-fab {
+                width: 48px;
+                height: 48px;
+                bottom: 16px;
+                right: 16px;
+                opacity: 0.82;
+              }
+              .levy-fab-icon {
+                font-size: 20px;
+              }
+              .levy-fab-tooltip {
+                display: none;
+              }
+            }
+          `}</style>
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="Demandez à Levy, assistant virtuel"
+            title="Demandez à Levy"
+            className="levy-fab"
+          >
+            <span className="levy-fab-icon" aria-hidden="true">💬</span>
+            <span className="levy-fab-tooltip" role="tooltip">Demandez à Levy</span>
+          </button>
+        </>
       )}
 
       {/* Panel ouvert */}
       {open && (
         <div style={{
-          position: 'fixed', bottom: 22, right: 22, zIndex: 999,
+          position: 'fixed', bottom: 20, right: 20, zIndex: 999,
           width: 380, maxWidth: 'calc(100vw - 32px)',
           height: 540, maxHeight: 'calc(100vh - 80px)',
           background: '#fff', borderRadius: 16,

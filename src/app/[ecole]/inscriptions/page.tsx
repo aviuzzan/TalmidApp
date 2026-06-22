@@ -53,7 +53,9 @@ export default function InscriptionsAdminPage() {
       s.from('inscriptions_pedagogiques').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('annee_scolaire', annee),
       s.from('demandes_reduction').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('annee_scolaire', annee),
       s.from('contrats_scolarisation').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('annee_scolaire', annee),
-      s.from('cheques_prevus').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut', 'prevu').lte('date_echeance', new Date().toISOString().split('T')[0]),
+      // Compteur "Chèques à encaisser" : ne compte que les vrais chèques (la table cheques_prevus
+      // stocke aussi virements / prélèvements / espèces / carte depuis le chantier hhh).
+      s.from('cheques_prevus').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut', 'prevu').in('mode_paiement', ['cheque', 'cheque_caution']).lte('date_echeance', new Date().toISOString().split('T')[0]),
       s.from('contrats_scolarisation').select('*, familles(nom, parent1_email), contrat_enfants(*, enfants(prenom, nom))').eq('ecole_id', ecole.id).eq('annee_scolaire', annee).order('created_at', { ascending: false }),
     ])
     setConfig(cfg)
@@ -81,7 +83,9 @@ export default function InscriptionsAdminPage() {
     { id: 'pedagogique', label: 'Fiches pédagogiques', icon: '📋', count: stats.pedagogique },
     { id: 'reduction', label: 'Demandes de réduction', icon: '💸', count: stats.reduction },
     { id: 'contrats', label: 'Contrats', icon: '📝', count: stats.contrats },
-    { id: 'cheques', label: 'Chèques', icon: '🏦', count: stats.cheques_a_encaisser },
+    // Le badge reflete uniquement les vrais cheques a encaisser (la vue interne propose
+    // des onglets pour les autres modes : virement, prelevement, espece, carte).
+    { id: 'cheques', label: 'Échéances', icon: '🏦', count: stats.cheques_a_encaisser },
   ]
 
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
@@ -848,25 +852,50 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
 function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [cheques, setCheques] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  // Filtre dynamique alimenté par modes_reglement_ecole. Valeur vide = tous les modes.
+  const [modeActif, setModeActif] = useState<string>('')
+  const [modesEcole, setModesEcole] = useState<{ type: string; label: string }[]>([])
 
+  // On charge TOUTES les echeances de l'ecole une fois, puis on filtre cote client
+  // par mode_paiement (egal au "type" / slug du mode_reglement_ecole choisi a la signature
+  // du contrat). La famille de modes (cheque vs virement vs sepa...) est definie par l'ecole.
+  const [allCheques, setAllCheques] = useState<any[]>([])
   useEffect(() => {
+    setLoading(true)
     createClient()
       .from('cheques_prevus')
       .select('*, familles(nom), contrats_scolarisation(annee_scolaire)')
       .eq('ecole_id', ecoleId)
       .order('date_echeance')
-      .then(({ data }) => { setCheques(data ?? []); setLoading(false) })
+      .then(({ data }) => { setAllCheques(data ?? []); setLoading(false) })
   }, [ecoleId])
+
+  // Charger la liste des modes de reglement activés pour l'école (pour alimenter le filtre)
+  useEffect(() => {
+    createClient()
+      .from('modes_reglement_ecole')
+      .select('type, label')
+      .eq('ecole_id', ecoleId)
+      .eq('actif', true)
+      .order('ordre')
+      .then(({ data }) => { setModesEcole(data ?? []) })
+  }, [ecoleId])
+
+  useEffect(() => {
+    if (!modeActif) { setCheques(allCheques); return }
+    // Filtre simple sur mode_paiement = slug choisi (le slug est le "type" du mode_reglement_ecole)
+    setCheques(allCheques.filter(c => c.mode_paiement === modeActif))
+  }, [allCheques, modeActif])
 
   async function encaisser(id: string) {
     await createClient().from('cheques_prevus').update({ statut: 'encaisse', encaisse_le: new Date().toISOString().split('T')[0] }).eq('id', id)
-    setCheques(p => p.map(c => c.id === id ? { ...c, statut: 'encaisse' } : c))
+    setAllCheques(p => p.map(c => c.id === id ? { ...c, statut: 'encaisse' } : c))
   }
 
   // Valider la reception physique d'un cheque : il devient alors visible/exploitable
   async function marquerRecu(id: string) {
     await createClient().from('cheques_prevus').update({ statut: 'prevu' }).eq('id', id)
-    setCheques(p => p.map(c => c.id === id ? { ...c, statut: 'prevu' } : c))
+    setAllCheques(p => p.map(c => c.id === id ? { ...c, statut: 'prevu' } : c))
   }
 
   const today = new Date().toISOString().split('T')[0]
@@ -874,6 +903,20 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const aEncaisser = cheques.filter(c => c.statut === 'prevu' && c.date_echeance <= today)
   const aVenir = cheques.filter(c => c.statut === 'prevu' && c.date_echeance > today)
   const encaisses = cheques.filter(c => c.statut === 'encaisse')
+
+  const modeLabel = modeActif
+    ? (modesEcole.find(m => m.type === modeActif)?.label || labelModePaiement(modeActif))
+    : ''
+  const titre = modeActif ? `Encaissement à venir — ${modeLabel}` : 'Encaissement à venir'
+  // Detection "famille chèque" : on garde le bouton "Marquer reçu" et la section
+  // "En attente de réception" uniquement pour les modes typés chèque (le slug commence par "cheque").
+  const isChequeMode = modeActif.startsWith('cheque')
+  const itemLabel = modeActif ? modeLabel.toLowerCase() : 'échéance'
+  const numLabel = isChequeMode ? 'N° chèque' : modeActif ? 'Réf' : 'N° / réf'
+
+  // En mode "tous" ou mode "famille chèque" : on montre la section "En attente de réception".
+  // Sinon (virement, sepa, carte, especes...), elle n'a pas de sens.
+  const showAttenteReception = !modeActif || isChequeMode
 
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
 
@@ -887,10 +930,13 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
       {list.length === 0 ? <div style={{ padding: 20, textAlign: 'center', color: '#94A3B8', fontSize: 12 }}>Aucun</div>
         : list.map((c: any, i: number) => (
           <div key={c.id} style={{ display: 'flex', alignItems: 'center', padding: '11px 20px', borderBottom: i < list.length - 1 ? '1px solid #F8FAFC' : 'none', gap: 14 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#64748B', flexShrink: 0 }}>{c.numero_cheque}</div>
+            <div title={numLabel} style={{ width: 28, height: 28, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#64748B', flexShrink: 0 }}>{c.numero_cheque}</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{c.familles?.nom}</div>
-              <div style={{ fontSize: 11, color: '#94A3B8' }}>Échéance : {new Date(c.date_echeance).toLocaleDateString('fr-FR')}</div>
+              <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                Échéance : {c.date_echeance ? new Date(c.date_echeance).toLocaleDateString('fr-FR') : '—'}
+                {!modeActif && c.mode_paiement ? ` · ${labelModePaiement(c.mode_paiement)}` : ''}
+              </div>
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{c.montant?.toLocaleString('fr-FR')}€</div>
             {showEncaisser && (
@@ -913,10 +959,36 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
 
   return (
     <div>
-      <Section title={`⏳ En attente de réception (${attenteReception.length})`} list={attenteReception} color="#2563EB" showRecu />
+      {/* Titre + filtre dynamique sur le mode de paiement */}
+      <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#1E293B', margin: 0 }}>{titre}</h2>
+          <p style={{ color: '#64748B', fontSize: 12, margin: '4px 0 0' }}>
+            Vue des échéances enregistrées sur les contrats — filtre par mode de paiement.
+          </p>
+        </div>
+        {/* Filtre dynamique alimenté par modes_reglement_ecole (modes activés pour cette école) */}
+        <select value={modeActif} onChange={e => setModeActif(e.target.value)}
+          style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', fontWeight: 600, color: '#1E293B', minWidth: 200, cursor: 'pointer' }}>
+          <option value="">Tous les modes</option>
+          {modesEcole.map(m => (
+            <option key={m.type} value={m.type}>{m.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {showAttenteReception && (
+        <Section title={`⏳ En attente de réception (${attenteReception.length})`} list={attenteReception} color="#2563EB" showRecu />
+      )}
       <Section title={`⚠️ À encaisser maintenant (${aEncaisser.length})`} list={aEncaisser} color="#EF4444" showEncaisser />
       <Section title={`📅 À venir (${aVenir.length})`} list={aVenir} color="#F59E0B" showEncaisser={false} />
       <Section title={`✅ Encaissés (${encaisses.length})`} list={encaisses} color="#10B981" showEncaisser={false} />
+
+      {cheques.length === 0 && (
+        <div style={{ padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13, background: '#fff', border: '1px dashed #E2E8F0', borderRadius: 12 }}>
+          Aucun {itemLabel} enregistré pour ce mode.
+        </div>
+      )}
     </div>
   )
 }

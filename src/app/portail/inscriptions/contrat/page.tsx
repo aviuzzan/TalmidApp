@@ -485,7 +485,7 @@ export default function ContratPage() {
   const nouvelEnfantEnAttente = enfants.some((e: any) => e.statut_inscription === 'en_attente')
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px 100px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>← Retour</button>
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Contrat de scolarisation {anneeInscription}</h1>
