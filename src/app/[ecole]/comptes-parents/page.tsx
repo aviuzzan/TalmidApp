@@ -42,13 +42,13 @@ export default function ComptesParentsPage() {
     setTimeout(() => setRenvoiMsg(null), 5000)
   }
 
-  async function renvoyerLien(famille: any) {
-    if (!famille.parent1_email) {
+  async function renvoyerLien(famille: any, email: string) {
+    if (!email) {
       setRenvoiMsg({ ok: false, msg: `Pas d'email pour ${famille.nom}` })
       setTimeout(() => setRenvoiMsg(null), 4000)
       return
     }
-    if (!confirm(`Renvoyer le lien d'activation à ${famille.parent1_email} ?`)) return
+    if (!confirm(`Renvoyer le lien d'activation à ${email} ?`)) return
     setRenvoyantId(famille.id); setRenvoiMsg(null)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
@@ -56,7 +56,7 @@ export default function ComptesParentsPage() {
     const res = await fetch('/api/admin/renvoyer-lien-magique', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ email: famille.parent1_email, familleId: famille.id, ecoleId: ecole.id }),
+      body: JSON.stringify({ email, familleId: famille.id, ecoleId: ecole.id }),
     })
     const json = await res.json()
     setRenvoiMsg({ ok: res.ok, msg: res.ok ? `✓ ${json.message}` : `Erreur : ${json.error || 'inconnue'}` })
@@ -77,19 +77,26 @@ export default function ComptesParentsPage() {
       .eq('ecole_id', ecole.id)
       .order('nom')
 
-    // Récupérer les profiles parents liés
+    // Récupérer les profiles parents liés (via la vue qui joint auth.users.email)
     const { data: parentProfiles } = await s
-      .from('profiles')
-      .select('id, famille_id, ecole_id')
+      .from('profiles_with_email')
+      .select('id, famille_id, ecole_id, email, parent_slot')
       .eq('role', 'parent')
       .eq('ecole_id', ecole.id)
 
-    // Récupérer les emails des parents (via auth — on a juste les IDs)
-    // On fait un join manuel
+    // Regrouper par famille — l'email de chaque compte vient maintenant directement de la vue
     const familleMap = new Map()
     parentProfiles?.forEach(p => {
       if (!familleMap.has(p.famille_id)) familleMap.set(p.famille_id, [])
       familleMap.get(p.famille_id).push(p)
+    })
+    // Trier les comptes : parent1 d'abord, puis parent2
+    familleMap.forEach((arr) => {
+      arr.sort((a: any, b: any) => {
+        const sa = a.parent_slot === 'parent2' ? 2 : 1
+        const sb = b.parent_slot === 'parent2' ? 2 : 1
+        return sa - sb
+      })
     })
 
     const enriched = (fams ?? []).map(f => ({
@@ -289,7 +296,22 @@ export default function ComptesParentsPage() {
                       {[f.parent1_prenom, f.parent1_nom].filter(Boolean).join(' ') || '—'}
                     </td>
                     <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B' }}>
-                      {f.parent1_email || '—'}
+                      {f.comptes.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {f.comptes.map((c: any) => (
+                            <div key={c.id} title={c.email || ''}>
+                              {c.parent_slot === 'parent2' ? (
+                                <span style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8', marginRight: 4 }}>P2</span>
+                              ) : (
+                                <span style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8', marginRight: 4 }}>P1</span>
+                              )}
+                              {c.email || '—'}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        f.parent1_email || '—'
+                      )}
                     </td>
                     <td style={{ padding: '13px 16px' }}>
                       {aCompte ? (
@@ -304,9 +326,9 @@ export default function ComptesParentsPage() {
                     </td>
                     <td style={{ padding: '13px 16px' }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {aCompte && (
-                          <button onClick={() => renvoyerLien(f)} disabled={renvoyantId === f.id}
-                            title="Renvoyer un email avec un nouveau lien d'activation"
+                        {aCompte && f.comptes.length === 1 && (
+                          <button onClick={() => renvoyerLien(f, f.comptes[0].email)} disabled={renvoyantId === f.id}
+                            title={f.comptes[0].email ? `Renvoyer un nouveau lien d'activation à ${f.comptes[0].email}` : "Renvoyer un email avec un nouveau lien d'activation"}
                             style={{
                               fontSize: 12, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 500,
                               background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A',
@@ -314,6 +336,19 @@ export default function ComptesParentsPage() {
                             {renvoyantId === f.id ? '...' : '📧 Renvoyer lien'}
                           </button>
                         )}
+                        {aCompte && f.comptes.length > 1 && f.comptes.map((c: any) => {
+                          const slotLabel = c.parent_slot === 'parent2' ? 'P2' : 'P1'
+                          return (
+                            <button key={c.id} onClick={() => renvoyerLien(f, c.email)} disabled={renvoyantId === f.id}
+                              title={c.email ? `Renvoyer un nouveau lien d'activation à ${c.email}` : "Renvoyer un nouveau lien d'activation"}
+                              style={{
+                                fontSize: 12, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 500,
+                                background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A',
+                              }}>
+                              {renvoyantId === f.id ? '...' : `📧 Lien ${slotLabel}`}
+                            </button>
+                          )
+                        })}
                         {aCompte && (
                           <button onClick={() => supprimerCompte(f)} disabled={supprId === f.id}
                             title="Supprimer le compte portail (la famille reste)"
