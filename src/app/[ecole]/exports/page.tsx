@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
@@ -16,27 +16,45 @@ export default function ExportsPage() {
   const { exercices, exerciceSelectionne, selectExercice } = useExercice()
   const [loading, setLoading] = useState<ExportType | ''>('')
   const [msg, setMsg] = useState('')
+  const [tranches, setTranches] = useState<{ id: string, code: string, libelle: string }[]>([])
+  const [filtreTrancheFamilles, setFiltreTrancheFamilles] = useState<string>('')
+
+  useEffect(() => {
+    if (!ecole?.id) return
+    createClient().from('tranches_facturation')
+      .select('id, code, libelle')
+      .eq('ecole_id', ecole.id)
+      .order('ordre').then(({ data }) => setTranches(data || []))
+  }, [ecole?.id])
 
   async function exportFamilles() {
     setLoading('familles'); setMsg('')
-    logAction(createClient(), ecole.id, 'export_csv', { type: 'familles' })
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'familles', tranche_id: filtreTrancheFamilles || null })
     const s = createClient()
-    const { data } = await s.from('familles')
-      .select('numero, nom, situation_maritale, parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, created_at')
+    let query = s.from('familles')
+      .select('numero, nom, situation_maritale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, created_at')
       .eq('ecole_id', ecole.id)
-      .order('nom')
+    if (filtreTrancheFamilles) query = query.eq('tranche_id', filtreTrancheFamilles)
+    const { data, error } = await query.order('nom')
+    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
+    if (!data || data.length === 0) { setMsg('Aucune famille trouvée pour ce filtre'); setLoading(''); return }
+    const trancheSelectionnee = filtreTrancheFamilles ? tranches.find(t => t.id === filtreTrancheFamilles) : null
+    const suffixeFichier = trancheSelectionnee ? `-${trancheSelectionnee.code}` : ''
+    const suffixeMsg = trancheSelectionnee ? ` (tranche ${trancheSelectionnee.code})` : ''
     downloadCSV(
-      `familles-${ecole.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Numéro', 'Nom famille', 'Situation', 'Adresse', 'Resp1 prénom', 'Resp1 nom', 'Resp1 email', 'Resp1 tél', 'Resp2 prénom', 'Resp2 nom', 'Resp2 email', 'Resp2 tél', 'Créé le'],
-      (data || []).map((f: any) => [
+      `familles-${ecole.slug}${suffixeFichier}-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Numéro', 'Nom famille', 'Situation', 'Code tranche', 'Libellé tranche', 'Adresse', 'Resp1 prénom', 'Resp1 nom', 'Resp1 email', 'Resp1 tél', 'Resp2 prénom', 'Resp2 nom', 'Resp2 email', 'Resp2 tél', 'Créé le'],
+      data.map((f: any) => [
         f.numero, f.nom, f.situation_maritale,
+        f.tranches_facturation?.code || '',
+        f.tranches_facturation?.libelle || '',
         [f.parent1_adresse, f.parent1_code_postal, f.parent1_ville].filter(Boolean).join(' '),
         f.parent1_prenom, f.parent1_nom, f.parent1_email, f.parent1_telephone,
         f.parent2_prenom, f.parent2_nom, f.parent2_email, f.parent2_telephone,
         formatDateCSV(f.created_at),
       ])
     )
-    setMsg(`✓ ${data?.length || 0} familles exportées`)
+    setMsg(`✓ ${data.length} familles exportées${suffixeMsg}`)
     setLoading('')
   }
 
@@ -44,11 +62,13 @@ export default function ExportsPage() {
     setLoading('eleves'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'eleves' })
     const s = createClient()
-    const { data } = await s.from('enfants')
+    const { data, error } = await s.from('enfants')
       .select('prenom, nom, date_naissance, classe_id, transport, instruction_religieuse, etude_garderie, statut_inscription, annee_scolaire, familles(numero, nom), classes(nom)')
       .eq('annee_scolaire', annee)
       .order('nom')
-    const rows = (data || []).map((e: any) => [
+    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
+    if (!data || data.length === 0) { setMsg(`Aucun élève trouvé pour ${annee}`); setLoading(''); return }
+    const rows = data.map((e: any) => [
       e.prenom, e.nom, formatDateCSV(e.date_naissance),
       e.familles?.numero || '', e.familles?.nom || '',
       e.classes?.nom || '',
@@ -71,11 +91,13 @@ export default function ExportsPage() {
     setLoading('factures'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'factures' })
     const s = createClient()
-    const { data } = await s.from('factures_solde')
+    const { data, error } = await s.from('factures_solde')
       .select('numero, date_emission, annee_scolaire, statut, total_facture, total_regle, solde_restant, familles(numero, nom)')
       .eq('annee_scolaire', annee)
       .order('date_emission', { ascending: false })
-    const rows = (data || []).map((f: any) => [
+    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
+    if (!data || data.length === 0) { setMsg(`Aucune facture trouvée pour ${annee}`); setLoading(''); return }
+    const rows = data.map((f: any) => [
       f.numero,
       formatDateCSV(f.date_emission),
       f.familles?.numero || '',
@@ -99,11 +121,13 @@ export default function ExportsPage() {
     setLoading('reglements'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'reglements' })
     const s = createClient()
-    const { data } = await s.from('reglements')
+    const { data, error } = await s.from('reglements')
       .select('date_reglement, montant, mode, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
       .eq('factures.annee_scolaire', annee)
       .order('date_reglement', { ascending: false })
-    const rows = (data || []).map((r: any) => [
+    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
+    if (!data || data.length === 0) { setMsg(`Aucun règlement trouvé pour ${annee}`); setLoading(''); return }
+    const rows = data.map((r: any) => [
       formatDateCSV(r.date_reglement),
       formatMontantCSV(r.montant),
       r.mode || '',
@@ -159,11 +183,13 @@ export default function ExportsPage() {
     setLoading('cheques'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'cheques' })
     const s = createClient()
-    const { data } = await s.from('cheques_prevus')
+    const { data, error } = await s.from('cheques_prevus')
       .select('numero_cheque, montant, date_echeance, statut, encaisse_le, mode_paiement, note, familles(numero, nom, parent1_prenom, parent1_nom)')
       .eq('ecole_id', ecole.id)
       .order('date_echeance', { ascending: true })
-    const rows = (data || []).map((c: any) => [
+    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
+    if (!data || data.length === 0) { setMsg('Aucun chèque trouvé'); setLoading(''); return }
+    const rows = data.map((c: any) => [
       c.numero_cheque,
       formatMontantCSV(c.montant),
       formatDateCSV(c.date_echeance),
@@ -232,6 +258,18 @@ export default function ExportsPage() {
               </div>
             </div>
             <p style={{ fontSize: 12, color: '#64748B', margin: 0, lineHeight: 1.5 }}>{e.desc}</p>
+            {e.id === 'familles' && tranches.length > 0 && (
+              <select
+                value={filtreTrancheFamilles}
+                onChange={ev => setFiltreTrancheFamilles(ev.target.value)}
+                style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#1E293B', cursor: 'pointer', alignSelf: 'flex-start' }}
+              >
+                <option value="">Toutes les tranches</option>
+                {tranches.map(t => (
+                  <option key={t.id} value={t.id}>{t.code} — {t.libelle}</option>
+                ))}
+              </select>
+            )}
             <button onClick={e.fn} disabled={loading === e.id}
               style={{ ...btn, opacity: loading === e.id ? 0.6 : 1, cursor: loading === e.id ? 'wait' : 'pointer', alignSelf: 'flex-start' }}>
               {loading === e.id ? 'Génération…' : '⬇ Télécharger CSV'}
