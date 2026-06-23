@@ -112,6 +112,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
 
   const activeCategory = findActiveCategory(pathname || '', slug)
   const isDashboardActive = pathname === '/' + slug + '/dashboard'
+  const isBilanActive = pathname === '/' + slug + '/bilan-quotidien'
 
   const { acces: accesFinances } = useAccesFinances()
 
@@ -204,6 +205,22 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
         </div>
 
         <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
+          {(accesFinances || role === 'super_admin') && (
+            <button onClick={() => navigate('/' + slug + '/bilan-quotidien')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                marginBottom: 4, fontSize: 14, textAlign: 'left',
+                fontWeight: isBilanActive ? 600 : 400,
+                background: isBilanActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                color: isBilanActive ? '#fff' : 'rgba(255,255,255,0.65)',
+                borderLeft: isBilanActive ? '3px solid #60A5FA' : '3px solid transparent',
+                minHeight: 44,
+              }}>
+              <span style={{ fontSize: 16 }}>📊</span>
+              Bilan du jour
+            </button>
+          )}
           <button onClick={() => navigate('/' + slug + '/dashboard')}
             style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
