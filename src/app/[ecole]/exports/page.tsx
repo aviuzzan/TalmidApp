@@ -32,7 +32,7 @@ export default function ExportsPage() {
     logAction(createClient(), ecole.id, 'export_csv', { type: 'familles', tranche_id: filtreTrancheFamilles || null })
     const s = createClient()
     let query = s.from('familles')
-      .select('numero, nom, situation_maritale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, created_at')
+      .select('numero, nom, situation_maritale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent2_prenom, parent2_nom, parent2_email, parent2_telephone')
       .eq('ecole_id', ecole.id)
     if (filtreTrancheFamilles) query = query.eq('tranche_id', filtreTrancheFamilles)
     const { data, error } = await query.order('nom')
@@ -43,7 +43,7 @@ export default function ExportsPage() {
     const suffixeMsg = trancheSelectionnee ? ` (tranche ${trancheSelectionnee.code})` : ''
     downloadCSV(
       `familles-${ecole.slug}${suffixeFichier}-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Numéro', 'Nom famille', 'Situation', 'Code tranche', 'Libellé tranche', 'Adresse', 'Resp1 prénom', 'Resp1 nom', 'Resp1 email', 'Resp1 tél', 'Resp2 prénom', 'Resp2 nom', 'Resp2 email', 'Resp2 tél', 'Créé le'],
+      ['Numéro', 'Nom famille', 'Situation', 'Code tranche', 'Libellé tranche', 'Adresse', 'Resp1 prénom', 'Resp1 nom', 'Resp1 email', 'Resp1 tél', 'Resp2 prénom', 'Resp2 nom', 'Resp2 email', 'Resp2 tél'],
       data.map((f: any) => [
         f.numero, f.nom, f.situation_maritale,
         f.tranches_facturation?.code || '',
@@ -51,7 +51,6 @@ export default function ExportsPage() {
         [f.parent1_adresse, f.parent1_code_postal, f.parent1_ville].filter(Boolean).join(' '),
         f.parent1_prenom, f.parent1_nom, f.parent1_email, f.parent1_telephone,
         f.parent2_prenom, f.parent2_nom, f.parent2_email, f.parent2_telephone,
-        formatDateCSV(f.created_at),
       ])
     )
     setMsg(`✓ ${data.length} familles exportées${suffixeMsg}`)
