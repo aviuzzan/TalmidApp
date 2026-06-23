@@ -308,17 +308,26 @@ export default function DemandesInscriptionPage() {
               </div>
             )}
 
-            {detail.statut === 'en_attente' && (
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
-                <button onClick={() => traiter('refuser')} disabled={traiteLoading}
-                  style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 8, padding: '10px 18px', fontWeight: 600, fontSize: 13, cursor: traiteLoading ? 'not-allowed' : 'pointer' }}>
-                  Refuser
-                </button>
-                <button onClick={() => traiter('accepter')} disabled={traiteLoading} className="btn-primary">
-                  {traiteLoading ? 'Traitement...' : 'Accepter et creer la famille'}
-                </button>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid #F1F5F9', paddingTop: 16, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => window.open(`/${ecole.slug}/demandes-inscription/${detail.id}/print`, '_blank')}
+                disabled={traiteLoading}
+                style={{ background: '#F1F5F9', color: '#1E293B', border: 'none', borderRadius: 8, padding: '10px 18px', fontWeight: 600, fontSize: 13, cursor: traiteLoading ? 'not-allowed' : 'pointer' }}
+              >
+                📄 Imprimer / PDF
+              </button>
+              {detail.statut === 'en_attente' && (
+                <>
+                  <button onClick={() => traiter('refuser')} disabled={traiteLoading}
+                    style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 8, padding: '10px 18px', fontWeight: 600, fontSize: 13, cursor: traiteLoading ? 'not-allowed' : 'pointer' }}>
+                    Refuser
+                  </button>
+                  <button onClick={() => traiter('accepter')} disabled={traiteLoading} className="btn-primary">
+                    {traiteLoading ? 'Traitement...' : 'Accepter et creer la famille'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
