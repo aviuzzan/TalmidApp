@@ -34,9 +34,21 @@ export async function POST(req: NextRequest) {
     // Vérifier que ce parent existe bien
     // Vérification case-insensitive : auth.users stocke l'email en lowercase
     // alors que la table profiles peut conserver la casse d'origine de la saisie.
+    // ATTENTION : listUsers() pagine par défaut à 50. On parcourt toutes les pages
+    // pour ne pas rater un compte parmi 100+ users (admins + parents + profs).
     const emailLower = (email || '').toLowerCase().trim()
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existing = existingUsers?.users?.find(u => (u.email || '').toLowerCase() === emailLower)
+    let existing: any = null
+    let page = 1
+    const perPage = 200
+    while (!existing) {
+      const { data: pageData } = await supabaseAdmin.auth.admin.listUsers({ page, perPage })
+      const users = pageData?.users || []
+      existing = users.find(u => (u.email || '').toLowerCase() === emailLower)
+      if (existing) break
+      if (users.length < perPage) break // dernière page atteinte
+      page++
+      if (page > 50) break // garde-fou : max 10000 utilisateurs scannés
+    }
     if (!existing) {
       return NextResponse.json({ error: 'Aucun compte trouvé avec cet email' }, { status: 404 })
     }
