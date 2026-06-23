@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { getExerciceInscription } from '@/lib/annee-inscription'
 
 type Bilan = {
   // Section 1
@@ -27,6 +28,11 @@ type Bilan = {
   demandesAccepteesAujourdhui: number
   contratsAujourdhui: number
   ddrAujourdhui: number
+  // Section "Avancement rentrée" (année d'inscription en cours)
+  contratsSignes: number
+  enfantsAvecContrat: number
+  contratsManquants: number
+  enfantsSansContrat: number
   // Section 2
   encaisseAujourdhui: number
   nbPaiementsAujourdhui: number
@@ -63,9 +69,21 @@ export default function BilanQuotidienPage() {
   const [bilan, setBilan] = useState<Bilan | null>(null)
   const [loading, setLoading] = useState(true)
   const [derniereMaj, setDerniereMaj] = useState<Date>(new Date())
+  // Année d'inscription en cours (ex: 2026-2027) — celle sur laquelle se fait le workflow
+  // (contrats / DDR de la PROCHAINE rentrée), distincte de l'exercice courant.
+  const [anneeInscription, setAnneeInscription] = useState<string>('')
+
+  // Résolution de l'année d'inscription dès qu'on connaît l'école
+  useEffect(() => {
+    if (!ecole?.id) return
+    getExerciceInscription(createClient(), ecole.id).then(r => setAnneeInscription(r.code))
+  }, [ecole?.id])
 
   const charger = useCallback(async () => {
     if (!ecole?.id || !exerciceSelectionne) return
+    // L'année d'inscription est nécessaire pour les KPIs "Avancement rentrée".
+    // Si pas encore résolue, on attend (l'effet [anneeInscription] relancera charger).
+    if (!anneeInscription) return
     setLoading(true)
     const s = createClient()
     const aujourdhui = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
@@ -104,6 +122,9 @@ export default function BilanQuotidienPage() {
         { count: famN },
         { count: eleN },
         { data: facturesExercice },
+        // Avancement rentrée (année d'inscription en cours)
+        { data: contratsRentree },
+        { count: enfantsContratRentree },
       ] = await Promise.all([
         // S1
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })
@@ -156,6 +177,21 @@ export default function BilanQuotidienPage() {
           .eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
         s.from('factures_solde').select('total_facture, total_regle, solde_restant, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
+        // Avancement rentrée — contrats signés (statuts : soumis, valide, accepte) sur
+        // l'année d'INSCRIPTION (≠ exercice courant). On récupère famille_id pour pouvoir
+        // calculer le nombre de familles DISTINCTES côté JS.
+        s.from('contrats_scolarisation')
+          .select('id, famille_id')
+          .eq('ecole_id', ecole.id)
+          .eq('annee_scolaire', anneeInscription)
+          .in('statut', ['soumis', 'valide', 'accepte']),
+        // Avancement rentrée — enfants liés à un contrat signé (count direct via la
+        // jointure inner sur contrats_scolarisation, filtrée par statut + année).
+        s.from('contrat_enfants')
+          .select('id, contrats_scolarisation!inner(ecole_id, annee_scolaire, statut)', { count: 'exact', head: true })
+          .eq('contrats_scolarisation.ecole_id', ecole.id)
+          .eq('contrats_scolarisation.annee_scolaire', anneeInscription)
+          .in('contrats_scolarisation.statut', ['soumis', 'valide', 'accepte']),
       ])
 
       // S2 — calculs
@@ -180,6 +216,16 @@ export default function BilanQuotidienPage() {
         if (new Date(t.last_message_at).getTime() < new Date(ilYa24h).getTime()) sansReponse24h++
       }
 
+      // Avancement rentrée — agrégations JS
+      const contratsR = (contratsRentree ?? []) as any[]
+      const contratsSignes = contratsR.length
+      const enfantsAvecContrat = enfantsContratRentree ?? 0
+      const famillesAvecContratSigne = new Set(contratsR.map(c => c.famille_id).filter(Boolean)).size
+      const totalFam = famN ?? 0
+      const totalEle = eleN ?? 0
+      const contratsManquants = Math.max(0, totalFam - famillesAvecContratSigne)
+      const enfantsSansContrat = Math.max(0, totalEle - enfantsAvecContrat)
+
       // S5 — finances année
       // NOTE : `total_regle` exclut désormais les avoirs imputés (vrais paiements uniquement).
       // Le "Reste à encaisser" doit donc venir de `solde_restant` (qui reste correct).
@@ -193,6 +239,10 @@ export default function BilanQuotidienPage() {
         demandesAccepteesAujourdhui: demAccepteesJour ?? 0,
         contratsAujourdhui: contratsJour ?? 0,
         ddrAujourdhui: ddrJour ?? 0,
+        contratsSignes,
+        enfantsAvecContrat,
+        contratsManquants,
+        enfantsSansContrat,
         encaisseAujourdhui,
         nbPaiementsAujourdhui: paiementsReels.length,
         avoirsImputesAujourdhui,
@@ -220,7 +270,7 @@ export default function BilanQuotidienPage() {
     } finally {
       setLoading(false)
     }
-  }, [ecole?.id, exerciceSelectionne])
+  }, [ecole?.id, exerciceSelectionne, anneeInscription])
 
   useEffect(() => { charger() }, [charger])
 
@@ -290,6 +340,32 @@ export default function BilanQuotidienPage() {
           <Kpi label="Contrats signés" value={bilan.contratsAujourdhui} color="#2563EB" onClick={() => go('inscriptions')} />
           <Kpi label="DDR soumises" value={bilan.ddrAujourdhui} color="#7C3AED" onClick={() => go('inscriptions?onglet=ddr')} />
         </KpiGrid>
+      </Section>
+
+      {/* Section — Avancement rentrée (année d'inscription en cours) */}
+      <Section titre={`📋 Avancement rentrée ${anneeInscription || ''}`} couleur="#1E40AF">
+        <KpiGrid>
+          <Kpi label="Contrats signés" value={bilan.contratsSignes}
+            color="#065F46" onClick={() => go('inscriptions?onglet=contrats')} />
+          <Kpi label="Enfants avec contrat" value={bilan.enfantsAvecContrat}
+            color="#065F46" onClick={() => go('inscriptions?onglet=contrats')} />
+          <Kpi label="Contrats à signer (familles)" value={bilan.contratsManquants}
+            color={bilan.contratsManquants > 0 ? '#92400E' : '#065F46'}
+            onClick={() => go('inscriptions')} />
+          <Kpi label="Enfants sans contrat" value={bilan.enfantsSansContrat}
+            color={bilan.enfantsSansContrat > 0 ? '#92400E' : '#065F46'}
+            onClick={() => go('inscriptions')} />
+        </KpiGrid>
+        {/* Résumé narratif sous les KPIs pour une lecture instantanée */}
+        <div style={{
+          marginTop: 12, padding: '10px 12px',
+          background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8,
+          fontSize: 13, color: '#1E3A8A', lineHeight: 1.5,
+        }}>
+          📋 <strong>{bilan.contratsSignes}</strong> contrats signés pour <strong>{bilan.enfantsAvecContrat}</strong> enfants
+          {' — '}
+          ⏳ reste <strong>{bilan.contratsManquants}</strong> contrats à signer pour <strong>{bilan.enfantsSansContrat}</strong> enfants
+        </div>
       </Section>
 
       {/* Section 2 — Paiements & finances */}

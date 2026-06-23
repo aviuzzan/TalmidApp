@@ -10,12 +10,18 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { getExerciceInscription } from '@/lib/annee-inscription'
 
 type Bilan = {
   demandesAujourdhui: number
   demandesAccepteesAujourdhui: number
   contratsAujourdhui: number
   ddrAujourdhui: number
+  // Avancement rentrée (année d'inscription en cours)
+  contratsSignes: number
+  enfantsAvecContrat: number
+  contratsManquants: number
+  enfantsSansContrat: number
   encaisseAujourdhui: number
   nbPaiementsAujourdhui: number
   avoirsImputesAujourdhui: number
@@ -47,9 +53,17 @@ export default function BilanPrintPage() {
   const [bilan, setBilan] = useState<Bilan | null>(null)
   const [loading, setLoading] = useState(true)
   const [genereLe] = useState<Date>(new Date())
+  const [anneeInscription, setAnneeInscription] = useState<string>('')
+
+  // Résolution de l'année d'inscription (prochaine rentrée) pour les KPIs dédiés
+  useEffect(() => {
+    if (!ecole?.id) return
+    getExerciceInscription(createClient(), ecole.id).then(r => setAnneeInscription(r.code))
+  }, [ecole?.id])
 
   const charger = useCallback(async () => {
     if (!ecole?.id || !exerciceSelectionne) return
+    if (!anneeInscription) return
     setLoading(true)
     const s = createClient()
     const aujourdhui = new Date().toISOString().slice(0, 10)
@@ -82,6 +96,8 @@ export default function BilanPrintPage() {
         { count: famN },
         { count: eleN },
         { data: facturesExercice },
+        { data: contratsRentree },
+        { count: enfantsContratRentree },
       ] = await Promise.all([
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecole.id)
@@ -126,6 +142,18 @@ export default function BilanPrintPage() {
           .eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
         s.from('factures_solde').select('total_facture, total_regle, solde_restant, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
+        // Avancement rentrée — contrats signés (statuts soumis/valide/accepte) sur l'année d'inscription
+        s.from('contrats_scolarisation')
+          .select('id, famille_id')
+          .eq('ecole_id', ecole.id)
+          .eq('annee_scolaire', anneeInscription)
+          .in('statut', ['soumis', 'valide', 'accepte']),
+        // Enfants liés à un contrat signé (count via jointure inner)
+        s.from('contrat_enfants')
+          .select('id, contrats_scolarisation!inner(ecole_id, annee_scolaire, statut)', { count: 'exact', head: true })
+          .eq('contrats_scolarisation.ecole_id', ecole.id)
+          .eq('contrats_scolarisation.annee_scolaire', anneeInscription)
+          .in('contrats_scolarisation.statut', ['soumis', 'valide', 'accepte']),
       ])
 
       const regs = (reglementsJour ?? []) as any[]
@@ -146,6 +174,16 @@ export default function BilanPrintPage() {
         if (new Date(t.last_message_at).getTime() < new Date(ilYa24h).getTime()) sansReponse24h++
       }
 
+      // Avancement rentrée — agrégations JS (cf. page principale)
+      const contratsR = (contratsRentree ?? []) as any[]
+      const contratsSignes = contratsR.length
+      const enfantsAvecContrat = enfantsContratRentree ?? 0
+      const famillesAvecContratSigne = new Set(contratsR.map(c => c.famille_id).filter(Boolean)).size
+      const totalFam = famN ?? 0
+      const totalEle = eleN ?? 0
+      const contratsManquants = Math.max(0, totalFam - famillesAvecContratSigne)
+      const enfantsSansContrat = Math.max(0, totalEle - enfantsAvecContrat)
+
       // NOTE : `total_regle` exclut désormais les avoirs imputés. On utilise `solde_restant`
       // pour le reste à encaisser (mathématiquement correct).
       const factEx = (facturesExercice ?? []) as any[]
@@ -158,6 +196,10 @@ export default function BilanPrintPage() {
         demandesAccepteesAujourdhui: demAccepteesJour ?? 0,
         contratsAujourdhui: contratsJour ?? 0,
         ddrAujourdhui: ddrJour ?? 0,
+        contratsSignes,
+        enfantsAvecContrat,
+        contratsManquants,
+        enfantsSansContrat,
         encaisseAujourdhui,
         nbPaiementsAujourdhui: paiementsReels.length,
         avoirsImputesAujourdhui,
@@ -184,7 +226,7 @@ export default function BilanPrintPage() {
     } finally {
       setLoading(false)
     }
-  }, [ecole?.id, exerciceSelectionne])
+  }, [ecole?.id, exerciceSelectionne, anneeInscription])
 
   useEffect(() => { charger() }, [charger])
 
@@ -213,15 +255,18 @@ export default function BilanPrintPage() {
   return (
     <>
       <style jsx global>{`
-        @page { size: A4; margin: 10mm 12mm }
+        @page { size: A4; margin: 8mm 10mm }
         body { background: #F1F5F9; margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1E293B }
-        .wrap { max-width: 780px; margin: 24px auto; background: #fff; padding: 22px 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border-radius: 4px }
+        .wrap { max-width: 780px; margin: 24px auto; background: #fff; padding: 14px 18px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border-radius: 4px }
         .toolbar { max-width: 780px; margin: 0 auto 8px; display: flex; gap: 10px; padding: 0 8px }
         .toolbar button { background: #2563EB; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer }
         .toolbar a { color: #64748B; text-decoration: none; padding: 10px 18px; font-size: 13px; align-self: center }
         @media print {
-          body { background: #fff }
-          .wrap { box-shadow: none; padding: 0; max-width: 100%; margin: 0; border-radius: 0 }
+          html, body { height: 100%; background: #fff }
+          .wrap {
+            box-shadow: none; padding: 0; max-width: 100%; margin: 0; border-radius: 0;
+            max-height: 273mm; overflow: hidden;
+          }
           .toolbar { display: none !important }
           aside, nav, header, [class*="EcoleSidebar"], [class*="sidebar"] { display: none !important }
           main { padding: 0 !important; margin: 0 !important; max-width: 100% !important }
@@ -236,59 +281,85 @@ export default function BilanPrintPage() {
       </div>
 
       <div className="wrap" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-        {/* Header pleine largeur — école + titre + date */}
+        {/* Header compact — école + titre + date (sans bande pleine couleur) */}
         <div className="header-bar" style={{
-          background: 'linear-gradient(135deg, #2563EB, #1E40AF)',
-          color: '#fff', borderRadius: 8, padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 14, gap: 12,
+          marginBottom: 6, gap: 10, paddingBottom: 6,
+          borderBottom: '2px solid #2563EB',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {ecole?.logo_url && (
-              <img src={ecole.logo_url} alt="" style={{ width: 42, height: 42, objectFit: 'contain', background: '#fff', borderRadius: 6, padding: 3 }} />
+              <img src={ecole.logo_url} alt="" style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 4 }} />
             )}
             <div>
-              <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{ecole?.nom}</div>
-              <h1 style={{ margin: 0, fontSize: 16, fontWeight: 800, letterSpacing: '0.03em' }}>
+              <div style={{ fontSize: 8, color: '#64748B', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1.2 }}>{ecole?.nom}</div>
+              <h1 style={{ margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: '0.02em', color: '#1E40AF', lineHeight: 1.15 }}>
                 BILAN DU JOUR
               </h1>
-              <div style={{ fontSize: 10, opacity: 0.9, marginTop: 2, textTransform: 'capitalize' }}>{fmtDateLongue(genereLe)}</div>
+              <div style={{ fontSize: 9, color: '#475569', marginTop: 1, textTransform: 'capitalize', lineHeight: 1.2 }}>{fmtDateLongue(genereLe)}</div>
             </div>
           </div>
-          <div style={{ textAlign: 'right', fontSize: 9, opacity: 0.85 }}>
-            <div>Exercice {annee}</div>
-            <div style={{ marginTop: 2 }}>Édité le {fmtDateHeure(genereLe)}</div>
+          <div style={{ textAlign: 'right', fontSize: 8, color: '#64748B', lineHeight: 1.3 }}>
+            <div style={{ fontWeight: 600 }}>Exercice {annee}</div>
+            <div>Édité le {fmtDateHeure(genereLe)}</div>
           </div>
         </div>
 
-        {/* Grille 2 colonnes — sections 1 à 4 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        {/* Ligne 1 : Inscriptions + Avancement rentrée — côte à côte 50/50 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
           {/* Section 1 — Inscriptions */}
           <Section titre="Inscriptions du jour" couleur="#2563EB" bg="#EFF6FF" border="#BFDBFE">
             <KpiGrid cols={2}>
-              <Kpi label="Nouvelles demandes reçues" value={fmtNum(bilan.demandesAujourdhui)} color="#2563EB" />
-              <Kpi label="Nouvelles demandes acceptées" value={fmtNum(bilan.demandesAccepteesAujourdhui)} color="#059669" />
+              <Kpi label="Demandes reçues" value={fmtNum(bilan.demandesAujourdhui)} color="#2563EB" />
+              <Kpi label="Demandes acceptées" value={fmtNum(bilan.demandesAccepteesAujourdhui)} color="#059669" />
               <Kpi label="Contrats signés" value={fmtNum(bilan.contratsAujourdhui)} color="#2563EB" />
               <Kpi label="DDR soumises" value={fmtNum(bilan.ddrAujourdhui)} color="#7C3AED" />
             </KpiGrid>
           </Section>
 
-          {/* Section 2 — Paiements & finances */}
-          <Section titre="Paiements & finances" couleur="#059669" bg="#ECFDF5" border="#A7F3D0">
+          {/* Section 2 — Avancement rentrée */}
+          <Section titre={`Avancement rentrée ${anneeInscription || ''}`} couleur="#1E40AF" bg="#EFF6FF" border="#BFDBFE">
             <KpiGrid cols={2}>
+              <Kpi label="Contrats signés" value={fmtNum(bilan.contratsSignes)} color="#065F46" />
+              <Kpi label="Enfants ✓" value={fmtNum(bilan.enfantsAvecContrat)} color="#065F46" />
+              <Kpi label="Contrats à signer" value={fmtNum(bilan.contratsManquants)}
+                color={bilan.contratsManquants > 0 ? '#92400E' : '#065F46'} />
+              <Kpi label="Enfants restants" value={fmtNum(bilan.enfantsSansContrat)}
+                color={bilan.enfantsSansContrat > 0 ? '#92400E' : '#065F46'} />
+            </KpiGrid>
+            <div style={{ marginTop: 4, fontSize: 9, color: '#1E3A8A', lineHeight: 1.3 }}>
+              <strong>{bilan.contratsSignes}</strong> signés / <strong>{bilan.enfantsAvecContrat}</strong> enfants —
+              reste <strong>{bilan.contratsManquants}</strong> contrats / <strong>{bilan.enfantsSansContrat}</strong> enfants.
+            </div>
+          </Section>
+        </div>
+
+        {/* Section — Paiements & finances (pleine largeur) */}
+        <div style={{ marginBottom: 6 }}>
+          <Section titre="Paiements & finances" couleur="#059669" bg="#ECFDF5" border="#A7F3D0">
+            <KpiGrid cols={4}>
               <Kpi label="Encaissé aujourd'hui" value={fmtEur(bilan.encaisseAujourdhui)} color="#065F46" />
               <Kpi label="Paiements reçus" value={fmtNum(bilan.nbPaiementsAujourdhui)} color="#065F46" />
               <Kpi label={`Avoirs imputés (${bilan.nbAvoirsImputesAujourdhui})`}
                 value={fmtEur(bilan.avoirsImputesAujourdhui)} color="#7C3AED" />
+              <Kpi label="Reste à encaisser" value={fmtEur(bilan.resteAEncaisser)}
+                color={bilan.resteAEncaisser > 0 ? '#991B1B' : '#065F46'} />
               <Kpi label={`Impayés >30j (${bilan.facturesRetard30Count})`}
                 value={fmtEur(bilan.facturesRetard30Montant)}
                 color={bilan.facturesRetard30Count > 0 ? '#991B1B' : '#065F46'} />
               <Kpi label={`Échéances 7j (${bilan.echeancesSemaineCount})`}
                 value={fmtEur(bilan.echeancesSemaineMontant)} color="#1E40AF" />
+              <Kpi label={`Échéances en retard (${bilan.echeancesRetardCount})`}
+                value={fmtEur(bilan.echeancesRetardMontant)}
+                color={bilan.echeancesRetardCount > 0 ? '#991B1B' : '#065F46'} />
+              <Kpi label="Total échéances à venir" value={fmtEur(bilan.echeancesSemaineMontant + bilan.echeancesRetardMontant)} color="#1E40AF" />
             </KpiGrid>
           </Section>
+        </div>
 
-          {/* Section 3 — Messages parents */}
+        {/* Ligne 3 : Messages + Alertes — côte à côte 50/50 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+          {/* Section — Messages parents */}
           <Section titre="Messages parents" couleur="#7C3AED" bg="#F5F3FF" border="#DDD6FE">
             <KpiGrid cols={2}>
               <Kpi label="Conversations ouvertes" value={fmtNum(bilan.conversationsOuvertes)} color="#5B21B6" />
@@ -297,7 +368,7 @@ export default function BilanPrintPage() {
             </KpiGrid>
           </Section>
 
-          {/* Section 4 — Alertes urgentes */}
+          {/* Section — Alertes urgentes */}
           <Section titre="Alertes urgentes" couleur="#D97706" bg="#FFFBEB" border="#FDE68A">
             <KpiGrid cols={2}>
               <Kpi label="DDR à traiter" value={fmtNum(bilan.ddrEnAttente)}
@@ -312,7 +383,7 @@ export default function BilanPrintPage() {
           </Section>
         </div>
 
-        {/* Section 5 — Vue d'ensemble (pleine largeur) */}
+        {/* Section — Vue d'ensemble (pleine largeur, 5 col) */}
         <Section titre={`Vue d'ensemble — Exercice ${annee}`} couleur="#475569" bg="#F8FAFC" border="#E2E8F0">
           <KpiGrid cols={5}>
             <Kpi label="Familles actives" value={fmtNum(bilan.totalFamilles)} color="#1E293B" />
@@ -324,10 +395,10 @@ export default function BilanPrintPage() {
           </KpiGrid>
         </Section>
 
-        {/* Footer */}
+        {/* Footer compact */}
         <div style={{
-          marginTop: 14, paddingTop: 8, borderTop: '1px solid #E2E8F0',
-          fontSize: 9, color: '#94A3B8', textAlign: 'center', lineHeight: 1.4,
+          marginTop: 6, paddingTop: 4, borderTop: '1px solid #E2E8F0',
+          fontSize: 7, color: '#94A3B8', textAlign: 'center', lineHeight: 1.3,
         }}>
           Document généré le {fmtDateHeure(genereLe)} — TalmidApp
         </div>
@@ -347,11 +418,11 @@ function Section({
     <div className="section" style={{
       background: bg || '#fff',
       border: `1px solid ${border || '#E2E8F0'}`,
-      borderRadius: 8, padding: '10px 12px',
+      borderRadius: 5, padding: '5px 7px',
     }}>
       <h2 style={{
-        fontSize: 10, fontWeight: 700, color: couleur, margin: 0, marginBottom: 8,
-        textTransform: 'uppercase', letterSpacing: '0.06em',
+        fontSize: 9, fontWeight: 700, color: couleur, margin: 0, marginBottom: 4,
+        textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.1,
       }}>{titre}</h2>
       {children}
     </div>
@@ -360,17 +431,20 @@ function Section({
 
 function KpiGrid({ children, cols = 2 }: { children: React.ReactNode; cols?: number }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 6 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 4 }}>
       {children}
     </div>
   )
 }
 
 function Kpi({ label, value, color }: { label: string; value: number | string; color: string }) {
+  // Adapter la taille de police à la longueur de la valeur (montants en € prennent plus de place)
+  const valStr = String(value)
+  const fontSize = valStr.length > 12 ? 11 : valStr.length > 9 ? 13 : 15
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '6px 8px' }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: 9, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 3, lineHeight: 1.2 }}>
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 4, padding: '4px 5px' }}>
+      <div style={{ fontSize, fontWeight: 800, color, lineHeight: 1.05 }}>{value}</div>
+      <div style={{ fontSize: 7, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: 1, lineHeight: 1.15 }}>
         {label}
       </div>
     </div>
