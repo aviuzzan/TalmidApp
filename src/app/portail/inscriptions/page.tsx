@@ -526,11 +526,16 @@ function FactureTab() {
     </div>
   )
 
+  // `total_avoirs_imputes` est exposé par la vue depuis la refonte (somme reglements
+  // mode_paiement='avoir'). Affiché en KPI distinct uniquement si > 0.
+  const totalAvoirsImputes = facture.statut === 'annule' ? 0 : Number((facture as any).total_avoirs_imputes || 0)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
           { label: t('portail.factures.total_invoiced'), value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_facture)).toLocaleString('fr-FR')} €`, color: '#2563EB', bg: '#EFF6FF' },
+          ...(totalAvoirsImputes > 0 ? [{ label: 'Avoirs imputés', value: `${totalAvoirsImputes.toLocaleString('fr-FR')} €`, color: '#7C3AED', bg: '#FAF5FF' }] : []),
           { label: t('portail.factures.total_paid'), value: `${(facture.statut === 'annule' ? 0 : Number(facture.total_regle)).toLocaleString('fr-FR')} €`, color: '#059669', bg: '#ECFDF5' },
           { label: t('portail.factures.remaining_to_pay'), value: `${(facture.statut === 'annule' ? 0 : Number(facture.solde_restant)).toLocaleString('fr-FR')} €`, color: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bg: facture.statut !== 'annule' && Number(facture.solde_restant) > 0 ? '#FEF2F2' : '#ECFDF5' },
         ].map(s => (
@@ -612,14 +617,21 @@ function FactureTab() {
               ))}</tr>
             </thead>
             <tbody>
-              {reglements.map(r => (
-                <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+              {reglements.map(r => {
+                const isAvoir = r.mode_paiement === 'avoir'
+                return (
+                <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9', background: isAvoir ? '#FAF5FF' : 'transparent' }}>
                   <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
-                  <td style={{ padding: '12px 16px' }}><span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span></td>
+                  <td style={{ padding: '12px 16px' }}>
+                    <span style={{ background: isAvoir ? '#F3E8FF' : '#EFF6FF', color: isAvoir ? '#6B21A8' : '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+                      {isAvoir ? '🎁 Avoir imputé' : labelModePaiement(r.mode_paiement)}
+                    </span>
+                  </td>
                   <td style={{ padding: '12px 16px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
-                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
+                  <td style={{ padding: '12px 16px', fontWeight: 700, color: isAvoir ? '#7C3AED' : '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

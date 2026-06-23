@@ -74,10 +74,13 @@ export default function FinancesDashboardPage() {
     const debut = new Date()
     debut.setMonth(debut.getMonth() - 11)
     debut.setDate(1)
+    // Encaissements mensuels : on EXCLUT les avoirs imputés (mode_paiement='avoir') pour
+    // refléter de vrais flux de trésorerie.
     const { data: regs } = await s
       .from('reglements')
-      .select('montant, date_reglement, factures!inner(annee_scolaire)')
+      .select('montant, mode_paiement, date_reglement, factures!inner(annee_scolaire)')
       .eq('factures.annee_scolaire', annee)
+      .neq('mode_paiement', 'avoir')
       .gte('date_reglement', debut.toISOString().split('T')[0])
 
     const par_mois: Record<string, number> = {}

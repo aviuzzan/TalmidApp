@@ -30,6 +30,8 @@ type Bilan = {
   // Section 2
   encaisseAujourdhui: number
   nbPaiementsAujourdhui: number
+  avoirsImputesAujourdhui: number
+  nbAvoirsImputesAujourdhui: number
   resteAEncaisser: number
   facturesRetard30Count: number
   facturesRetard30Montant: number
@@ -118,7 +120,8 @@ export default function BilanQuotidienPage() {
           .eq('ecole_id', ecole.id)
           .gte('soumis_le', debutJourIso).lte('soumis_le', finJourIso),
         // S2 — encaissé aujourd'hui (date_reglement = today, scopé école via facture→famille)
-        s.from('reglements').select('montant, factures!inner(famille_id, familles!inner(ecole_id))')
+        // On récupère aussi mode_paiement pour distinguer les VRAIS paiements des avoirs imputés.
+        s.from('reglements').select('montant, mode_paiement, factures!inner(famille_id, familles!inner(ecole_id))')
           .eq('factures.familles.ecole_id', ecole.id)
           .eq('date_reglement', aujourdhui),
         // Toutes les factures de l'école (vue factures_solde) — sert au "reste à encaisser" et aux retards
@@ -151,13 +154,18 @@ export default function BilanQuotidienPage() {
         s.from('familles').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
         s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true })
           .eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
-        s.from('factures_solde').select('total_facture, total_regle, familles!inner(ecole_id)')
+        s.from('factures_solde').select('total_facture, total_regle, solde_restant, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
       ])
 
       // S2 — calculs
       const regs = (reglementsJour ?? []) as any[]
-      const encaisseAujourdhui = regs.reduce((sum, r) => sum + Number(r.montant || 0), 0)
+      // Distinguer les VRAIS paiements (espèces, chèque, virement, ...) des avoirs imputés.
+      // "Encaissé" = vrais paiements uniquement ; les avoirs sont comptabilisés à part.
+      const paiementsReels = regs.filter(r => r.mode_paiement !== 'avoir')
+      const avoirsImputes = regs.filter(r => r.mode_paiement === 'avoir')
+      const encaisseAujourdhui = paiementsReels.reduce((sum, r) => sum + Number(r.montant || 0), 0)
+      const avoirsImputesAujourdhui = avoirsImputes.reduce((sum, r) => sum + Number(r.montant || 0), 0)
       const factAll = (facturesAll ?? []) as any[]
       const resteAEncaisser = factAll.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
       const retards30 = factAll.filter(f => Number(f.solde_restant) > 0 && f.date_emission && f.date_emission <= ilYa30Jours)
@@ -173,9 +181,12 @@ export default function BilanQuotidienPage() {
       }
 
       // S5 — finances année
+      // NOTE : `total_regle` exclut désormais les avoirs imputés (vrais paiements uniquement).
+      // Le "Reste à encaisser" doit donc venir de `solde_restant` (qui reste correct).
       const factEx = (facturesExercice ?? []) as any[]
       const totalFacture = factEx.reduce((sum, f) => sum + Number(f.total_facture || 0), 0)
       const totalRegle = factEx.reduce((sum, f) => sum + Number(f.total_regle || 0), 0)
+      const totalRestantS5 = factEx.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
 
       setBilan({
         demandesAujourdhui: demJour ?? 0,
@@ -183,7 +194,9 @@ export default function BilanQuotidienPage() {
         contratsAujourdhui: contratsJour ?? 0,
         ddrAujourdhui: ddrJour ?? 0,
         encaisseAujourdhui,
-        nbPaiementsAujourdhui: regs.length,
+        nbPaiementsAujourdhui: paiementsReels.length,
+        avoirsImputesAujourdhui,
+        nbAvoirsImputesAujourdhui: avoirsImputes.length,
         resteAEncaisser,
         facturesRetard30Count: retards30.length,
         facturesRetard30Montant: retards30.reduce((s, f) => s + Number(f.solde_restant || 0), 0),
@@ -201,7 +214,7 @@ export default function BilanQuotidienPage() {
         totalEleves: eleN ?? 0,
         totalFacture,
         totalRegle,
-        totalRestant: totalFacture - totalRegle,
+        totalRestant: totalRestantS5,
       })
       setDerniereMaj(new Date())
     } finally {
@@ -225,7 +238,7 @@ export default function BilanQuotidienPage() {
 
   // Tests "rien à signaler" par section
   const s1Vide = bilan.demandesAujourdhui === 0 && bilan.demandesAccepteesAujourdhui === 0 && bilan.contratsAujourdhui === 0 && bilan.ddrAujourdhui === 0
-  const s2Vide = bilan.encaisseAujourdhui === 0 && bilan.nbPaiementsAujourdhui === 0 && bilan.facturesRetard30Count === 0 && bilan.echeancesSemaineCount === 0 && bilan.echeancesRetardCount === 0
+  const s2Vide = bilan.encaisseAujourdhui === 0 && bilan.nbPaiementsAujourdhui === 0 && bilan.avoirsImputesAujourdhui === 0 && bilan.facturesRetard30Count === 0 && bilan.echeancesSemaineCount === 0 && bilan.echeancesRetardCount === 0
   const s3Vide = bilan.conversationsOuvertes === 0 && bilan.conversationsSansReponse24h === 0
   const s4Vide = bilan.ddrEnAttente === 0 && bilan.contratsAValider === 0 && bilan.inscriptionsPedaAValider === 0 && bilan.demandesEnAttenteVieux === 0
 
@@ -257,7 +270,7 @@ export default function BilanQuotidienPage() {
             }}>
             ↻ Actualiser
           </button>
-          <button onClick={() => window.print()}
+          <button onClick={() => window.open(`/${ecole?.slug}/bilan-quotidien/print`, '_blank')}
             style={{
               background: '#fff', color: '#1E40AF',
               border: 'none', borderRadius: 8,
@@ -269,23 +282,11 @@ export default function BilanQuotidienPage() {
         </div>
       </div>
 
-      {/* Styles d'impression : masque sidebar/header admin pour un PDF propre 1 page */}
-      <style jsx global>{`
-        @media print {
-          @page { size: A4; margin: 10mm 12mm }
-          body { background: #fff !important }
-          .no-print, aside, nav, header, [class*="EcoleSidebar"], [class*="sidebar"] { display: none !important }
-          main { padding: 0 !important; margin: 0 !important; max-width: 100% !important }
-          .bilan-section { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; border: 1px solid #E2E8F0 !important }
-          .bilan-hero { background: #1E40AF !important; -webkit-print-color-adjust: exact; print-color-adjust: exact }
-        }
-      `}</style>
-
       {/* Section 1 — Inscriptions du jour */}
       <Section titre="📝 Inscriptions du jour" couleur="#2563EB" vide={s1Vide}>
         <KpiGrid>
-          <Kpi label="Demandes reçues" value={bilan.demandesAujourdhui} color="#2563EB" onClick={() => go('demandes-inscription')} />
-          <Kpi label="Demandes acceptées" value={bilan.demandesAccepteesAujourdhui} color="#059669" onClick={() => go('demandes-inscription')} />
+          <Kpi label="Nouvelles demandes reçues" value={bilan.demandesAujourdhui} color="#2563EB" onClick={() => go('demandes-inscription')} />
+          <Kpi label="Nouvelles demandes acceptées" value={bilan.demandesAccepteesAujourdhui} color="#059669" onClick={() => go('demandes-inscription')} />
           <Kpi label="Contrats signés" value={bilan.contratsAujourdhui} color="#2563EB" onClick={() => go('inscriptions')} />
           <Kpi label="DDR soumises" value={bilan.ddrAujourdhui} color="#7C3AED" onClick={() => go('inscriptions?onglet=ddr')} />
         </KpiGrid>
@@ -298,6 +299,9 @@ export default function BilanQuotidienPage() {
             color="#065F46" big onClick={() => go('finances')} />
           <Kpi label="Paiements reçus" value={bilan.nbPaiementsAujourdhui}
             color="#065F46" onClick={() => go('finances')} />
+          <Kpi label={`Avoirs imputés aujourd'hui (${bilan.nbAvoirsImputesAujourdhui})`}
+            value={fmtEur(bilan.avoirsImputesAujourdhui)}
+            color="#7C3AED" onClick={() => go('finances/avoirs')} />
           <Kpi label="Reste à encaisser (année)" value={fmtEur(bilan.resteAEncaisser)}
             color={bilan.resteAEncaisser > 0 ? '#991B1B' : '#065F46'} onClick={() => go('finances')} />
         </KpiGrid>

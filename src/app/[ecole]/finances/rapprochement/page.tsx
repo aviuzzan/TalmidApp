@@ -133,8 +133,13 @@ export default function RapprochementPage() {
     // Recalcul statut facture
     const { data: factSolde } = await s.from('factures_solde').select('total_facture, total_regle, solde_restant').eq('id', factureId).single()
     if (factSolde) {
+      // NOTE : `total_regle` exclut les avoirs imputés. Ici on vient de créer un règlement
+      // virement (non-avoir) donc `total_regle > 0` ; le statut 'partiel' est bien atteint.
+      // On étend aussi à `sr < total` pour couvrir le cas où des avoirs ont déjà entamé le solde.
       const sr = Number((factSolde as any).solde_restant)
-      const newStatut = sr <= 0 ? 'paye' : (Number((factSolde as any).total_regle) > 0 ? 'partiel' : 'en_attente')
+      const tf = Number((factSolde as any).total_facture)
+      const tr = Number((factSolde as any).total_regle)
+      const newStatut = sr <= 0 ? 'paye' : (tr > 0 || sr < tf) ? 'partiel' : 'en_attente'
       await s.from('factures').update({ statut: newStatut }).eq('id', factureId)
     }
     toast.success('Mouvement rapproché et règlement créé')

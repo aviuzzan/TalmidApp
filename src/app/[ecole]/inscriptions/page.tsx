@@ -1046,12 +1046,14 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
         .eq('id', facture.id)
         .maybeSingle()
       if (sol) {
+        // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements). On étend
+        // `partiel` au cas où le solde est entamé par des avoirs seulement.
         const restant = Number((sol as any).solde_restant) || 0
         const regle = Number((sol as any).total_regle) || 0
         const total = Number((sol as any).total_facture) || 0
         let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
         if (restant <= 0.01 && total > 0) statut = 'paye'
-        else if (regle > 0) statut = 'partiel'
+        else if (regle > 0 || restant < total) statut = 'partiel'
         await s.from('factures').update({ statut }).eq('id', facture.id)
       }
     } catch {

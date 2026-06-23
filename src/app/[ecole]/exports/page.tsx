@@ -90,8 +90,10 @@ export default function ExportsPage() {
     setLoading('factures'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'factures' })
     const s = createClient()
+    // NOTE : `total_regle` exclut désormais les avoirs imputés. On expose donc
+    // `total_avoirs_imputes` dans une colonne séparée pour traçabilité comptable.
     const { data, error } = await s.from('factures_solde')
-      .select('numero, date_emission, annee_scolaire, statut, total_facture, total_regle, solde_restant, familles(numero, nom)')
+      .select('numero, date_emission, annee_scolaire, statut, total_facture, total_regle, total_avoirs_imputes, solde_restant, familles(numero, nom)')
       .eq('annee_scolaire', annee)
       .order('date_emission', { ascending: false })
     if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
@@ -105,11 +107,12 @@ export default function ExportsPage() {
       f.statut,
       formatMontantCSV(f.total_facture),
       formatMontantCSV(f.total_regle),
+      formatMontantCSV(f.total_avoirs_imputes ?? 0),
       formatMontantCSV(f.solde_restant),
     ])
     downloadCSV(
       `factures-${annee}-${ecole.slug}.csv`,
-      ['N° facture', 'Date émission', 'N° famille', 'Nom famille', 'Année', 'Statut', 'Total facturé €', 'Total réglé €', 'Solde restant €'],
+      ['N° facture', 'Date émission', 'N° famille', 'Nom famille', 'Année', 'Statut', 'Total facturé €', 'Total réglé €', 'Avoirs imputés €', 'Solde restant €'],
       rows,
     )
     setMsg(`✓ ${rows.length} factures exportées (${annee})`)

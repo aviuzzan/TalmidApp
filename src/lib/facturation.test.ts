@@ -31,6 +31,13 @@ function totalRegle(factures: Facture[]): number {
     .reduce((s, f) => s + Number(f.total_regle || 0), 0)
 }
 
+/**
+ * ATTENTION : depuis la refonte de la vue `factures_solde`, `total_regle` EXCLUT les
+ * avoirs imputés. En production le code utilise désormais `solde_restant` (qui prend
+ * en compte les avoirs) pour le reste à recouvrer. Le helper ci-dessous reste utile
+ * pour les tests historiques sur facturations sans avoir, mais ne doit plus servir
+ * de référence pour totalRestant en présence d'avoirs imputés.
+ */
 function totalRestant(factures: Facture[]): number {
   return totalFacture(factures) - totalRegle(factures)
 }

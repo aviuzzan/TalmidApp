@@ -63,9 +63,13 @@ export default function TableauBordDirectionPage() {
         s.from('demandes_reduction').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('exercice_id', exerciceId).eq('statut', 'accordee'),
       ])
 
+      // NOTE : depuis la refonte de la vue, `total_regle` EXCLUT les avoirs imputés
+      // (= vrais paiements uniquement). Le "Total réglé" affiché est donc un vrai recouvrement
+      // monétaire ; les avoirs ne gonflent plus artificiellement le KPI. Pour le reste à
+      // recouvrer on utilise `solde_restant` (mathématiquement correct, inchangé).
       const totalFacture = ((factures ?? []) as any[]).reduce((sum: number, f: any) => sum + Number(f.total_facture || 0), 0)
       const totalRegle = ((factures ?? []) as any[]).reduce((sum: number, f: any) => sum + Number(f.total_regle || 0), 0)
-      const totalRestant = totalFacture - totalRegle
+      const totalRestant = ((factures ?? []) as any[]).reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
       const retards = ((factures ?? []) as any[]).filter((f: any) => Number(f.solde_restant) > 0 && f.date_emission && f.date_emission <= il30Joursj)
       const facturesRetard30 = retards.length
       const montantRetard30 = retards.reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)

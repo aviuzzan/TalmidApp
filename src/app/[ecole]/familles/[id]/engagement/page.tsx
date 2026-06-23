@@ -12,7 +12,7 @@ type Famille = { id: string; nom: string; numero: string | null; parent1_prenom:
 type Contrat = { id: string; montant_total: number | null; assurance_montant_total: number | null; mode_reglement: string | null; nb_echeances: number | null; statut: string }
 type FraisCfg = { inscription_par_enfant: number | null; inscription_par_famille: number | null; reinscription_par_enfant: number | null; reinscription_par_famille: number | null }
 type Inscription = { id: string; enfant_id: string; forfait_id: string | null; statut: string; enfants: { prenom: string; nom: string } | null; cantine_forfaits?: { nom: string; prix: number | null } | null; transport_forfaits?: { nom: string; prix: number | null } | null }
-type FactureSolde = { id: string; numero: string | null; total_facture: number; total_regle: number; solde_restant: number; statut: string }
+type FactureSolde = { id: string; numero: string | null; total_facture: number; total_regle: number; total_avoirs_imputes: number; solde_restant: number; statut: string }
 
 export default function EngagementFamillePage() {
   const params = useParams()
@@ -129,10 +129,12 @@ export default function EngagementFamillePage() {
   const totalEngage = montantContrat + montantAssurance + totalFraisInsc + totalCantine + totalTransport
 
   // ── Calcul du suivi factures ──
+  // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements). On utilise
+  // `solde_restant` pour le reste à régler (mathématiquement correct).
   const facturesActives = factures.filter(f => f.statut !== 'annule')
   const totalFacture = facturesActives.reduce((s, f) => s + Number(f.total_facture), 0)
   const totalRegle = facturesActives.reduce((s, f) => s + Number(f.total_regle), 0)
-  const resteARegler = totalFacture - totalRegle
+  const resteARegler = facturesActives.reduce((s, f) => s + Number(f.solde_restant || 0), 0)
   const ecartEngageFacture = totalEngage - totalFacture
 
   async function envoyerEmail() {

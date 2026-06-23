@@ -112,6 +112,10 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Écritures de règlement (BQ - banque)
+    // TODO : depuis la refonte de la vue `factures_solde`, les règlements `mode_paiement='avoir'`
+    // sont des imputations d'avoir (pas des flux bancaires). Ils devraient être filtrés ici
+    // ou rangés dans une partie distincte (OD). Le code utilise `r.mode` (champ inexistant ?),
+    // ce qui suggère un bug pré-existant à investiguer séparément.
     for (const r of (reglements || []) as any[]) {
       const date = formatDate(r.date_reglement || debut)
       const num = String(ecritureNum++).padStart(6, '0')

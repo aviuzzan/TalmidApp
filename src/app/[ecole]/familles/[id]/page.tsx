@@ -593,7 +593,9 @@ export default function FamilleDetailPage() {
                 const totalAvoirs = imputations.reduce((s: number, i: any) => s + Number(i.montant), 0)
                 const totalFact = Number(facture.total_facture)
                 const totalNet = totalFact - totalAvoirs
-                const totalRegleReel = Number(facture.total_regle) - totalAvoirs
+                // Depuis la refonte de la vue `factures_solde`, `total_regle` EXCLUT déjà
+                // les règlements de type avoir → on l'utilise tel quel (vrais paiements).
+                const totalRegleReel = Number(facture.total_regle)
                 const solde = Number(facture.solde_restant)
                 return (
                   <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 20px' }}>
@@ -708,16 +710,23 @@ export default function FamilleDetailPage() {
                     <thead><tr style={{ borderBottom: '1px solid #E2E8F0' }}>
                       {['Date', ...(estSeparee ? ['Parent'] : []), 'Mode', 'Référence', 'Montant', ''].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>)}
                     </tr></thead>
-                    <tbody>{reglements.map((r, i) => (
-                      <tr key={r.id} style={{ borderBottom: i < reglements.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                    <tbody>{reglements.map((r, i) => {
+                      const isAvoir = r.mode_paiement === 'avoir'
+                      return (
+                      <tr key={r.id} style={{ borderBottom: i < reglements.length - 1 ? '1px solid #F1F5F9' : 'none', background: isAvoir ? '#FAF5FF' : 'transparent' }}>
                         <td style={{ padding: '10px 12px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
                         {estSeparee && <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{r.paye_par === 'parent1' ? 'Parent 1' : r.paye_par === 'parent2' ? 'Parent 2' : '—'}</td>}
-                        <td style={{ padding: '10px 12px' }}><span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span></td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ background: isAvoir ? '#F3E8FF' : '#EFF6FF', color: isAvoir ? '#6B21A8' : '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+                            {isAvoir ? '🎁 Avoir imputé' : labelModePaiement(r.mode_paiement)}
+                          </span>
+                        </td>
                         <td style={{ padding: '10px 12px', color: '#64748B', fontSize: 13 }}>{r.reference || '—'}</td>
-                        <td style={{ padding: '10px 12px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 700, color: isAvoir ? '#7C3AED' : '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
                         <td style={{ padding: '10px 12px' }}><button onClick={() => deleteReglement(r.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button></td>
                       </tr>
-                    ))}</tbody>
+                      )
+                    })}</tbody>
                   </table>
                 )}
               </div>

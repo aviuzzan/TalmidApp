@@ -40,6 +40,8 @@ export default function FacturePrintPage() {
         s.from('reglements').select('*').eq('facture_id', id).order('date_reglement'),
       ])
       setLignes(lig ?? [])
+      // Pour l'affichage on sépare les VRAIS paiements des avoirs imputés. Le total_regle
+      // de la vue exclut désormais les avoirs (vrais paiements uniquement).
       setReglements(regl ?? [])
       setLoading(false)
 
@@ -53,17 +55,26 @@ export default function FacturePrintPage() {
 
   const total = Number(facture.total_facture)
   const totalRegle = Number(facture.total_regle)
+  // Avoirs imputés (somme des reglements de type 'avoir' sur cette facture). Affichés
+  // séparément du total réglé pour distinguer flux monétaire et imputations.
+  const totalAvoirsImputes = reglements
+    .filter(r => r.mode_paiement === 'avoir')
+    .reduce((s, r) => s + Number(r.montant || 0), 0)
   const restant = Number(facture.solde_restant)
   const fmt = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
   const date = (d: string) => new Date(d).toLocaleDateString('fr-FR')
-  const lastRegl = reglements[reglements.length - 1]
+  // Pour la mention "Soldée le", on cherche le dernier vrai règlement (pas un avoir).
+  const reglementsReels = reglements.filter(r => r.mode_paiement !== 'avoir')
+  const lastRegl = reglementsReels[reglementsReels.length - 1] || reglements[reglements.length - 1]
   const estSeparee = famille?.situation_maritale === 'divorce' || famille?.situation_maritale === 'separe'
   const partP1 = Number(famille?.part_pere ?? 100)
   const partP2 = Number(famille?.part_mere ?? 0)
   const partP1Montant = total * partP1 / 100
   const partP2Montant = total * partP2 / 100
-  const regleP1 = reglements.filter(r => r.paye_par === 'parent1').reduce((s, r) => s + Number(r.montant), 0)
-  const regleP2 = reglements.filter(r => r.paye_par === 'parent2').reduce((s, r) => s + Number(r.montant), 0)
+  // On exclut les avoirs imputés du "réglé par parent" (ce sont des imputations, pas
+  // de l'argent versé par un parent).
+  const regleP1 = reglementsReels.filter(r => r.paye_par === 'parent1').reduce((s, r) => s + Number(r.montant), 0)
+  const regleP2 = reglementsReels.filter(r => r.paye_par === 'parent2').reduce((s, r) => s + Number(r.montant), 0)
 
   const titre = facture.statut === 'paye' ? 'FACTURE ACQUITTÉE' : facture.statut === 'partiel' ? 'RELEVÉ DE COMPTE' : facture.statut === 'annule' ? 'FACTURE ANNULÉE' : 'FACTURE'
 
@@ -157,6 +168,11 @@ export default function FacturePrintPage() {
           <div>
             <h2>Récapitulatif</h2>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}><span>Total facturé</span><strong>{fmt(total)}</strong></div>
+            {totalAvoirsImputes > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4, color: '#7C3AED' }}>
+                <span>Avoirs imputés</span><strong>− {fmt(totalAvoirsImputes)}</strong>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4, color: '#059669' }}><span>Total réglé</span><strong>{fmt(totalRegle)}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginTop: 8, paddingTop: 8, borderTop: '2px solid #E2E8F0', color: restant > 0 ? '#DC2626' : '#059669' }}>
               <strong>{restant > 0 ? 'Solde restant' : 'Solde'}</strong><strong>{fmt(restant)}</strong>
@@ -218,15 +234,23 @@ export default function FacturePrintPage() {
                 <tr><th>Date</th><th>Mode</th><th>Référence</th><th style={{ textAlign: 'right' }}>Montant</th></tr>
               </thead>
               <tbody>
-                {reglements.map(r => (
-                  <tr key={r.id}>
+                {reglements.map(r => {
+                  const isAvoir = r.mode_paiement === 'avoir'
+                  return (
+                  <tr key={r.id} style={{ background: isAvoir ? '#FAF5FF' : 'transparent' }}>
                     <td>{date(r.date_reglement)}</td>
-                    <td>{MODES_LABEL[r.mode_paiement] || r.mode_paiement}</td>
+                    <td style={{ color: isAvoir ? '#6B21A8' : undefined, fontWeight: isAvoir ? 600 : undefined }}>
+                      {isAvoir ? 'Avoir imputé' : (MODES_LABEL[r.mode_paiement] || r.mode_paiement)}
+                    </td>
                     <td style={{ color: '#64748B', fontSize: 11 }}>{r.reference || '—'}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>{fmt(Number(r.montant))}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: isAvoir ? '#7C3AED' : '#059669' }}>{fmt(Number(r.montant))}</td>
                   </tr>
-                ))}
-                <tr><td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, paddingTop: 12 }}>Total réglé</td><td style={{ textAlign: 'right', fontWeight: 800, color: '#059669', paddingTop: 12 }}>{fmt(totalRegle)}</td></tr>
+                  )
+                })}
+                {totalAvoirsImputes > 0 && (
+                  <tr><td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, color: '#7C3AED', paddingTop: 12 }}>Dont avoirs imputés</td><td style={{ textAlign: 'right', fontWeight: 800, color: '#7C3AED', paddingTop: 12 }}>{fmt(totalAvoirsImputes)}</td></tr>
+                )}
+                <tr><td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, paddingTop: 12 }}>Total réglé (paiements)</td><td style={{ textAlign: 'right', fontWeight: 800, color: '#059669', paddingTop: 12 }}>{fmt(totalRegle)}</td></tr>
                 {restant > 0 && <tr><td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>Solde restant dû</td><td style={{ textAlign: 'right', fontWeight: 800, color: '#DC2626' }}>{fmt(restant)}</td></tr>}
               </tbody>
             </table>

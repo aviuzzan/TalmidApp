@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       enfantIds.length > 0
         ? sb.from('transport_inscriptions').select('transport_forfaits(nom, prix)').eq('exercice_id', exerciceId).in('enfant_id', enfantIds)
         : Promise.resolve({ data: [] as any }),
-      sb.from('factures_solde').select('total_facture, total_regle, statut').eq('famille_id', familleId).eq('exercice_id', exerciceId),
+      sb.from('factures_solde').select('total_facture, total_regle, solde_restant, statut').eq('famille_id', familleId).eq('exercice_id', exerciceId),
     ])
 
     const montantContrat = Number((contrat as any)?.montant_total ?? 0)
@@ -67,10 +67,12 @@ export async function POST(req: NextRequest) {
     const totalTransport = (trsp ?? []).reduce((s: number, t: any) => s + Number(t.transport_forfaits?.prix ?? 0), 0)
     const totalEngage = montantContrat + montantAssurance + totalFraisInsc + totalCantine + totalTransport
 
+    // NOTE : `total_regle` exclut désormais les avoirs imputés. On utilise `solde_restant`
+    // pour le reste à régler (mathématiquement correct, inchangé).
     const facturesActives = ((factures ?? []) as any[]).filter(f => f.statut !== 'annule')
     const totalFacture = facturesActives.reduce((s, f) => s + Number(f.total_facture), 0)
     const totalRegle = facturesActives.reduce((s, f) => s + Number(f.total_regle), 0)
-    const resteARegler = totalFacture - totalRegle
+    const resteARegler = facturesActives.reduce((s, f) => s + Number(f.solde_restant || 0), 0)
 
     const fmt = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
     const exLabel = (ex as any).libelle || (ex as any).code

@@ -7,7 +7,7 @@ import { labelStatutFacture, labelModePaiement } from '@/lib/statuts'
 
 type Facture = {
   id: string; numero: string; date_emission: string; statut: string;
-  total_facture: number; total_regle: number; solde_restant: number;
+  total_facture: number; total_regle: number; total_avoirs_imputes: number; solde_restant: number;
 }
 type Reglement = {
   id: string; facture_id: string; montant: number; date_reglement: string;
@@ -118,9 +118,13 @@ export default function CompteFamillePage() {
   for (const r of reglements) {
     const fac = factures.find(f => f.id === r.facture_id)
     const isPointe = pointes.has(r.id)
+    const isAvoir = r.mode_paiement === 'avoir'
     mouvements.push({
       date: r.date_reglement, type: 'reglement',
-      libelle: 'Règlement ' + labelModePaiement(r.mode_paiement) + (fac ? ' / ' + fac.numero : '') + (r.reference ? ' (' + r.reference + ')' : '') + (isPointe ? ' ✓ pointé' : ''),
+      libelle: (isAvoir ? 'Avoir imputé' : 'Règlement ' + labelModePaiement(r.mode_paiement))
+        + (fac ? ' / ' + fac.numero : '')
+        + (r.reference ? ' (' + r.reference + ')' : '')
+        + (isPointe ? ' ✓ pointé' : ''),
       debit: 0, credit: Number(r.montant || 0), id: r.id,
     })
   }

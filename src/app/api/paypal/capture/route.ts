@@ -83,12 +83,15 @@ export async function POST(req: NextRequest) {
     })
 
     // Recalcule le statut de la facture
+    // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements). On utilise
+    // `solde_restant` (mathématiquement correct, qui prend en compte les avoirs).
     const { data: fs } = await supabaseAdmin
-      .from('factures_solde').select('total_facture, total_regle').eq('id', paiement.facture_id).maybeSingle()
+      .from('factures_solde').select('total_facture, total_regle, solde_restant').eq('id', paiement.facture_id).maybeSingle()
     if (fs) {
       const regle = Number(fs.total_regle || 0)
       const total = Number(fs.total_facture || 0)
-      const statut = regle >= total ? 'paye' : regle > 0 ? 'partiel' : 'en_attente'
+      const restant = Number(fs.solde_restant || 0)
+      const statut = restant <= 0.01 && total > 0 ? 'paye' : (regle > 0 || restant < total) ? 'partiel' : 'en_attente'
       await supabaseAdmin.from('factures').update({ statut }).eq('id', paiement.facture_id)
     }
 

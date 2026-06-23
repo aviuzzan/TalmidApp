@@ -104,12 +104,16 @@ export async function POST(req: NextRequest) {
             .eq('id', factureId)
             .maybeSingle()
           if (sol) {
+            // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements uniquement).
+            // Ici on vient d'enregistrer un paiement Stripe (non-avoir) donc `regle > 0` ;
+            // le statut 'partiel' est donc bien atteint. Le statut 'paye' s'appuie sur
+            // `solde_restant` qui est mathématiquement correct.
             const total = Number(sol.total_facture) || 0
             const regle = Number(sol.total_regle) || 0
             const restant = Number(sol.solde_restant) || 0
             let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
             if (restant <= 0.01 && total > 0) statut = 'paye'
-            else if (regle > 0) statut = 'partiel'
+            else if (regle > 0 || restant < total) statut = 'partiel'
             await supabaseAdmin.from('factures').update({ statut }).eq('id', factureId)
           }
         }

@@ -99,7 +99,12 @@ export default function PortailFacturesPage() {
 
   // Si la facture est annulee, rien n'est du ni a regler
   const isAnnulee = facture?.statut === 'annule'
-  // Avoirs imputes sur cette facture (deduction du facture)
+  // Avoirs imputes sur cette facture (deduction du facture).
+  // NOTE : depuis la refonte de la vue `factures_solde`, le champ `total_avoirs_imputes`
+  // est aussi exposé directement (somme des reglements WHERE mode_paiement='avoir').
+  // On garde ici le recalcul depuis `avoirs_imputations` car on a déjà besoin du detail
+  // des imputations (numero/motif) pour l'affichage du bloc "Avoirs disponibles".
+  // Les deux sources sont mathematiquement equivalentes.
   const totalAvoirsImputes = isAnnulee ? 0 : imputations.reduce((s, i) => s + Number(i.montant), 0)
   // Net a regler par la famille apres deduction avoirs (= "facture nette")
   const totalFactureNet = facture && !isAnnulee ? Number(facture.total_facture) - totalAvoirsImputes : 0
@@ -197,7 +202,7 @@ export default function PortailFacturesPage() {
                 { label: t('portail.factures.total_invoiced'), value: isAnnulee ? 0 : Number(facture.total_facture), color: '#1E293B', bold: true },
                 ...(totalAvoirsImputes > 0 ? [{ label: t('portail.factures.credits_deduction'), value: -totalAvoirsImputes, color: '#059669', bold: false }] : []),
                 ...(totalAvoirsImputes > 0 ? [{ label: t('portail.factures.net_to_pay'), value: isAnnulee ? 0 : totalFactureNet, color: '#1E293B', bold: true, separator: true }] : []),
-                { label: t('portail.factures.total_paid'), value: isAnnulee ? 0 : (Number(facture.total_regle) - totalAvoirsImputes), color: '#059669', bold: false },
+                { label: t('portail.factures.total_paid'), value: isAnnulee ? 0 : Number(facture.total_regle), color: '#059669', bold: false },
                 { label: t('portail.factures.remaining_to_pay'), value: isAnnulee ? 0 : Number(facture.solde_restant), color: !isAnnulee && Number(facture.solde_restant) > 0 ? '#DC2626' : '#059669', bold: true, highlight: true },
               ].map((row: any, idx: number) => (
                 <div key={idx} className="portail-recap-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: row.separator ? '1px solid #E2E8F0' : 'none', marginTop: row.separator ? 6 : 0, paddingTop: row.separator ? 12 : 8 }}>

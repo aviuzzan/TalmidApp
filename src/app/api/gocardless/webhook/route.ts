@@ -104,12 +104,15 @@ export async function POST(req: NextRequest) {
             const { data: sol } = await sb.from('factures_solde')
               .select('total_facture, total_regle, solde_restant').eq('id', pe.facture_id).maybeSingle()
             if (sol) {
+              // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements uniquement).
+              // On s'appuie sur `solde_restant` pour le 'paye' et on étend 'partiel' au cas
+              // où le solde est entamé sans paiement réel (avoirs seulement).
               const restant = Number(sol.solde_restant) || 0
               const regle = Number(sol.total_regle) || 0
               const total = Number(sol.total_facture) || 0
               let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
               if (restant <= 0.01 && total > 0) statut = 'paye'
-              else if (regle > 0) statut = 'partiel'
+              else if (regle > 0 || restant < total) statut = 'partiel'
               await sb.from('factures').update({ statut }).eq('id', pe.facture_id)
             }
           }

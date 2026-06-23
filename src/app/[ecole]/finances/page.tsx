@@ -196,11 +196,13 @@ export default function FinancesPage() {
 
   const inp = { width: '100%', padding: '9px 12px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, color: '#1E293B', fontSize: 13, outline: 'none' }
 
-  // Les factures annulees ne comptent ni dans le facture ni dans le restant a encaisser
+  // Les factures annulees ne comptent ni dans le facture ni dans le restant a encaisser.
+  // NOTE : depuis la refonte de la vue, `total_regle` EXCLUT les avoirs imputés.
+  // Le reste à encaisser = solde_restant agrégé (qui reste mathématiquement correct).
   const facturesActives = factures.filter((f: any) => f.statut !== 'annule')
   const totalFacture = facturesActives.reduce((s: number, f: any) => s + Number(f.total_facture), 0)
   const totalRegle = facturesActives.reduce((s: number, f: any) => s + Number(f.total_regle), 0)
-  const totalRestant = totalFacture - totalRegle
+  const totalRestant = facturesActives.reduce((s: number, f: any) => s + Number(f.solde_restant || 0), 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -390,16 +392,25 @@ export default function FinancesPage() {
                     <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
                   ) : reglementsFiltres.length === 0 ? (
                     <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucun règlement {reglements.length > 0 ? 'pour ces filtres' : 'enregistré'}</td></tr>
-                  ) : reglementsFiltres.map((r, i) => (
-                    <tr key={r.id} style={{ borderBottom: i < reglementsFiltres.length - 1 ? '1px solid #F1F5F9' : 'none' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  ) : reglementsFiltres.map((r, i) => {
+                    const isAvoir = r.mode_paiement === 'avoir'
+                    const rowBgBase = isAvoir ? '#FAF5FF' : 'transparent'
+                    return (
+                    <tr key={r.id} style={{ borderBottom: i < reglementsFiltres.length - 1 ? '1px solid #F1F5F9' : 'none', background: rowBgBase }}
+                      onMouseEnter={e => (e.currentTarget.style.background = isAvoir ? '#F3E8FF' : '#F8FAFC')}
+                      onMouseLeave={e => (e.currentTarget.style.background = rowBgBase)}>
                       <td style={{ padding: '13px 16px', color: '#475569', fontSize: 12 }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
                       <td style={{ padding: '13px 16px', fontWeight: 600 }}>{r.familles?.nom} <span style={{ color: '#94A3B8', fontSize: 11 }}>({r.familles?.numero})</span></td>
                       <td style={{ padding: '13px 16px', fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{r.factures?.numero}</td>
-                      <td style={{ padding: '13px 16px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
+                      <td style={{ padding: '13px 16px', fontWeight: 700, color: isAvoir ? '#7C3AED' : '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
                       <td style={{ padding: '13px 16px' }}>
-                        <span style={{ background: '#F1F5F9', color: '#475569', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span>
+                        <span style={{
+                          background: isAvoir ? '#F3E8FF' : '#F1F5F9',
+                          color: isAvoir ? '#6B21A8' : '#475569',
+                          borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600,
+                        }}>
+                          {isAvoir ? '🎁 Avoir imputé' : labelModePaiement(r.mode_paiement)}
+                        </span>
                       </td>
                       <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B' }}>{r.reference || '—'}</td>
                       <td style={{ padding: '13px 16px', fontSize: 12, color: '#64748B', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.notes || ''}>{r.notes || '—'}</td>
@@ -407,7 +418,8 @@ export default function FinancesPage() {
                         <button onClick={() => deletePaiement(r.id)} className="btn-danger" style={{ padding: '5px 10px', fontSize: 12 }} title="Supprimer">🗑️</button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

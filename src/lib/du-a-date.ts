@@ -21,7 +21,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface DuADateResult {
   totalFacture: number       // montant_total de la facture
-  totalRegle: number         // Sigma reglements imputes sur cette facture
+  // ATTENTION : ce `totalRegle` inclut TOUS les reglements (paiements + avoirs imputes).
+  // C'est volontaire : on calcule ici un "du a date" qui doit etre reduit par
+  // chaque euro qui a deja entame le solde de la facture, peu importe la nature.
+  // Diffère donc de `factures_solde.total_regle` qui exclut les avoirs depuis la refonte.
+  totalRegle: number         // Sigma reglements imputes sur cette facture (paiements + avoirs)
   soldeAnnuel: number        // max(0, totalFacture - totalRegle)
   totalEcheances: number     // Sigma echeances generees (toutes, echues ou non)
   totalEcheancesEchues: number  // Sigma echeances dont date_echeance <= aujourd hui
