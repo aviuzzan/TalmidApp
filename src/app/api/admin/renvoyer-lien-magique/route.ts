@@ -32,17 +32,22 @@ export async function POST(req: NextRequest) {
     }
 
     // Vérifier que ce parent existe bien
+    // Vérification case-insensitive : auth.users stocke l'email en lowercase
+    // alors que la table profiles peut conserver la casse d'origine de la saisie.
+    const emailLower = (email || '').toLowerCase().trim()
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existing = existingUsers?.users?.find(u => u.email === email)
+    const existing = existingUsers?.users?.find(u => (u.email || '').toLowerCase() === emailLower)
     if (!existing) {
       return NextResponse.json({ error: 'Aucun compte trouvé avec cet email' }, { status: 404 })
     }
+    // Utilise l'email normalisé (lowercase) pour la suite — c'est celui qu'accepte Supabase
+    const emailNorm = existing.email || emailLower
 
     // 1. Générer un nouveau lien magique (recovery) avec redirection vers /auth/set-password
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
     const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
-      email,
+      email: emailNorm,
       options: { redirectTo: baseUrl + '/auth/set-password?invited=1' },
     })
     const lienMagique = linkData?.properties?.action_link || ''
@@ -83,9 +88,9 @@ export async function POST(req: NextRequest) {
     const sujet = remplacer(tpl.sujet)
     const html = remplacer(tpl.contenu_html)
 
-    // 4. Envoyer
+    // 4. Envoyer (utilise l'email normalisé)
     const emailResult = await sendEmail({
-      to: { email },
+      to: { email: emailNorm },
       subject: sujet,
       html,
       fromName: ecole?.nom || 'TalmidApp',
