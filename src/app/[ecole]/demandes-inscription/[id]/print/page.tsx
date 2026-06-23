@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 
 /**
- * Page imprimable d'une demande d'inscription.
+ * Page imprimable d'une demande d'inscription (1 page A4).
  * L'admin l'ouvre depuis le modal de detail puis fait Ctrl+P (ou clique
  * "Imprimer / PDF") -> "Enregistrer en PDF" dans le dialogue navigateur.
  */
@@ -37,16 +37,6 @@ const STATUT_LABEL: Record<string, string> = {
   accepte: 'Acceptée',
   refuse: 'Refusée',
 }
-
-const PRINT_CSS = `
-@page { size: A4; margin: 18mm; }
-@media print {
-  .no-print { display: none !important; }
-  body { margin: 0; padding: 0; background: #fff !important; }
-  .print-page { padding: 0 !important; max-width: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; }
-  .print-section { break-inside: avoid; page-break-inside: avoid; }
-}
-`
 
 export default function PrintDemandeInscriptionPage() {
   const params = useParams()
@@ -84,8 +74,8 @@ export default function PrintDemandeInscriptionPage() {
     }
   }, [demande, autoPrinted])
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
-  if (!demande) return <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Demande introuvable.</div>
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8', fontFamily: 'Inter, sans-serif' }}>Chargement...</div>
+  if (!demande) return <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8', fontFamily: 'Inter, sans-serif' }}>Demande introuvable.</div>
 
   const today = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
   const idCourt = demande.id.slice(0, 8).toUpperCase()
@@ -106,156 +96,160 @@ export default function PrintDemandeInscriptionPage() {
 
   const hasParent2 = !!(demande.parent2_prenom || demande.parent2_nom || demande.parent2_email || demande.parent2_telephone)
 
+  const prenomComplet = [demande.enfant_prenom, demande.enfant_deuxieme_prenom].filter(Boolean).join(' ') || '—'
+  const ecoleAdr = [ecoleInfo?.adresse, [ecoleInfo?.code_postal, ecoleInfo?.ville].filter(Boolean).join(' ')].filter(Boolean).join(' — ')
+
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
+      <style jsx global>{`
+        @page { size: A4; margin: 12mm 14mm }
+        body { background: #F1F5F9; margin: 0; font-family: 'Inter', -apple-system, system-ui, sans-serif; color: #1E293B }
+        .wrap { max-width: 800px; margin: 18px auto; background: #fff; padding: 24px 30px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border-radius: 4px }
+        .toolbar { max-width: 800px; margin: 0 auto 8px; display: flex; gap: 10px; padding: 0 8px }
+        .toolbar button { background: #2563EB; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer }
+        .toolbar a { color: #64748B; text-decoration: none; padding: 8px 16px; font-size: 13px; align-self: center }
+        h1 { margin: 0; font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase }
+        h2 { font-size: 10px; font-weight: 700; color: #94A3B8; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px }
+        .section { margin-top: 10px; padding-top: 8px; border-top: 1px solid #F1F5F9 }
+        .section:first-of-type { border-top: none; padding-top: 0; margin-top: 0 }
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+        .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px }
+        .field { font-size: 11px; line-height: 1.3 }
+        .field .lbl { font-size: 9px; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600 }
+        .field .vl { color: #1E293B; font-weight: 500; word-break: break-word }
+        .field-inline { display: flex; gap: 6px; font-size: 11px; line-height: 1.4 }
+        .field-inline .lbl { color: #94A3B8; min-width: 78px; flex-shrink: 0 }
+        .field-inline .vl { color: #1E293B; font-weight: 500; word-break: break-word }
+        @media print {
+          body { background: #fff }
+          .wrap { box-shadow: none; padding: 0; max-width: 100%; margin: 0; border-radius: 0 }
+          .toolbar { display: none }
+        }
+      `}</style>
 
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => window.history.back()} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Retour</button>
-        <button onClick={() => window.print()} className="btn-primary">🖨 Imprimer / PDF</button>
+      <div className="toolbar">
+        <button onClick={() => window.print()}>🖨 Imprimer / PDF</button>
+        <a href="javascript:history.back()">← Retour</a>
       </div>
 
-      <div className="print-page" style={{
-        maxWidth: 820, margin: '0 auto', background: '#fff', padding: 36,
-        border: '1px solid #E2E8F0', borderRadius: 12,
-        fontFamily: 'Georgia, serif', color: '#1E293B', lineHeight: 1.55,
-      }}>
-        {/* En-tete */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #1E293B', paddingBottom: 14, marginBottom: 22 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {ecoleInfo?.logo_url && <img src={ecoleInfo.logo_url} alt="" style={{ maxHeight: 60 }} />}
+      <div className="wrap">
+        {/* En-tête compact : logo + école à gauche, titre + meta à droite */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, paddingBottom: 10, borderBottom: '2px solid #1E293B', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            {ecoleInfo?.logo_url && <img src={ecoleInfo.logo_url} alt="" style={{ maxHeight: 44, maxWidth: 60, objectFit: 'contain' }} />}
             <div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{ecoleInfo?.nom || ecole.nom}</div>
-              {ecoleInfo?.adresse && <div style={{ fontSize: 11, color: '#475569' }}>{ecoleInfo.adresse}</div>}
-              {(ecoleInfo?.code_postal || ecoleInfo?.ville) && (
-                <div style={{ fontSize: 11, color: '#475569' }}>{[ecoleInfo?.code_postal, ecoleInfo?.ville].filter(Boolean).join(' ')}</div>
-              )}
-              {ecoleInfo?.telephone && <div style={{ fontSize: 11, color: '#475569' }}>Tél : {ecoleInfo.telephone}</div>}
+              <div style={{ fontWeight: 800, fontSize: 14, color: '#1E293B', lineHeight: 1.2 }}>{ecoleInfo?.nom || ecole.nom}</div>
+              {ecoleAdr && <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{ecoleAdr}</div>}
+              {ecoleInfo?.telephone && <div style={{ fontSize: 10, color: '#64748B' }}>Tél : {ecoleInfo.telephone}</div>}
             </div>
           </div>
-          <div style={{ textAlign: 'right', fontSize: 11, color: '#64748B' }}>
-            <div>Demande N° <strong>{idCourt}</strong></div>
-            <div>Soumise le : {fmtDate(demande.soumis_le || demande.created_at)}</div>
-            <div>Année : {demande.annee_scolaire}</div>
-            <div style={{ marginTop: 4 }}>Statut : <strong>{statutLabel}</strong></div>
+          <div style={{ textAlign: 'right' }}>
+            <h1>Demande d&apos;inscription</h1>
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 4, lineHeight: 1.4 }}>
+              <div>N° <strong style={{ fontFamily: 'monospace' }}>{idCourt}</strong> · Année {demande.annee_scolaire}</div>
+              <div>Soumise le {fmtDate(demande.soumis_le || demande.created_at)} · Statut : <strong>{statutLabel}</strong></div>
+            </div>
           </div>
         </div>
 
-        <h2 style={{ fontSize: 22, fontWeight: 700, textAlign: 'center', marginTop: 0, marginBottom: 22, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Demande d&apos;inscription
-        </h2>
+        {/* Enfant + Scolarité côte à côte */}
+        <div className="grid2 section">
+          <div>
+            <h2>Informations de l&apos;enfant</h2>
+            <div className="grid2" style={{ gap: 6 }}>
+              <div className="field"><div className="lbl">Prénom</div><div className="vl">{prenomComplet}</div></div>
+              <div className="field"><div className="lbl">Nom</div><div className="vl">{val(demande.enfant_nom)}</div></div>
+              <div className="field"><div className="lbl">Genre</div><div className="vl">{genreLabel}</div></div>
+              <div className="field"><div className="lbl">Date de naissance</div><div className="vl">{fmtDate(demande.enfant_date_naissance)}</div></div>
+            </div>
+          </div>
+          <div>
+            <h2>Scolarité demandée</h2>
+            <div className="grid2" style={{ gap: 6 }}>
+              <div className="field"><div className="lbl">Classe souhaitée</div><div className="vl">{val(demande.classe_souhaitee)}</div></div>
+              <div className="field"><div className="lbl">Date d&apos;entrée</div><div className="vl">{fmtDate(demande.date_entree_souhaitee)}</div></div>
+              <div className="field"><div className="lbl">Déjà scolarisé</div><div className="vl">{fmtBool(demande.deja_scolarise)}</div></div>
+              <div className="field"><div className="lbl">Établissement précédent</div><div className="vl">{val(demande.etablissement_precedent)}</div></div>
+            </div>
+          </div>
+        </div>
 
-        <Section titre="Informations de l'enfant">
-          <Row label="Prénom" value={val(demande.enfant_prenom)} />
-          <Row label="Deuxième prénom" value={val(demande.enfant_deuxieme_prenom)} />
-          <Row label="Nom" value={val(demande.enfant_nom)} />
-          <Row label="Genre" value={genreLabel} />
-          <Row label="Date de naissance" value={fmtDate(demande.enfant_date_naissance)} />
-          <Row label="Lieu de naissance" value={val(demande.enfant_lieu_naissance)} />
-        </Section>
+        {/* Famille - 1 ligne compacte */}
+        <div className="section">
+          <h2>Famille</h2>
+          <div className="grid3" style={{ gap: 6 }}>
+            <div className="field"><div className="lbl">Nom de famille</div><div className="vl">{val(demande.nom_famille)}</div></div>
+            <div className="field"><div className="lbl">Situation maritale</div><div className="vl">{val(demande.situation_maritale)}</div></div>
+            <div className="field"><div className="lbl">Email de contact</div><div className="vl">{val(demande.email_invite)}</div></div>
+          </div>
+        </div>
 
-        <Section titre="Scolarité demandée">
-          <Row label="Classe souhaitée" value={val(demande.classe_souhaitee)} />
-          <Row label="Date d'entrée souhaitée" value={fmtDate(demande.date_entree_souhaitee)} />
-          <Row label="Déjà scolarisé" value={fmtBool(demande.deja_scolarise)} />
-          <Row label="Établissement précédent" value={val(demande.etablissement_precedent)} />
-        </Section>
+        {/* Responsables 1 et 2 côte à côte */}
+        <div className="grid2 section">
+          <div>
+            <h2>Responsable 1</h2>
+            <div className="field-inline"><div className="lbl">Nom complet</div><div className="vl">{val([demande.parent1_prenom, demande.parent1_nom].filter(Boolean).join(' ') || null)}</div></div>
+            <div className="field-inline"><div className="lbl">Email</div><div className="vl">{val(demande.parent1_email)}</div></div>
+            <div className="field-inline"><div className="lbl">Téléphone</div><div className="vl">{val(demande.parent1_telephone)}</div></div>
+            <div className="field-inline"><div className="lbl">Profession</div><div className="vl">{val(demande.parent1_emploi)}</div></div>
+            <div className="field-inline"><div className="lbl">Adresse</div><div className="vl">{val(adresseParent1)}</div></div>
+          </div>
+          <div>
+            <h2>Responsable 2</h2>
+            {hasParent2 ? (
+              <>
+                <div className="field-inline"><div className="lbl">Nom complet</div><div className="vl">{val([demande.parent2_prenom, demande.parent2_nom].filter(Boolean).join(' ') || null)}</div></div>
+                <div className="field-inline"><div className="lbl">Email</div><div className="vl">{val(demande.parent2_email)}</div></div>
+                <div className="field-inline"><div className="lbl">Téléphone</div><div className="vl">{val(demande.parent2_telephone)}</div></div>
+                <div className="field-inline"><div className="lbl">Profession</div><div className="vl">{val(demande.parent2_emploi)}</div></div>
+                <div className="field-inline"><div className="lbl">Adresse</div><div className="vl">{val(adresseParent2)}</div></div>
+              </>
+            ) : (
+              <div style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>Non renseigné</div>
+            )}
+          </div>
+        </div>
 
-        <Section titre="Famille">
-          <Row label="Nom de famille" value={val(demande.nom_famille)} />
-          <Row label="Situation maritale" value={val(demande.situation_maritale)} />
-          <Row label="Email de contact (invité)" value={val(demande.email_invite)} />
-        </Section>
+        {/* Options + Santé + Urgences en 3 colonnes */}
+        <div className="grid3 section">
+          <div>
+            <h2>Options</h2>
+            <div className="field-inline"><div className="lbl">Transport</div><div className="vl">{fmtBool(demande.transport)}</div></div>
+            <div className="field-inline"><div className="lbl">Instr. relig.</div><div className="vl">{fmtBool(demande.instruction_religieuse)}</div></div>
+            <div className="field-inline"><div className="lbl">Étude/garderie</div><div className="vl">{fmtBool(demande.etude_garderie)}</div></div>
+          </div>
+          <div>
+            <h2>Santé</h2>
+            <div className="field-inline"><div className="lbl">Signes part.</div><div className="vl">{val(demande.signes_particuliers)}</div></div>
+            <div className="field-inline"><div className="lbl">Médecin</div><div className="vl">{val(demande.medecin_nom)}</div></div>
+            <div className="field-inline"><div className="lbl">Tél. médecin</div><div className="vl">{val(demande.medecin_telephone)}</div></div>
+          </div>
+          <div>
+            <h2>Contacts d&apos;urgence</h2>
+            <div className="field-inline"><div className="lbl">Contact 1</div><div className="vl">{val(demande.urgence_1_nom)}{demande.urgence_1_lien ? ` (${demande.urgence_1_lien})` : ''}{demande.urgence_1_tel ? ` — ${demande.urgence_1_tel}` : ''}</div></div>
+            <div className="field-inline"><div className="lbl">Contact 2</div><div className="vl">{val(demande.urgence_2_nom)}{demande.urgence_2_lien ? ` (${demande.urgence_2_lien})` : ''}{demande.urgence_2_tel ? ` — ${demande.urgence_2_tel}` : ''}</div></div>
+          </div>
+        </div>
 
-        <Section titre="Responsable 1">
-          <Row label="Prénom" value={val(demande.parent1_prenom)} />
-          <Row label="Nom" value={val(demande.parent1_nom)} />
-          <Row label="Email" value={val(demande.parent1_email)} />
-          <Row label="Téléphone" value={val(demande.parent1_telephone)} />
-          <Row label="Profession / emploi" value={val(demande.parent1_emploi)} />
-          <Row label="Adresse" value={val(adresseParent1)} />
-        </Section>
-
-        {hasParent2 && (
-          <Section titre="Responsable 2">
-            <Row label="Prénom" value={val(demande.parent2_prenom)} />
-            <Row label="Nom" value={val(demande.parent2_nom)} />
-            <Row label="Email" value={val(demande.parent2_email)} />
-            <Row label="Téléphone" value={val(demande.parent2_telephone)} />
-            <Row label="Profession / emploi" value={val(demande.parent2_emploi)} />
-            <Row label="Adresse" value={val(adresseParent2)} />
-          </Section>
-        )}
-
-        <Section titre="Options">
-          <Row label="Transport scolaire" value={fmtBool(demande.transport)} />
-          <Row label="Instruction religieuse" value={fmtBool(demande.instruction_religieuse)} />
-          <Row label="Étude / garderie" value={fmtBool(demande.etude_garderie)} />
-        </Section>
-
-        <Section titre="Santé et signes particuliers">
-          <Row label="Signes particuliers" value={val(demande.signes_particuliers)} />
-          <Row label="Médecin" value={val(demande.medecin_nom)} />
-          <Row label="Téléphone du médecin" value={val(demande.medecin_telephone)} />
-        </Section>
-
-        <Section titre="Contacts d'urgence">
-          <Row label="Contact 1 — Nom" value={val(demande.urgence_1_nom)} />
-          <Row label="Contact 1 — Téléphone" value={val(demande.urgence_1_tel)} />
-          <Row label="Contact 1 — Lien de parenté" value={val(demande.urgence_1_lien)} />
-          <Row label="Contact 2 — Nom" value={val(demande.urgence_2_nom)} />
-          <Row label="Contact 2 — Téléphone" value={val(demande.urgence_2_tel)} />
-          <Row label="Contact 2 — Lien de parenté" value={val(demande.urgence_2_lien)} />
-        </Section>
-
+        {/* Motif refus (si applicable) */}
         {demande.statut === 'refuse' && demande.motif_refus && (
-          <div className="print-section" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', padding: 12, borderRadius: 8, fontSize: 12, marginTop: 14 }}>
+          <div style={{ marginTop: 10, background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', padding: '6px 10px', borderRadius: 6, fontSize: 10 }}>
             <strong>Motif du refus :</strong> {demande.motif_refus}
           </div>
         )}
 
-        {/* Signature parent */}
-        <div className="print-section" style={{ marginTop: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24 }}>
-          <div style={{ fontSize: 11, color: '#64748B', maxWidth: 360 }}>
-            Je certifie l&apos;exactitude des informations renseignées dans la présente demande
-            d&apos;inscription et accepte que celles-ci soient utilisées par l&apos;établissement
-            dans le cadre de l&apos;instruction du dossier.
-          </div>
-          <div style={{ textAlign: 'center', minWidth: 220 }}>
-            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>Signature du responsable légal</div>
-            <div style={{ height: 60, borderBottom: '1px solid #94A3B8' }} />
-            <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>Date et signature</div>
-          </div>
+        {/* Ligne signature compacte */}
+        <div style={{ marginTop: 14, paddingTop: 8, borderTop: '1px solid #E2E8F0', fontSize: 10, color: '#475569', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+          <div>Fait à <span style={{ display: 'inline-block', borderBottom: '1px solid #94A3B8', minWidth: 100 }}>&nbsp;</span>, le <span style={{ display: 'inline-block', borderBottom: '1px solid #94A3B8', minWidth: 80 }}>&nbsp;</span></div>
+          <div>Signature du responsable : <span style={{ display: 'inline-block', borderBottom: '1px solid #94A3B8', minWidth: 160 }}>&nbsp;</span></div>
         </div>
 
-        {/* Footer */}
-        <div style={{ marginTop: 36, paddingTop: 12, borderTop: '1px solid #E2E8F0', fontSize: 10, color: '#94A3B8', display: 'flex', justifyContent: 'space-between' }}>
-          <div>Document généré le {today} via TalmidApp</div>
+        {/* Footer minuscule */}
+        <div style={{ marginTop: 8, fontSize: 8, color: '#94A3B8', display: 'flex', justifyContent: 'space-between' }}>
+          <div>Généré le {today} via TalmidApp</div>
           <div>Demande N° {idCourt}</div>
         </div>
       </div>
     </>
-  )
-}
-
-function Section({ titre, children }: { titre: string; children: React.ReactNode }) {
-  return (
-    <div className="print-section" style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#1E293B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, borderLeft: '3px solid #1E293B', paddingLeft: 8 }}>
-        {titre}
-      </div>
-      <div style={{ background: '#F8FAFC', border: '1px solid #F1F5F9', borderRadius: 8, padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 18, rowGap: 4 }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', fontSize: 12, lineHeight: 1.5, breakInside: 'avoid' }}>
-      <div style={{ width: 150, color: '#94A3B8', flexShrink: 0 }}>{label}</div>
-      <div style={{ color: '#1E293B', fontWeight: 500, flex: 1, wordBreak: 'break-word' }}>{value}</div>
-    </div>
   )
 }
