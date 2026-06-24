@@ -223,7 +223,19 @@ export default function ContratPage() {
     setEnfantsContrat(prev => prev.map(e => {
       if (e.enfant_id !== enfantId) return e
       const exists = e.postes.find((p: any) => p.tarif_id === tarif.id)
-      const newPostes = exists ? e.postes.filter((p: any) => p.tarif_id !== tarif.id) : [...e.postes, { tarif_id: tarif.id, nom: tarif.nom_poste, montant: parseFloat(tarif.montant) || 0 }]
+      let newPostes: any[]
+      if (exists) {
+        // Decoche le poste
+        newPostes = e.postes.filter((p: any) => p.tarif_id !== tarif.id)
+      } else {
+        // Coche un nouveau poste : retirer d'abord les autres tarifs du meme groupe_exclusif (ex: si on coche Navette, on retire Car de ramassage)
+        const groupe = tarif.groupe_exclusif
+        const idsAEvincer = groupe
+          ? tarifs.filter((t: any) => t.groupe_exclusif === groupe && t.id !== tarif.id).map((t: any) => t.id)
+          : []
+        const postesNettoyes = idsAEvincer.length ? e.postes.filter((p: any) => !idsAEvincer.includes(p.tarif_id)) : e.postes
+        newPostes = [...postesNettoyes, { tarif_id: tarif.id, nom: tarif.nom_poste, montant: parseFloat(tarif.montant) || 0 }]
+      }
       return { ...e, postes: newPostes, sous_total: newPostes.reduce((s: number, p: any) => s + (parseFloat(p.montant) || 0), 0) }
     }))
   }
@@ -589,18 +601,36 @@ export default function ContratPage() {
                   {enf.classe_id && tarifsDispos.length > 0 && (
                     <div>
                       <label style={lbl}>Prestations</label>
-                      {tarifsDispos.map((t: any) => {
-                        const sel = enf.postes?.find((p: any) => p.tarif_id === t.id)
-                        return (
-                          <label key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: t.obligatoire ? 'default' : 'pointer', background: sel ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${sel ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <input type="checkbox" checked={!!sel || t.obligatoire} disabled={t.obligatoire} onChange={() => !t.obligatoire && togglePoste(enfant.id, t)} />
-                              <span style={{ fontSize: 13 }}>{t.nom_poste}{t.obligatoire && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(inclus)</span>}</span>
-                            </div>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: '#059669', flexShrink: 0 }}>{(parseFloat(t.montant) || 0).toLocaleString('fr-FR')} €</span>
-                          </label>
+                      {(() => {
+                        const groupesAvecHint = new Set(
+                          tarifsDispos
+                            .filter((t: any) => t.groupe_exclusif)
+                            .map((t: any) => t.groupe_exclusif)
+                            .filter((g: string, _i: number, arr: string[]) => arr.filter(x => x === g).length > 1)
                         )
-                      })}
+                        const groupesAffiches = new Set<string>()
+                        return tarifsDispos.map((t: any) => {
+                          const sel = enf.postes?.find((p: any) => p.tarif_id === t.id)
+                          const hintAAfficher = t.groupe_exclusif && groupesAvecHint.has(t.groupe_exclusif) && !groupesAffiches.has(t.groupe_exclusif)
+                          if (hintAAfficher) groupesAffiches.add(t.groupe_exclusif)
+                          return (
+                            <div key={t.id}>
+                              {hintAAfficher && (
+                                <div style={{ fontSize: 11, color: '#7C3AED', background: '#EDE9FE', borderRadius: 6, padding: '4px 10px', marginBottom: 4, display: 'inline-block' }}>
+                                  ↔ Choisissez une seule option de «&nbsp;{t.groupe_exclusif}&nbsp;»
+                                </div>
+                              )}
+                              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: t.obligatoire ? 'default' : 'pointer', background: sel ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${sel ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <input type="checkbox" checked={!!sel || t.obligatoire} disabled={t.obligatoire} onChange={() => !t.obligatoire && togglePoste(enfant.id, t)} />
+                                  <span style={{ fontSize: 13 }}>{t.nom_poste}{t.obligatoire && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(inclus)</span>}</span>
+                                </div>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#059669', flexShrink: 0 }}>{(parseFloat(t.montant) || 0).toLocaleString('fr-FR')} €</span>
+                              </label>
+                            </div>
+                          )
+                        })
+                      })()}
                     </div>
                   )}
                 </div>

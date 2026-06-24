@@ -143,32 +143,78 @@ export async function creerFactureDepuisContrat(
   const lignes: any[] = []
 
   if (ddr?.tarif_accorde) {
-    // DDR validée : 1 ligne forfait commission + 1 ligne par enfant pour les options
-    const enfantsLabels = enfants
-      .map((e: any) => `${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim())
-      .filter(Boolean)
-      .join(' + ')
-    const descForfait = enfantsLabels
-      ? `Forfait scolarité ${annee} — Famille (${enfants.length} enfant${enfants.length > 1 ? 's' : ''} : ${enfantsLabels}) — tarif accordé par la commission`
-      : `Forfait scolarité ${annee} (tarif accordé par la commission)`
-    lignes.push({
-      facture_id: nf.id,
-      enfant_id: null,
-      description: descForfait,
-      montant: parseFloat(ddr.tarif_accorde) || 0,
-      deductible: true,
-    })
+    // DDR validée : on RÉPARTIT le tarif accordé par enfant, et on détaille
+    // ligne par ligne comme pour le plein tarif. La réduction s'applique en
+    // priorité sur la scolarité, ensuite éventuellement sur la demi-pension.
+    //
+    // Mécanique :
+    //   part_par_enfant = tarif_accorde / nb_enfants
+    //   postes "inclus_dans_reduction" SAUF scolarité (ex: Demi-pension) → plein tarif
+    //   Scolarité par enfant = part_par_enfant - somme(autres postes inclus)
+    //   Postes NON inclus (Navette, Car de ramassage) → plein tarif facturé en plus
+    const tarifAccorde = parseFloat(ddr.tarif_accorde) || 0
+    const nbEnfants = enfants.length || 1
+    const partParEnfant = Math.round((tarifAccorde / nbEnfants) * 100) / 100
+
     for (const e of enfants) {
-      const totalOptions = (e.postes || []).reduce((acc: number, p: any) => {
+      const enfantLabel = e.enfants ? `${e.enfants.prenom || ''} ${e.enfants.nom || ''}`.trim() : ''
+      const classe = e.classe_prevue ? ` (${e.classe_prevue})` : ''
+      const postesContrat = Array.isArray(e.postes) ? e.postes : []
+
+      // Postes inclus dans la réduction (sauf scolarité) — facturés au plein tarif
+      const postesInclusHorsScol = postesContrat.filter((p: any) => {
         const inclus = tarifMap[p.tarif_id] !== false
-        return acc + (inclus ? 0 : (parseFloat(p.montant) || 0))
-      }, 0)
-      if (totalOptions > 0) {
+        const estScolarite = /scolarit/i.test(p.nom || '')
+        return inclus && !estScolarite
+      })
+      const totalInclusHorsScol = postesInclusHorsScol.reduce((s: number, p: any) => s + (parseFloat(p.montant) || 0), 0)
+
+      // Scolarité enfant = part accordée - autres postes inclus (DP, etc.)
+      // Si la part est inférieure aux autres postes inclus → réduction additionnelle sur DP
+      const scolEnfant = Math.max(0, Math.round((partParEnfant - totalInclusHorsScol) * 100) / 100)
+
+      // Ligne Scolarité (tarif accordé)
+      if (scolEnfant > 0) {
         lignes.push({
           facture_id: nf.id,
           enfant_id: e.enfant_id,
-          description: `Options ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
-          montant: totalOptions,
+          description: `Scolarité ${annee} — ${enfantLabel}${classe} (tarif accordé)`.trim(),
+          montant: scolEnfant,
+          deductible: true,
+        })
+      }
+
+      // Lignes postes inclus hors scolarité (DP au plein tarif)
+      // Si scolEnfant a saturé à 0 et qu'il reste un excédent, on réduit la DP en cascade
+      let excedentARepartir = Math.max(0, totalInclusHorsScol - partParEnfant)
+      // Trier postes inclus pour appliquer la cascade (DP d'abord par défaut)
+      for (const p of postesInclusHorsScol) {
+        const montantPlein = parseFloat(p.montant) || 0
+        if (montantPlein <= 0) continue
+        const reduc = Math.min(excedentARepartir, montantPlein)
+        excedentARepartir -= reduc
+        const montantFinal = Math.round((montantPlein - reduc) * 100) / 100
+        if (montantFinal > 0) {
+          lignes.push({
+            facture_id: nf.id,
+            enfant_id: e.enfant_id,
+            description: `${p.nom || 'Poste'} ${annee} — ${enfantLabel}${classe}`.trim(),
+            montant: montantFinal,
+            deductible: true,
+          })
+        }
+      }
+
+      // Postes NON inclus dans la réduction (Navette, Car de ramassage) → plein tarif
+      const postesNonInclus = postesContrat.filter((p: any) => tarifMap[p.tarif_id] === false)
+      for (const p of postesNonInclus) {
+        const m = parseFloat(p.montant) || 0
+        if (m <= 0) continue
+        lignes.push({
+          facture_id: nf.id,
+          enfant_id: e.enfant_id,
+          description: `${p.nom || 'Poste'} ${annee} — ${enfantLabel}${classe}`.trim(),
+          montant: m,
           deductible: false,
         })
       }

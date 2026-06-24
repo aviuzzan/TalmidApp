@@ -12,6 +12,7 @@ type EditForm = {
   obligatoire: boolean
   code_comptable: string
   inclus_dans_reduction: boolean
+  groupe_exclusif: string
 }
 
 export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
@@ -20,9 +21,9 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
   const [secteurs, setSecteurs] = useState<any[]>([])
   const [tranches, setTranches] = useState<any[]>([])
   const [tarifs, setTarifs] = useState<any[]>([])
-  const [newT, setNewT] = useState({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true })
+  const [newT, setNewT] = useState({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '' })
   const [editing, setEditing] = useState<any | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true })
+  const [editForm, setEditForm] = useState<EditForm>({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '' })
   const [saving, setSaving] = useState(false)
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
   useEffect(() => { load() // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,9 +43,9 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
   }
   async function ajouter() {
     if (!newT.nom_poste.trim() || !newT.montant || parseFloat(newT.montant) <= 0) { toast.error('Poste obligatoire et montant > 0'); return }
-    const { error } = await createClient().from('tarifs_secteur').insert({ ecole_id: ecoleId, annee_scolaire: annee, secteur_id: newT.secteur_id || null, tranche_id: newT.tranche_id || null, nom_poste: newT.nom_poste, montant: parseFloat(newT.montant), obligatoire: newT.obligatoire, code_comptable: newT.code_comptable || null, inclus_dans_reduction: newT.inclus_dans_reduction, ordre: tarifs.length })
+    const { error } = await createClient().from('tarifs_secteur').insert({ ecole_id: ecoleId, annee_scolaire: annee, secteur_id: newT.secteur_id || null, tranche_id: newT.tranche_id || null, nom_poste: newT.nom_poste, montant: parseFloat(newT.montant), obligatoire: newT.obligatoire, code_comptable: newT.code_comptable || null, inclus_dans_reduction: newT.inclus_dans_reduction, groupe_exclusif: newT.groupe_exclusif.trim() || null, ordre: tarifs.length })
     if (error) { toast.error('Erreur : ' + error.message); return }
-    setNewT({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true })
+    setNewT({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '' })
     toast.success('Tarif ajouté')
     await load()
   }
@@ -57,6 +58,7 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
       obligatoire: !!t.obligatoire,
       code_comptable: t.code_comptable || '',
       inclus_dans_reduction: t.inclus_dans_reduction !== false,
+      groupe_exclusif: t.groupe_exclusif || '',
     })
     setEditing(t)
   }
@@ -72,6 +74,7 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
       obligatoire: editForm.obligatoire,
       code_comptable: editForm.code_comptable || null,
       inclus_dans_reduction: editForm.inclus_dans_reduction,
+      groupe_exclusif: editForm.groupe_exclusif.trim() || null,
     }).eq('id', editing.id)
     if (error) { toast.error('Erreur : ' + error.message); setSaving(false); return }
     toast.success('Tarif modifié')
@@ -110,6 +113,11 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
             <span style={{ display: 'block', fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Coché = ce tarif est couvert par le tarif accordé en réduction. Décoché = ce tarif s&apos;ajoute EN PLUS au tarif accordé (typique pour options : cantine, navette, instruction religieuse...).</span>
           </span>
         </label>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>GROUPE EXCLUSIF (optionnel)</div>
+          <input style={{ ...inp, maxWidth: 280 }} value={newT.groupe_exclusif} onChange={e => setNewT(p => ({ ...p, groupe_exclusif: e.target.value }))} placeholder="ex : transport" />
+          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Les tarifs partageant la même valeur sont mutuellement exclusifs (ex : Car et Navette dans «&nbsp;transport&nbsp;» → on ne peut choisir qu&apos;une option). Laisser vide si pas de groupe.</div>
+        </div>
       </div>
       {tarifs.length === 0 ? <div style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun tarif pour {annee}</div> : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -120,10 +128,13 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
                 <td style={{ padding: '11px 14px' }}><span style={{ fontSize: 11, background: '#EFF6FF', color: '#2563EB', borderRadius: 5, padding: '2px 8px' }}>{t.secteurs?.nom || 'Tous'}</span></td>
                 <td style={{ padding: '11px 14px' }}>{t.tranches_facturation ? <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, background: '#EEF2FF', color: '#4338CA', borderRadius: 5, padding: '2px 8px' }} title={t.tranches_facturation.libelle}>{t.tranches_facturation.code}</span> : <span style={{ fontSize: 11, color: '#CBD5E1' }}>Toutes</span>}</td>
                 <td style={{ padding: '11px 14px', fontWeight: 500 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {t.nom_poste}
                     {t.inclus_dans_reduction === false && (
                       <span title="Ce tarif s'ajoute EN PLUS du tarif accordé en commission DDR" style={{ fontSize: 10, background: '#FEF3C7', color: '#B45309', borderRadius: 5, padding: '2px 6px', fontWeight: 600 }}>💡 Option</span>
+                    )}
+                    {t.groupe_exclusif && (
+                      <span title={`Mutuellement exclusif avec les autres tarifs du groupe "${t.groupe_exclusif}"`} style={{ fontSize: 10, background: '#EDE9FE', color: '#6D28D9', borderRadius: 5, padding: '2px 6px', fontWeight: 600 }}>↔ {t.groupe_exclusif}</span>
                     )}
                   </span>
                 </td>
@@ -187,6 +198,11 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
                   <span style={{ display: 'block', fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Coché = ce tarif est couvert par le tarif accordé en réduction. Décoché = ce tarif s&apos;ajoute EN PLUS au tarif accordé (typique pour options : cantine, navette, instruction religieuse...).</span>
                 </span>
               </label>
+              <div>
+                <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>GROUPE EXCLUSIF (optionnel)</div>
+                <input style={inp} value={editForm.groupe_exclusif} onChange={e => setEditForm(p => ({ ...p, groupe_exclusif: e.target.value }))} placeholder="ex : transport" />
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Les tarifs partageant la même valeur sont mutuellement exclusifs dans le contrat (ex : Car et Navette dans «&nbsp;transport&nbsp;»).</div>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setEditing(null)} disabled={saving} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
