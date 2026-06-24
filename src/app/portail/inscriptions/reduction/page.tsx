@@ -402,7 +402,7 @@ export default function DemandeReductionPage() {
 
     // Validation des documents obligatoires (sauf si la famille a coche "pas de justificatif")
     if (!pasDeJustificatif) {
-      const docsManquants = (documentsConfig || [])
+      const docsManquants = (docsConfig || [])
         .filter((d: any) => d.actif !== false && d.obligatoire)
         .filter((d: any) => !docsUploaded[d.id])
       if (docsManquants.length > 0) {
