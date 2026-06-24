@@ -15,6 +15,7 @@ export default function PortailFacturesPage() {
   const [reglements, setReglements] = useState<any[]>([])
   const [avoirs, setAvoirs] = useState<any[]>([])
   const [imputations, setImputations] = useState<any[]>([])
+  const [echeances, setEcheances] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [stripeActif, setStripeActif] = useState(false)
   const [gocardlessActif, setGocardlessActif] = useState(false)
@@ -46,14 +47,17 @@ export default function PortailFacturesPage() {
 
       if (fact) {
         setFacture(fact)
-        const [{ data: lig }, { data: regl }, { data: imp }, { data: integrationsActives }] = await Promise.all([
+        const [{ data: lig }, { data: regl }, { data: imp }, { data: integrationsActives }, { data: ech }] = await Promise.all([
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
           supabase.from('avoirs_imputations').select('*, avoirs(numero, motif)').eq('facture_id', fact.id),
           supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless', 'paypal']),
+          // Echeances : on masque les cheques en attente_reception (l'admin n'a pas encore confirme reception)
+          supabase.from('cheques_prevus').select('*').eq('facture_id', fact.id).neq('statut', 'attente_reception').order('date_echeance', { ascending: true }),
         ])
         setLignes(lig ?? [])
         setImputations(imp ?? [])
+        setEcheances(ech ?? [])
         // Filtrer les reglements de mode_paiement=avoir (deja comptes dans imputations)
         const reglementsReels = (regl ?? []).filter((r: any) => r.mode_paiement !== 'avoir')
         setReglements(parent.estSeparee ? reglementsReels.filter((r: any) => r.paye_par === parent.parentSlot) : reglementsReels)
@@ -323,6 +327,140 @@ export default function PortailFacturesPage() {
               </div>
             )}
           </div>
+
+          {/* Echeancier */}
+          {echeances.length > 0 && !isAnnulee && (() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const reglees = echeances.filter(e => ['encaisse', 'paye'].includes(e.statut))
+            const aRegler = echeances.filter(e => !['encaisse', 'paye', 'rejete'].includes(e.statut))
+            const prochaine = aRegler.find(e => new Date(e.date_echeance) >= today) || aRegler[0]
+            const totalRegle = reglees.reduce((s, e) => s + Number(e.montant), 0)
+            const totalRestant = aRegler.reduce((s, e) => s + Number(e.montant), 0)
+            const modeLabel = (m: string) => {
+              if (m === 'cheque') return 'Chèque'
+              if (m === 'sepa' || m === 'prelevement') return 'Prélèvement'
+              if (m === 'virement') return 'Virement'
+              if (m === 'especes') return 'Espèces'
+              if (m === 'carte') return 'Carte'
+              return labelModePaiement(m)
+            }
+            const modeIcon = (m: string) => {
+              if (m === 'cheque') return '📝'
+              if (m === 'sepa' || m === 'prelevement') return '🏦'
+              if (m === 'virement') return '↪️'
+              if (m === 'especes') return '💶'
+              if (m === 'carte') return '💳'
+              return '•'
+            }
+            function badge(e: any) {
+              const dateEch = new Date(e.date_echeance); dateEch.setHours(0, 0, 0, 0)
+              const enRetard = !['encaisse', 'paye', 'rejete', 'recu'].includes(e.statut) && dateEch < today
+              if (e.statut === 'encaisse') return { label: 'Encaissé', bg: '#ECFDF5', color: '#065F46' }
+              if (e.statut === 'paye') return { label: 'Payé', bg: '#ECFDF5', color: '#065F46' }
+              if (e.statut === 'rejete') return { label: 'Rejeté', bg: '#FEF2F2', color: '#991B1B' }
+              if (e.statut === 'recu') return { label: 'Reçu', bg: '#EEF2FF', color: '#3730A3' }
+              if (enRetard) return { label: 'En retard', bg: '#FEF2F2', color: '#991B1B' }
+              if (prochaine && prochaine.id === e.id) return { label: 'Prochaine', bg: '#DBEAFE', color: '#1E40AF' }
+              return { label: 'À venir', bg: '#F1F5F9', color: '#475569' }
+            }
+            const joursAvant = prochaine ? Math.ceil((new Date(prochaine.date_echeance).getTime() - today.getTime()) / 86400000) : 0
+            return (
+              <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#1E293B', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    📅 Mon échéancier
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748B' }}>
+                    {echeances.length} échéance{echeances.length > 1 ? 's' : ''} · {echeances[0] ? modeLabel(echeances[0].mode_paiement) : ''}
+                  </div>
+                </div>
+                {/* KPI strip */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, padding: '14px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                  <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Échéances réglées</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{reglees.length} / {echeances.length}</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{totalRegle.toLocaleString('fr-FR')} € encaissés</div>
+                  </div>
+                  {prochaine && (
+                    <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Prochaine échéance</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{new Date(prochaine.date_echeance).toLocaleDateString('fr-FR')}</div>
+                      <div style={{ fontSize: 11, color: joursAvant < 0 ? '#DC2626' : '#64748B', marginTop: 1 }}>
+                        {joursAvant < 0 ? `en retard de ${Math.abs(joursAvant)} j` : joursAvant === 0 ? "aujourd'hui" : `dans ${joursAvant} jour${joursAvant > 1 ? 's' : ''}`}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Reste à régler</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{totalRestant.toLocaleString('fr-FR')} €</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>sur {(totalRegle + totalRestant).toLocaleString('fr-FR')} €</div>
+                  </div>
+                </div>
+                {/* Tableau desktop */}
+                <div className="echeancier-desktop" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#F8FAFC' }}>
+                      <tr>
+                        {['N°', 'Date prévue', 'Montant', 'Mode', 'Statut'].map((h, i) => (
+                          <th key={h} style={{ textAlign: i === 2 ? 'right' : 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {echeances.map(e => {
+                        const b = badge(e)
+                        const isProchaine = prochaine && prochaine.id === e.id
+                        return (
+                          <tr key={e.id} style={{ borderTop: '1px solid #F1F5F9', background: isProchaine ? '#EFF6FF' : 'transparent' }}>
+                            <td style={{ padding: '11px 16px', fontSize: 12, fontFamily: 'monospace', color: '#64748B', fontWeight: isProchaine ? 700 : 500 }}>{e.numero_cheque}</td>
+                            <td style={{ padding: '11px 16px', fontSize: 13, color: '#1E293B', fontWeight: isProchaine ? 700 : 500 }}>{new Date(e.date_echeance).toLocaleDateString('fr-FR')}</td>
+                            <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 700, color: '#1E293B', textAlign: 'right' }}>{Number(e.montant).toLocaleString('fr-FR')} €</td>
+                            <td style={{ padding: '11px 16px', fontSize: 12, color: '#475569' }}>
+                              <span style={{ marginRight: 4 }}>{modeIcon(e.mode_paiement)}</span>{modeLabel(e.mode_paiement)}
+                            </td>
+                            <td style={{ padding: '11px 16px' }}>
+                              <span style={{ background: b.bg, color: b.color, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>{b.label}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Cards mobile */}
+                <div className="echeancier-mobile" style={{ display: 'none', flexDirection: 'column', gap: 8, padding: '12px 14px' }}>
+                  {echeances.map(e => {
+                    const b = badge(e)
+                    const isProchaine = prochaine && prochaine.id === e.id
+                    return (
+                      <div key={e.id} style={{ border: `1px solid ${isProchaine ? '#BFDBFE' : '#E2E8F0'}`, background: isProchaine ? '#EFF6FF' : '#fff', borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+                            #{e.numero_cheque} · {new Date(e.date_echeance).toLocaleDateString('fr-FR')}
+                          </div>
+                          <span style={{ background: b.bg, color: b.color, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>{b.label}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#475569' }}>
+                          <span>{modeIcon(e.mode_paiement)} {modeLabel(e.mode_paiement)}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{Number(e.montant).toLocaleString('fr-FR')} €</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ padding: '10px 16px', borderTop: '1px solid #E2E8F0', background: '#FFFBEB', fontSize: 11, color: '#92400E', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span>💡</span>
+                  <div>Les dates indiquées sont les dates prévues d'encaissement. En cas de difficulté, contactez l'école <strong>avant</strong> la date d'échéance.</div>
+                </div>
+                <style jsx>{`
+                  @media (max-width: 640px) {
+                    .echeancier-desktop { display: none; }
+                    .echeancier-mobile { display: flex !important; }
+                  }
+                `}</style>
+              </div>
+            )
+          })()}
 
           {/* Règlements */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'auto' }}>
