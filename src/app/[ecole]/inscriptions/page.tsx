@@ -803,6 +803,7 @@ function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee:
 }
 
 function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
+  const ecole = useEcole()
   const [liste, setListe] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -869,12 +870,19 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
               <div style={{ fontSize: 11, color: '#94A3B8' }}>{d.familles?.nom} · Secteur : {d.secteurs?.nom || '—'} · Classe : {d.classe_souhaitee || '—'}</div>
             </div>
             <span style={{ fontSize: 11, fontWeight: 600, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 20 }}>{st.label}</span>
-            {d.statut === 'soumis' && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => changerStatut(d.id, 'accepte')} style={{ fontSize: 11, color: '#10B981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Accepter</button>
-                <button onClick={() => changerStatut(d.id, 'refuse')} style={{ fontSize: 11, color: '#EF4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Refuser</button>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => window.open(`/${ecole.slug}/inscriptions/pedagogique/${d.id}/print`, '_blank')}
+                title="Ouvrir la fiche imprimable / PDF"
+                style={{ fontSize: 11, color: '#2563EB', background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+              >📥 PDF</button>
+              {d.statut === 'soumis' && (
+                <>
+                  <button onClick={() => changerStatut(d.id, 'accepte')} style={{ fontSize: 11, color: '#10B981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Accepter</button>
+                  <button onClick={() => changerStatut(d.id, 'refuse')} style={{ fontSize: 11, color: '#EF4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Refuser</button>
+                </>
+              )}
+            </div>
           </div>
         )
       })}
