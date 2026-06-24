@@ -400,6 +400,20 @@ export default function DemandeReductionPage() {
       return
     }
 
+    // Validation des documents obligatoires (sauf si la famille a coche "pas de justificatif")
+    if (!pasDeJustificatif) {
+      const docsManquants = (documentsConfig || [])
+        .filter((d: any) => d.actif !== false && d.obligatoire)
+        .filter((d: any) => !docsUploaded[d.id])
+      if (docsManquants.length > 0) {
+        alert('Veuillez fournir les pieces justificatives obligatoires :\n• ' + docsManquants.map((d: any) => d.label).join('\n• ') + '\n\nSi vous n\'avez aucun justificatif, cochez la case "Je declare sur l\'honneur que je ne dispose d\'aucun justificatif de revenus".')
+        return
+      }
+    } else if (!pasDeJustificatifDetail.trim()) {
+      alert('Veuillez preciser dans le champ texte pourquoi vous ne disposez d\'aucun justificatif (ex: situation, demarches en cours, etc.).')
+      return
+    }
+
     setSaving(true)
     const s = createClient()
 
