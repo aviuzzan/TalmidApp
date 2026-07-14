@@ -9,7 +9,7 @@ import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { useToast } from '@/components/ui/Toast'
 
-type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'cheques'
+type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'a_relancer' | 'cheques'
 
 export default function InscriptionsAdminPage() {
   const { t } = useI18n()
@@ -106,6 +106,7 @@ export default function InscriptionsAdminPage() {
     { id: 'pedagogique', label: 'Fiches pédagogiques', icon: '📋', count: stats.pedagogique },
     { id: 'reduction', label: 'Demandes de réduction', icon: '💸', count: stats.reduction },
     { id: 'contrats', label: 'Contrats', icon: '📝', count: stats.contrats },
+    { id: 'a_relancer', label: 'À relancer', icon: '📧' },
     // Le badge reflete uniquement les vrais cheques a encaisser (la vue interne propose
     // des onglets pour les autres modes : virement, prelevement, espece, carte).
     // Onglet masqué si l'utilisateur n'a pas l'accès finances (cf. verrou /finances/**).
@@ -331,6 +332,11 @@ export default function InscriptionsAdminPage() {
       {/* ── CONTRATS ── */}
       {onglet === 'contrats' && (
         <ContratsList ecoleId={ecole.id} ecoleSlug={ecole.slug} annee={annee} />
+      )}
+
+      {/* ── À RELANCER ── */}
+      {onglet === 'a_relancer' && (
+        <ARelancerList ecoleId={ecole.id} ecoleSlug={ecole.slug} annee={annee} />
       )}
 
       {/* ── RÉDUCTIONS ── */}
@@ -1289,6 +1295,258 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
           </div>
         )
       })()}
+    </div>
+  )
+}
+
+// ── ONGLET À RELANCER ──
+function ARelancerList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlug: string; annee: string }) {
+  const router = useRouter()
+  const toast = useToast()
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [sending, setSending] = useState(false)
+  const [messagePerso, setMessagePerso] = useState('')
+  const [showModal, setShowModal] = useState(false)
+
+  useEffect(() => {
+    if (!ecoleId || !annee) return
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecoleId, annee])
+
+  async function load() {
+    setLoading(true)
+    const s = createClient()
+    // 1) Toutes les familles actives de l'ecole
+    const { data: familles } = await s
+      .from('familles')
+      .select('id, nom, parent1_prenom, parent1_email, parent2_prenom, parent2_email, parent1_telephone')
+      .eq('ecole_id', ecoleId)
+      .order('nom')
+
+    // 2) Contrats existants pour cette annee (tous statuts)
+    const { data: contrats } = await s
+      .from('contrats_scolarisation')
+      .select('famille_id, statut')
+      .eq('ecole_id', ecoleId)
+      .eq('annee_scolaire', annee)
+
+    // 3) Enfants par famille (pour compter combien d'enfants)
+    const familleIds = (familles || []).map((f: any) => f.id)
+    const { data: enfants } = familleIds.length
+      ? await s.from('enfants').select('famille_id').in('famille_id', familleIds)
+      : { data: [] as any[] }
+
+    // 4) Dernieres relances envoyees
+    const { data: relances } = familleIds.length
+      ? await s.from('relances_contrat')
+        .select('famille_id, envoye_le, succes')
+        .in('famille_id', familleIds)
+        .eq('annee_scolaire', annee)
+        .order('envoye_le', { ascending: false })
+      : { data: [] as any[] }
+
+    const contratMap = new Map<string, string>()
+    ;(contrats || []).forEach((c: any) => contratMap.set(c.famille_id, c.statut))
+    const enfantsCount = new Map<string, number>()
+    ;(enfants || []).forEach((e: any) => enfantsCount.set(e.famille_id, (enfantsCount.get(e.famille_id) || 0) + 1))
+    const dernieresRelances = new Map<string, { date: string; succes: boolean; count: number }>()
+    ;(relances || []).forEach((r: any) => {
+      const cur = dernieresRelances.get(r.famille_id)
+      if (!cur) {
+        dernieresRelances.set(r.famille_id, { date: r.envoye_le, succes: r.succes, count: 1 })
+      } else {
+        cur.count += 1
+      }
+    })
+
+    // Filtrer : ne garder que les familles SANS contrat valide/soumis/accepte
+    // (brouillon ou aucun contrat ou annule)
+    const arelancer = (familles || [])
+      .filter((f: any) => (enfantsCount.get(f.id) || 0) > 0) // ignore familles sans enfant
+      .map((f: any) => {
+        const statutContrat = contratMap.get(f.id) || null
+        const derniere = dernieresRelances.get(f.id)
+        let statutLabel = 'Aucun contrat'
+        let statutColor = '#F87171'
+        let statutBg = '#FEF2F2'
+        if (statutContrat === 'brouillon') { statutLabel = 'Brouillon en cours'; statutColor = '#B45309'; statutBg = '#FFFBEB' }
+        else if (statutContrat === 'annule' || statutContrat === 'annulee') { statutLabel = 'Contrat annulé'; statutColor = '#64748B'; statutBg = '#F1F5F9' }
+        return { ...f, statutContrat, statutLabel, statutColor, statutBg, nbEnfants: enfantsCount.get(f.id) || 0, derniere }
+      })
+      .filter((f: any) => !f.statutContrat || ['brouillon', 'annule', 'annulee'].includes(f.statutContrat))
+    setRows(arelancer)
+    setLoading(false)
+  }
+
+  function toggleOne(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  function toggleAll() {
+    if (selected.size === rows.length) setSelected(new Set())
+    else setSelected(new Set(rows.filter(r => r.parent1_email || r.parent2_email).map(r => r.id)))
+  }
+
+  async function envoyerRelances(ids: string[]) {
+    if (ids.length === 0) return
+    setSending(true)
+    try {
+      const s = createClient()
+      const { data: { session } } = await s.auth.getSession()
+      if (!session) { toast.error('Session expirée'); setSending(false); return }
+      const res = await fetch('/api/admin/relancer-contrat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ familleIds: ids, anneeScolaire: annee, ecoleId, messagePerso: messagePerso.trim() || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        toast.error(data.error || 'Erreur envoi')
+        setSending(false)
+        return
+      }
+      toast.success(`${data.envoye} email(s) envoyé(s)${data.echec > 0 ? ` · ${data.echec} échec(s)` : ''}`)
+      setSelected(new Set())
+      setMessagePerso('')
+      setShowModal(false)
+      await load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Erreur')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function exportCsv() {
+    const header = 'Nom;Parent 1;Email 1;Parent 2;Email 2;Téléphone;Enfants;Statut;Dernière relance\n'
+    const lines = rows.map(r => {
+      const derniere = r.derniere ? new Date(r.derniere.date).toLocaleDateString('fr-FR') + (r.derniere.count > 1 ? ` (×${r.derniere.count})` : '') : ''
+      return [r.nom, r.parent1_prenom || '', r.parent1_email || '', r.parent2_prenom || '', r.parent2_email || '', r.parent1_telephone || '', r.nbEnfants, r.statutLabel, derniere]
+        .map((v: any) => String(v).replace(/;/g, ',')).join(';')
+    }).join('\n')
+    const blob = new Blob([header + lines], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `familles-a-relancer-${annee}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const selectionValide = Array.from(selected).filter(id => {
+    const r = rows.find(x => x.id === id)
+    return r && (r.parent1_email || r.parent2_email)
+  })
+
+  if (loading) return <div style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Chargement…</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Barre d'action */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontSize: 13, color: '#64748B' }}>
+          <strong style={{ color: '#1E293B' }}>{rows.length}</strong> famille{rows.length > 1 ? 's' : ''} sans contrat pour {annee}
+          {selected.size > 0 && <span style={{ marginLeft: 12, color: '#2563EB', fontWeight: 600 }}>· {selected.size} sélectionnée{selected.size > 1 ? 's' : ''}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportCsv} disabled={rows.length === 0}
+            style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: rows.length === 0 ? 'not-allowed' : 'pointer' }}>
+            📥 Export CSV
+          </button>
+          <button onClick={() => setShowModal(true)} disabled={selectionValide.length === 0}
+            style={{ background: selectionValide.length === 0 ? '#CBD5E1' : '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: selectionValide.length === 0 ? 'not-allowed' : 'pointer' }}>
+            📧 Relancer sélectionnées ({selectionValide.length})
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 36 }}>🎉</div>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginTop: 10 }}>Aucune famille à relancer</h3>
+          <p style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>Toutes les familles avec enfants ont un contrat pour {annee}.</p>
+        </div>
+      ) : (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 800 }}>
+            <thead style={{ background: '#F8FAFC' }}>
+              <tr>
+                <th style={{ padding: '10px 14px', textAlign: 'left' }}>
+                  <input type="checkbox" checked={selected.size > 0 && selected.size === rows.filter(r => r.parent1_email || r.parent2_email).length} onChange={toggleAll} />
+                </th>
+                {['Famille', 'Parents', 'Enfants', 'Statut', 'Dernière relance', ''].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const hasEmail = !!(r.parent1_email || r.parent2_email)
+                return (
+                  <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9', background: selected.has(r.id) ? '#EFF6FF' : 'transparent' }}>
+                    <td style={{ padding: '11px 14px' }}>
+                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} disabled={!hasEmail} />
+                    </td>
+                    <td style={{ padding: '11px 14px' }}>
+                      <a onClick={() => router.push(`/${ecoleSlug}/familles/${r.id}`)} style={{ fontWeight: 600, color: '#1E293B', cursor: 'pointer', textDecoration: 'none' }}>{r.nom}</a>
+                    </td>
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#475569' }}>
+                      {r.parent1_prenom || ''} {r.parent1_email && <span style={{ color: '#94A3B8', fontSize: 11 }}>· {r.parent1_email}</span>}
+                      {r.parent2_email && <><br />{r.parent2_prenom || ''} <span style={{ color: '#94A3B8', fontSize: 11 }}>· {r.parent2_email}</span></>}
+                      {!hasEmail && <span style={{ color: '#DC2626', fontSize: 11 }}>⚠ Aucun email</span>}
+                    </td>
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#64748B' }}>{r.nbEnfants}</td>
+                    <td style={{ padding: '11px 14px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 999, background: r.statutBg, color: r.statutColor }}>{r.statutLabel}</span>
+                    </td>
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: '#64748B' }}>
+                      {r.derniere ? (
+                        <>
+                          {new Date(r.derniere.date).toLocaleDateString('fr-FR')}
+                          {r.derniere.count > 1 && <span style={{ background: '#EEF2FF', color: '#4338CA', borderRadius: 5, padding: '1px 6px', fontSize: 10, fontWeight: 700, marginLeft: 6 }}>×{r.derniere.count}</span>}
+                        </>
+                      ) : <span style={{ color: '#CBD5E1' }}>Jamais</span>}
+                    </td>
+                    <td style={{ padding: '11px 14px' }}>
+                      <button onClick={() => envoyerRelances([r.id])} disabled={!hasEmail || sending}
+                        style={{ background: hasEmail ? '#2563EB' : '#CBD5E1', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: hasEmail && !sending ? 'pointer' : 'not-allowed' }}>
+                        📧 Relancer
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal relance groupée */}
+      {showModal && (
+        <div onClick={() => !sending && setShowModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: '100%', maxWidth: 520 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginBottom: 4 }}>Relancer {selectionValide.length} famille{selectionValide.length > 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 14 }}>Un email de rappel sera envoyé aux parents de chaque famille sélectionnée.</div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase' }}>Message personnalisé (optionnel)</label>
+            <textarea rows={5} value={messagePerso} onChange={e => setMessagePerso(e.target.value)}
+              placeholder="Laisser vide pour utiliser le message par défaut. Sinon écrivez votre propre message ici."
+              style={{ width: '100%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={() => setShowModal(false)} disabled={sending}
+                style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: sending ? 'not-allowed' : 'pointer' }}>Annuler</button>
+              <button onClick={() => envoyerRelances(selectionValide)} disabled={sending}
+                style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1 }}>
+                {sending ? 'Envoi…' : `Envoyer à ${selectionValide.length}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
