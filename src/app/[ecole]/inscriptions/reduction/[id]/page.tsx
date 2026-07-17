@@ -23,6 +23,7 @@ export default function DossierReductionPage() {
   const [membres, setMembres] = useState<any[]>([])
   const [avis, setAvis] = useState<any[]>([])
   const [questionsConfig, setQuestionsConfig] = useState<any[]>([])
+  const [enfantsList, setEnfantsList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isIPad, setIsIPad] = useState(false)
 
@@ -52,6 +53,23 @@ export default function DossierReductionPage() {
     if (dem) {
       const { data: qcfg } = await s.from('reduction_questions_config').select('cle, label').eq('ecole_id', ecole.id).eq('annee_scolaire', dem.annee_scolaire)
       setQuestionsConfig(qcfg ?? [])
+
+      // Charger les enfants concernes par la DDR (enfants_dossier = [{ enfant_id, classe_souhaitee }])
+      const enfantIds = Array.isArray(dem.enfants_dossier)
+        ? dem.enfants_dossier.map((e: any) => e.enfant_id).filter(Boolean)
+        : []
+      if (enfantIds.length > 0) {
+        const { data: enfs } = await s.from('enfants').select('id, prenom, nom, date_naissance').in('id', enfantIds)
+        const enfMap = new Map<string, any>()
+        ;(enfs || []).forEach((e: any) => enfMap.set(e.id, e))
+        setEnfantsList((dem.enfants_dossier as any[]).map((row: any) => ({
+          ...(enfMap.get(row.enfant_id) || {}),
+          enfant_id: row.enfant_id,
+          classe_souhaitee: row.classe_souhaitee || null,
+        })))
+      } else {
+        setEnfantsList([])
+      }
     }
     if (dem) {
       setTarifDecide(dem.tarif_accorde?.toString() || '')
@@ -181,6 +199,34 @@ export default function DossierReductionPage() {
                 <InfoBlock label="Adresse" value={[famille?.parent1_adresse, famille?.parent1_code_postal, famille?.parent1_ville].filter(Boolean).join(' ')} />
               </div>
             </div>
+
+            {/* Enfants concernés par la DDR */}
+            {enfantsList.length > 0 && (
+              <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  👦 Enfants concernés par la demande
+                  <span style={{ fontSize: 11, background: '#EFF6FF', color: '#2563EB', borderRadius: 5, padding: '2px 8px', fontWeight: 600 }}>{enfantsList.length}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {enfantsList.map((e: any, i: number) => (
+                    <div key={e.enfant_id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#DBEAFE', color: '#1E40AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11 }}>
+                          {(e.prenom || '?')[0]}{(e.nom || '')[0]}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{e.prenom || '?'} {e.nom || ''}</div>
+                          {e.date_naissance && <div style={{ fontSize: 10, color: '#94A3B8' }}>Né(e) le {new Date(e.date_naissance).toLocaleDateString('fr-FR')}</div>}
+                        </div>
+                      </div>
+                      {e.classe_souhaitee && (
+                        <span style={{ fontSize: 11, background: '#EEF2FF', color: '#4338CA', borderRadius: 5, padding: '3px 8px', fontWeight: 600 }}>{e.classe_souhaitee}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Logement */}
             <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
