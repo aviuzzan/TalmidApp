@@ -274,6 +274,17 @@ export default function FinancesPage() {
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
         {tab === 'factures' && (
           <>
+            {(() => {
+              // Compteur familles en retard (du-a-date > 0) → lien direct Relances
+              const nbRetard = factures.filter(f => (duAdates[f.id]?.duAdate || 0) > 0).length
+              return nbRetard > 0 ? (
+                <button onClick={() => router.push(`/${ecole.slug}/finances/relances`)}
+                  title="Familles avec des échéances échues non couvertes"
+                  style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  📮 {nbRetard} en retard → Relancer
+                </button>
+              ) : null
+            })()}
             <button onClick={() => router.push(`/${ecole.slug}/finances/avoirs`)}
               style={{ background: '#fff', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               🎁 Avoirs
@@ -332,10 +343,21 @@ export default function FinancesPage() {
                   </td>
                   <td style={{ padding: '13px 16px' }}>{statutBadge(f.statut)}</td>
                   <td style={{ padding: '13px 16px' }}>
-                    <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }}
-                      onClick={() => router.push(`/${ecole.slug}/familles/${f.famille_id}?tab=facturation`)}>
-                      Voir →
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {Number(f.solde_restant) > 0.01 && f.statut !== 'annule' && (
+                        <button title="Encaisser un règlement (montant pré-rempli)" style={{ padding: '5px 10px', fontSize: 12, background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0', borderRadius: 7, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}
+                          onClick={() => {
+                            setPaiementForm({ ...emptyPaiement, famille_id: f.famille_id, facture_id: f.id, montant: String(f.solde_restant) })
+                            setShowPaiementForm(true)
+                          }}>
+                          💰 Encaisser
+                        </button>
+                      )}
+                      <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }}
+                        onClick={() => router.push(`/${ecole.slug}/factures/${f.id}`)}>
+                        Voir →
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 )

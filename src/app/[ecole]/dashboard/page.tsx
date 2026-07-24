@@ -137,6 +137,10 @@ export default function DashboardPage() {
             {ecole.nom} · {today} · {userName}
           </p>
         </div>
+        <button onClick={() => router.push(`/${ecole.slug}/a-traiter`)}
+          style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          📥 À traiter
+        </button>
       </div>
 
       <AlertesUrgentes ecoleId={ecole.id} ecoleSlug={ecole.slug} />

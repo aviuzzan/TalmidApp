@@ -374,6 +374,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
   const [contrats, setContrats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState('tous')
+  const [recapValidation, setRecapValidation] = useState<any>(null)
 
   useEffect(() => {
     createClient()
@@ -413,8 +414,9 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
     }
 
     // Notifier la famille par email (best-effort)
+    let emailEnvoye = false
     try {
-      await fetch('/api/notify-famille', {
+      const notifRes = await fetch('/api/notify-famille', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -423,9 +425,28 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
           type: 'contrat_valide',
         }),
       })
+      emailEnvoye = notifRes.ok
     } catch {}
 
     setContrats(p => p.map(c => c.id === id ? { ...c, statut: 'valide' } : c))
+
+    // Récap post-validation (simplification UX) : montrer en une modale tout ce
+    // qui vient de se passer au lieu de devoir verifier dans 3 pages.
+    try {
+      const [{ data: lignesFact }, { count: nbEch }] = await Promise.all([
+        factRes.facture_id ? s.from('facture_lignes').select('montant').eq('facture_id', factRes.facture_id) : Promise.resolve({ data: [] as any[] }),
+        s.from('cheques_prevus').select('*', { count: 'exact', head: true }).eq('famille_id', contrat.famille_id),
+      ])
+      const totalFact = ((lignesFact || []) as any[]).reduce((sum: number, l: any) => sum + (parseFloat(l.montant) || 0), 0)
+      setRecapValidation({
+        famille: contrat.familles?.nom || 'Famille',
+        numero: factRes.numero || '',
+        dejaExistante: !!factRes.deja_existante,
+        total: totalFact,
+        nbEcheances: nbEch || 0,
+        emailEnvoye,
+      })
+    } catch { /* recap best-effort */ }
   }
 
   const filtres = ['tous', 'soumis', 'valide', 'brouillon']
@@ -475,6 +496,35 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
             )
           })}
       </div>
+
+      {/* Modale récap post-validation (simplification UX) */}
+      {recapValidation && (
+        <div onClick={() => setRecapValidation(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 26, width: '100%', maxWidth: 440, textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#1E293B', marginBottom: 4 }}>Contrat {recapValidation.famille} validé</div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 18 }}>Voici tout ce qui vient d&apos;être fait automatiquement :</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 20 }}>
+              {[
+                { ok: true, label: `Contrat marqué validé` },
+                { ok: true, label: recapValidation.dejaExistante
+                    ? `Facture ${recapValidation.numero} déjà existante (inchangée) — ${recapValidation.total.toLocaleString('fr-FR')} €`
+                    : `Facture ${recapValidation.numero} générée — ${recapValidation.total.toLocaleString('fr-FR')} €` },
+                { ok: recapValidation.nbEcheances > 0, label: recapValidation.nbEcheances > 0
+                    ? `Échéancier : ${recapValidation.nbEcheances} échéance${recapValidation.nbEcheances > 1 ? 's' : ''}`
+                    : `Aucun échéancier trouvé — vérifier l'onglet Échéances` },
+                { ok: recapValidation.emailEnvoye, label: recapValidation.emailEnvoye ? 'Email de confirmation envoyé à la famille' : "Email famille non envoyé (vérifier la config)" },
+              ].map((r: any, i: number) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: r.ok ? '#F0FDF4' : '#FFFBEB', borderRadius: 8, padding: '9px 12px' }}>
+                  <span style={{ fontSize: 14 }}>{r.ok ? '✅' : '⚠️'}</span>
+                  <span style={{ fontSize: 13, color: r.ok ? '#065F46' : '#92400E' }}>{r.label}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setRecapValidation(null)} className="btn-primary" style={{ width: '100%' }}>OK, compris</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -678,6 +728,7 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [editing, setEditing] = useState<any | null>(null)
   const [editForm, setEditForm] = useState<{ date_echeance: string; montant: string; numero_cheque: string; mode_paiement: string }>({ date_echeance: '', montant: '', numero_cheque: '', mode_paiement: '' })
   const [editSaving, setEditSaving] = useState(false)
+  const [batchEncaissement, setBatchEncaissement] = useState(false)
 
   // Verrou acces finances : on lit profiles.acces_finances pour l'utilisateur connecté.
   // super_admin a toujours accès. Sinon, accès uniquement si acces_finances === true.
@@ -989,6 +1040,26 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
 
       {showAttenteReception && (
         <Section title={`⏳ En attente de réception (${attenteReception.length})`} list={attenteReception} color="#2563EB" showRecu />
+      )}
+      {/* Traitement par lot : encaisse toutes les echeances echues d'un coup (ex: preleve SEPA du 5 du mois) */}
+      {aEncaisser.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button disabled={batchEncaissement} onClick={async () => {
+            const okConfirm = window.confirm(`Encaisser les ${aEncaisser.length} échéances échues d'un coup ?\n(crée un règlement par échéance : ${aEncaisser.reduce((s: number, c: any) => s + (c.montant || 0), 0).toLocaleString('fr-FR')} € au total)`)
+            if (!okConfirm) return
+            setBatchEncaissement(true)
+            let okCount = 0
+            for (const c of aEncaisser) {
+              try { await encaisser(c.id); okCount++ } catch { /* continue */ }
+            }
+            setBatchEncaissement(false)
+            toast.success(`${okCount}/${aEncaisser.length} échéances traitées`)
+            reload()
+          }}
+            style={{ background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: batchEncaissement ? 'not-allowed' : 'pointer', opacity: batchEncaissement ? 0.6 : 1 }}>
+            {batchEncaissement ? 'Traitement…' : `✓ Tout encaisser (${aEncaisser.length})`}
+          </button>
+        </div>
       )}
       <Section title={`⚠️ À encaisser maintenant (${aEncaisser.length})`} list={aEncaisser} color="#EF4444" showEncaisser />
       <Section title={`📅 À venir (${aVenir.length})`} list={aVenir} color="#F59E0B" showEncaisser={false} />
