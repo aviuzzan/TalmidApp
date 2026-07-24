@@ -68,17 +68,32 @@ export async function POST(req: NextRequest) {
 
         let reglementId = pe?.reglement_id
         if (factureId && !reglementId) {
-          const { data: regl } = await supabaseAdmin.from('reglements').insert({
-            ecole_id: ecoleId,
-            facture_id: factureId,
-            famille_id: pe?.famille_id || meta.famille_id || null,
-            montant: montantEuros,
-            mode_paiement: 'stripe',
-            date_reglement: new Date().toISOString().slice(0, 10),
-            reference: `Stripe ${sessionId.slice(0, 12)}`,
-            commentaire: 'Paiement en ligne Stripe',
-          }).select('id').single()
-          reglementId = regl?.id
+          // FIX audit 24/07/2026 pt 13 : anti-doublon (retry de webhook sans ligne
+          // paiements_en_ligne) — verifier qu'un reglement avec cette reference n'existe pas deja
+          const refStripe = `Stripe ${sessionId.slice(0, 12)}`
+          const { data: dejaLa } = await supabaseAdmin.from('reglements')
+            .select('id').eq('facture_id', factureId).eq('reference', refStripe).maybeSingle()
+          if (dejaLa?.id) {
+            reglementId = dejaLa.id
+          } else {
+            const { data: regl, error: reglErr } = await supabaseAdmin.from('reglements').insert({
+              ecole_id: ecoleId,
+              facture_id: factureId,
+              famille_id: pe?.famille_id || meta.famille_id || null,
+              montant: montantEuros,
+              mode_paiement: 'stripe',
+              date_reglement: new Date().toISOString().slice(0, 10),
+              reference: refStripe,
+              // FIX : colonne 'commentaire' inexistante sur reglements (verifie en BDD) ->
+              // l'insert echouait silencieusement et le paiement passait succeeded sans reglement
+              notes: 'Paiement en ligne Stripe',
+            }).select('id').single()
+            if (reglErr || !regl?.id) {
+              console.error('[stripe webhook] insert reglement failed:', reglErr?.message)
+              return NextResponse.json({ received: true, error: 'insert reglement failed' }, { status: 500 })
+            }
+            reglementId = regl.id
+          }
         }
 
         if (pe?.id) {

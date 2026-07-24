@@ -46,7 +46,11 @@ export async function POST(req: NextRequest) {
       .eq('provider', 'paypal')
       .maybeSingle()
     if (!paiement) return NextResponse.json({ error: 'Paiement introuvable' }, { status: 404 })
-    if (paiement.statut === 'paid') return NextResponse.json({ success: true, alreadyPaid: true })
+    // FIX audit 24/07/2026 pt 13 : la garde comparait 'paid' alors que le statut
+    // ecrit est 'succeeded' -> garde inoperante, double capture possible
+    if (paiement.statut === 'succeeded' || paiement.statut === 'paid') {
+      return NextResponse.json({ success: true, alreadyPaid: true })
+    }
 
     const integration = await getIntegration(paiement.ecole_id, 'paypal')
     if (!integration) return NextResponse.json({ error: 'Intégration PayPal inactive' }, { status: 400 })
@@ -71,8 +75,8 @@ export async function POST(req: NextRequest) {
 
     const montant = Number(paiement.montant_centimes || 0) / 100
 
-    // Enregistre le règlement sur la facture
-    await supabaseAdmin.from('reglements').insert({
+    // Enregistre le règlement sur la facture (FIX pt 13 : verifier l'erreur d'insert)
+    const { error: reglErr } = await supabaseAdmin.from('reglements').insert({
       facture_id: paiement.facture_id,
       famille_id: paiement.famille_id,
       montant,
@@ -81,19 +85,11 @@ export async function POST(req: NextRequest) {
       reference: 'PayPal ' + orderId,
       notes: 'Paiement en ligne PayPal',
     })
-
-    // Recalcule le statut de la facture
-    // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements). On utilise
-    // `solde_restant` (mathématiquement correct, qui prend en compte les avoirs).
-    const { data: fs } = await supabaseAdmin
-      .from('factures_solde').select('total_facture, total_regle, solde_restant').eq('id', paiement.facture_id).maybeSingle()
-    if (fs) {
-      const regle = Number(fs.total_regle || 0)
-      const total = Number(fs.total_facture || 0)
-      const restant = Number(fs.solde_restant || 0)
-      const statut = restant <= 0.01 && total > 0 ? 'paye' : (regle > 0 || restant < total) ? 'partiel' : 'en_attente'
-      await supabaseAdmin.from('factures').update({ statut }).eq('id', paiement.facture_id)
+    if (reglErr) {
+      console.error('[paypal capture] insert reglement failed:', reglErr.message)
+      return NextResponse.json({ error: 'Paiement capturé mais enregistrement du règlement échoué : ' + reglErr.message }, { status: 500 })
     }
+    // Statut facture : recalcule automatiquement par le trigger BDD trg_reglements_statut
 
     await supabaseAdmin.from('paiements_en_ligne')
       .update({ statut: 'succeeded', metadata: { ...(paiement.metadata || {}), paypal_capture_id: cap.id } })

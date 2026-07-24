@@ -12,6 +12,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import BoutonReinscription from '@/components/BoutonReinscription'
 import { labelModePaiement, labelStatutFacture } from '@/lib/statuts'
 import { logAction } from '@/lib/audit-log'
+import { calculerEcartFactureContrat, regenererFactureDepuisContrat } from '@/lib/facture-contrat'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -35,6 +36,9 @@ export default function FamilleDetailPage() {
   const [classes, setClasses] = useState<any[]>([])
   const [transports, setTransports] = useState<any[]>([])
   const [facture, setFacture] = useState<any>(null)
+  const [ecartFacture, setEcartFacture] = useState<any>(null)
+  const [contratAnnee, setContratAnnee] = useState<any>(null)
+  const [regenerating, setRegenerating] = useState(false)
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
   const [imputations, setImputations] = useState<any[]>([])
@@ -138,7 +142,23 @@ export default function FamilleDetailPage() {
         supabase.from('avoirs_imputations').select('*, avoirs(numero, motif)').eq('facture_id', fact.id),
       ])
       setLignes(lig ?? []); setReglements(regl ?? []); setImputations(imp ?? [])
-    } else { setFacture(null); setLignes([]); setReglements([]); setImputations([]) }
+
+      // Detection d'ecart facture/contrat (audit 24/07/2026 pt 9) : si le contrat
+      // a change depuis la generation (re-signature, DDR acceptee apres coup,
+      // option ajoutee...), afficher un bandeau + bouton Regenerer.
+      try {
+        const { data: contratAnnee } = await supabase.from('contrats_scolarisation')
+          .select('*, contrat_enfants(*, enfants(prenom, nom))')
+          .eq('famille_id', id).eq('annee_scolaire', ANNEE)
+          .in('statut', ['valide', 'accepte', 'soumis'])
+          .maybeSingle()
+        if (contratAnnee) {
+          setContratAnnee(contratAnnee)
+          const ec = await calculerEcartFactureContrat(supabase, contratAnnee, ecole.id, ANNEE)
+          setEcartFacture(ec)
+        } else { setContratAnnee(null); setEcartFacture(null) }
+      } catch { setEcartFacture(null) }
+    } else { setFacture(null); setLignes([]); setReglements([]); setImputations([]); setEcartFacture(null); setContratAnnee(null) }
   }, [id, ANNEE])
 
   useEffect(() => { load() }, [load])
@@ -388,6 +408,26 @@ export default function FamilleDetailPage() {
     load()
   }
 
+  async function regenererFacture() {
+    if (!contratAnnee || !ecartFacture) return
+    const ok = await confirm({
+      title: 'Régénérer la facture depuis le contrat ?',
+      message: `Les lignes actuelles (${ecartFacture.totalActuel.toLocaleString('fr-FR')} €) seront remplacées par le calcul depuis le contrat (${ecartFacture.totalTheorique.toLocaleString('fr-FR')} €). Les règlements déjà saisis sont conservés.`,
+      danger: true,
+    })
+    if (!ok) return
+    setRegenerating(true)
+    const res = await regenererFactureDepuisContrat(supabase, contratAnnee, ecole.id, ANNEE)
+    if (!res.ok) { toast.error(res.error || 'Erreur régénération'); setRegenerating(false); return }
+    await logAction(supabase, ecole.id, 'facture_regeneree', {
+      facture_id: res.facture_id, famille_id: id, numero: res.numero,
+      ancien_total: ecartFacture.totalActuel, nouveau_total: ecartFacture.totalTheorique,
+    })
+    toast.success(`Facture ${res.numero} régénérée`)
+    setRegenerating(false)
+    load()
+  }
+
   async function deleteReglement(reglId: string) {
     const ok = await confirm({ title: 'Supprimer ce règlement ?', message: 'Le solde de la facture sera recalculé.', danger: true })
     if (!ok) return
@@ -587,6 +627,25 @@ export default function FamilleDetailPage() {
       {/* FACTURATION */}
       {tab === 'facturation' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Bandeau écart facture / contrat (audit pt 9) */}
+          {facture && ecartFacture?.enEcart && (
+            <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 18 }}>⚠️</span>
+                <div style={{ fontSize: 13, color: '#9A3412', lineHeight: 1.5 }}>
+                  <strong>La facture ne correspond plus au contrat.</strong><br />
+                  Facturé : {ecartFacture.totalActuel.toLocaleString('fr-FR')} € · Contrat actuel : {ecartFacture.totalTheorique.toLocaleString('fr-FR')} € · Écart : <strong>{ecartFacture.ecart > 0 ? '+' : ''}{ecartFacture.ecart.toLocaleString('fr-FR')} €</strong>
+                  {ecartFacture.verrouillee && <span style={{ display: 'block', fontSize: 11, marginTop: 2 }}>🔒 Facture verrouillée — déverrouillez avant de régénérer.</span>}
+                </div>
+              </div>
+              {!ecartFacture.verrouillee && (
+                <button onClick={regenererFacture} disabled={regenerating}
+                  style={{ background: '#EA580C', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: regenerating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+                  {regenerating ? 'Régénération…' : '↻ Régénérer depuis le contrat'}
+                </button>
+              )}
+            </div>
+          )}
           {!facture ? (
             <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>

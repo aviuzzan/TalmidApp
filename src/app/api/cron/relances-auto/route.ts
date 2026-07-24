@@ -1,18 +1,34 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
+import { calcDuADateBatch } from '@/lib/du-a-date'
 
 /**
  * Cron quotidien Vercel : envoie automatiquement les relances impayés.
  * Schedule dans vercel.json : tous les jours à 08:00 UTC.
  *
- * Pour chaque école avec relances_config.actif=true, parcourt les factures
- * impayées dont l'échéance est passée, calcule le niveau (rappel/relance/demeure)
- * selon les délais configurés, envoie l'email custom rempli avec les variables,
- * log dans relances_log.
+ * REFONTE audit 24/07/2026 pt 15 : le retard est desormais defini par le
+ * DU-A-DATE (echeancier), comme la page manuelle /finances/relances — et non
+ * plus par factures.date_echeance (souvent NULL -> jamais relance, et une
+ * famille a jour selon son echeancier pouvait etre mise en demeure).
+ * Escalade par historique : N1 (rappel) si aucun envoi, puis N2 (relance)
+ * apres (delai_relance - delai_rappel) jours, puis N3 (demeure) apres
+ * (delai_demeure - delai_relance) jours. relances_log.niveau est ecrit en
+ * numerique ('1'/'2'/'3') compatible avec le parseInt de la page manuelle.
  *
  * Sécurité : header Authorization doit contenir CRON_SECRET.
  */
+
+const NIVEAU_LABEL: Record<number, 'rappel' | 'relance' | 'demeure'> = { 1: 'rappel', 2: 'relance', 3: 'demeure' }
+function niveauNumFromLog(n: string | null): number {
+  if (!n) return 0
+  const parsed = parseInt(n)
+  if (!isNaN(parsed)) return parsed
+  if (n === 'rappel') return 1
+  if (n === 'relance') return 2
+  if (n === 'demeure') return 3
+  return 0
+}
 
 function fmtMontant(n: number): string {
   return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
@@ -72,27 +88,39 @@ async function handle(req: NextRequest) {
       .select('id, numero, total_facture, solde_restant, date_echeance, statut, famille_id, familles!inner(ecole_id, parent1_prenom, parent1_email, parent2_prenom, parent2_email, situation_maritale, part_pere, part_mere)')
       .gt('solde_restant', 0)
       .neq('statut', 'annule')
-      .not('date_echeance', 'is', null)
-      .lte('date_echeance', todayIso)
       .eq('familles.ecole_id', ecoleId)
+
+    // Du-a-date en batch : seules les factures avec des echeances ECHUES non
+    // couvertes sont en retard (une famille a jour sur son echeancier n'est
+    // jamais relancee meme si son solde annuel est > 0).
+    const factureIds = ((factures || []) as any[]).map(f => f.id)
+    const duMap = factureIds.length ? await calcDuADateBatch(supabaseAdmin as any, factureIds) : {}
 
     for (const f of (factures || []) as any[]) {
       result.processed++
 
-      const echeance = new Date(f.date_echeance)
-      echeance.setHours(0, 0, 0, 0)
-      const joursRetard = Math.floor((today.getTime() - echeance.getTime()) / 86400000)
+      const du = (duMap as any)[f.id]
+      if (!du || !du.enRetard || du.duAdate <= 0) { ecoleSkipped++; continue }
 
-      let niveau: 'rappel' | 'relance' | 'demeure' | null = null
-      if (joursRetard >= cfg.delai_demeure) niveau = 'demeure'
-      else if (joursRetard >= cfg.delai_relance) niveau = 'relance'
-      else if (joursRetard >= cfg.delai_rappel) niveau = 'rappel'
-      if (!niveau) { ecoleSkipped++; continue }
+      // Escalade par historique de relances (logs succes=true)
+      const { data: logs } = await supabaseAdmin
+        .from('relances_log').select('niveau, created_at, envoye_le')
+        .eq('facture_id', f.id).eq('succes', true)
+      const dernierNiveau = Math.max(0, ...((logs || []) as any[]).map((l: any) => niveauNumFromLog(l.niveau)))
+      const derniereDate = ((logs || []) as any[])
+        .map((l: any) => l.envoye_le || l.created_at)
+        .filter(Boolean).sort().pop()
+      const joursDepuisDerniere = derniereDate
+        ? Math.floor((today.getTime() - new Date(derniereDate).setHours(0, 0, 0, 0)) / 86400000)
+        : Infinity
 
-      const { data: logExist } = await supabaseAdmin
-        .from('relances_log').select('id')
-        .eq('facture_id', f.id).eq('niveau', niveau).eq('succes', true).limit(1)
-      if (logExist && logExist.length > 0) { ecoleSkipped++; continue }
+      let niveauNum = 0
+      if (dernierNiveau === 0) niveauNum = 1
+      else if (dernierNiveau === 1 && joursDepuisDerniere >= Math.max(1, (cfg.delai_relance || 15) - (cfg.delai_rappel || 7))) niveauNum = 2
+      else if (dernierNiveau === 2 && joursDepuisDerniere >= Math.max(1, (cfg.delai_demeure || 30) - (cfg.delai_relance || 15))) niveauNum = 3
+      if (niveauNum === 0) { ecoleSkipped++; continue }
+      const niveau = NIVEAU_LABEL[niveauNum]
+      const joursRetard = joursDepuisDerniere === Infinity ? 0 : joursDepuisDerniere
 
       const fam = f.familles || {}
       const estSeparee = fam.situation_maritale === 'divorce' || fam.situation_maritale === 'separe'
@@ -108,13 +136,14 @@ async function handle(req: NextRequest) {
         if (soldeP1 > 0.005 && fam.parent1_email) cibles.push({ email: fam.parent1_email, prenom: fam.parent1_prenom || 'Madame, Monsieur', montantDu: soldeP1 })
         if (soldeP2 > 0.005 && fam.parent2_email) cibles.push({ email: fam.parent2_email, prenom: fam.parent2_prenom || 'Madame, Monsieur', montantDu: soldeP2 })
       } else if (fam.parent1_email) {
-        cibles.push({ email: fam.parent1_email, prenom: fam.parent1_prenom || 'Madame, Monsieur', montantDu: Number(f.solde_restant) })
+        // Montant relance = du-a-date (echeances echues non couvertes), pas le solde annuel entier
+        cibles.push({ email: fam.parent1_email, prenom: fam.parent1_prenom || 'Madame, Monsieur', montantDu: Number(du.duAdate) })
       }
 
       if (cibles.length === 0) {
         await supabaseAdmin.from('relances_log').insert({
           facture_id: f.id, famille_id: f.famille_id, ecole_id: ecoleId,
-          niveau, envoye_a: '(aucun email)', jours_apres_echeance: joursRetard,
+          niveau: String(niveauNum), envoye_a: '(aucun email)', jours_apres_echeance: joursRetard,
           succes: false, erreur: estSeparee ? 'Aucune part de parent impayee' : "Pas d'email parent1",
         })
         result.errors.push({ facture: f.numero, error: 'no email' })
@@ -145,7 +174,7 @@ async function handle(req: NextRequest) {
 
       await supabaseAdmin.from('relances_log').insert({
         facture_id: f.id, famille_id: f.famille_id, ecole_id: ecoleId,
-        niveau, envoye_a: emailsOk.join(', ') || '(echec)', jours_apres_echeance: joursRetard,
+        niveau: String(niveauNum), envoye_a: emailsOk.join(', ') || '(echec)', jours_apres_echeance: joursRetard,
         succes: factureSent, erreur: factureSent ? null : 'envoi echoue',
       })
 

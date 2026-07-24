@@ -117,7 +117,32 @@ export async function creerFactureDepuisContrat(
     return { ok: false, error: insErr?.message || 'Insert facture échoué' }
   }
 
-  // 4. Calculer les lignes
+  // 4. Calculer + insérer les lignes (logique extraite dans construireLignesFacture
+  //    pour être partagée avec calculerEcartFactureContrat / regenererFactureDepuisContrat)
+  const lignes = await construireLignesFacture(s, contrat, ecoleId, annee, nf.id)
+
+  if (lignes.length) {
+    const { error: ligErr } = await s.from('facture_lignes').insert(lignes)
+    if (ligErr) {
+      return { ok: false, facture_id: nf.id, numero: nf.numero, error: 'Lignes : ' + ligErr.message }
+    }
+  }
+
+  return { ok: true, facture_id: nf.id, numero: nf.numero }
+}
+
+/**
+ * Construit les lignes de facture théoriques pour un contrat donné (sans insert).
+ * Source de vérité UNIQUE du calcul des lignes (DDR ventilée par enfant, postes,
+ * assurance, frais d'inscription/réinscription).
+ */
+export async function construireLignesFacture(
+  s: AnySupabase,
+  contrat: any,
+  ecoleId: string,
+  annee: string,
+  factureId: string,
+): Promise<any[]> {
   const enfants = contrat.contrat_enfants || []
   const enfantIds = enfants.map((e: any) => e.enfant_id).filter(Boolean)
   const [{ data: ddr }, { data: tarifsList }, { data: fraisCfg }, { data: pedagos }] = await Promise.all([
@@ -140,6 +165,7 @@ export async function creerFactureDepuisContrat(
     tarifMap[t.id] = t.inclus_dans_reduction !== false
   })
 
+  const nf = { id: factureId }
   const lignes: any[] = []
 
   if (ddr?.tarif_accorde) {
@@ -321,12 +347,114 @@ export async function creerFactureDepuisContrat(
     }
   }
 
-  if (lignes.length) {
-    const { error: ligErr } = await s.from('facture_lignes').insert(lignes)
-    if (ligErr) {
-      return { ok: false, facture_id: nf.id, numero: nf.numero, error: 'Lignes : ' + ligErr.message }
-    }
-  }
+  return lignes
+}
 
-  return { ok: true, facture_id: nf.id, numero: nf.numero }
+/**
+ * Compare la facture existante d'une famille avec ce que le contrat actuel
+ * générerait. Permet d'afficher un bandeau "la facture ne correspond plus au
+ * contrat" (re-signature du parent, DDR acceptée après validation, etc.).
+ */
+export interface EcartFactureContrat {
+  facture_id: string
+  numero: string
+  verrouillee: boolean
+  totalActuel: number
+  totalTheorique: number
+  ecart: number
+  enEcart: boolean
+}
+
+export async function calculerEcartFactureContrat(
+  s: AnySupabase,
+  contrat: any,
+  ecoleId: string,
+  annee: string,
+): Promise<EcartFactureContrat | null> {
+  if (!contrat?.famille_id) return null
+  const { data: facture } = await s
+    .from('factures')
+    .select('id, numero, statut, verrouillee')
+    .eq('famille_id', contrat.famille_id)
+    .eq('annee_scolaire', annee)
+    .neq('statut', 'annule')
+    .maybeSingle()
+  if (!facture) return null
+
+  const [{ data: lignesActuelles }, lignesTheoriques] = await Promise.all([
+    s.from('facture_lignes').select('montant').eq('facture_id', facture.id),
+    construireLignesFacture(s, contrat, ecoleId, annee, facture.id),
+  ])
+  const totalActuel = Math.round(((lignesActuelles || []) as any[]).reduce((sum: number, l: any) => sum + (parseFloat(l.montant) || 0), 0) * 100) / 100
+  const totalTheorique = Math.round(lignesTheoriques.reduce((sum: number, l: any) => sum + (parseFloat(l.montant) || 0), 0) * 100) / 100
+  const ecart = Math.round((totalTheorique - totalActuel) * 100) / 100
+  return {
+    facture_id: facture.id,
+    numero: facture.numero,
+    verrouillee: !!facture.verrouillee,
+    totalActuel,
+    totalTheorique,
+    ecart,
+    enEcart: Math.abs(ecart) > 1,
+  }
+}
+
+/**
+ * Régénère les lignes de la facture existante depuis le contrat actuel.
+ * Refuse si la facture est verrouillée. Resynchronise l'échéancier (échéance
+ * de régularisation si le nouveau total n'est plus couvert).
+ */
+export async function regenererFactureDepuisContrat(
+  s: AnySupabase,
+  contrat: any,
+  ecoleId: string,
+  annee: string,
+): Promise<CreerFactureResult> {
+  if (!contrat?.famille_id) return { ok: false, error: 'Contrat sans famille' }
+  const { data: facture } = await s
+    .from('factures')
+    .select('id, numero, statut, verrouillee')
+    .eq('famille_id', contrat.famille_id)
+    .eq('annee_scolaire', annee)
+    .neq('statut', 'annule')
+    .maybeSingle()
+  if (!facture) return { ok: false, error: 'Aucune facture active pour cette famille/année' }
+  if (facture.verrouillee) return { ok: false, error: `Facture ${facture.numero} verrouillée : déverrouiller avant de régénérer` }
+
+  const lignes = await construireLignesFacture(s, contrat, ecoleId, annee, facture.id)
+  if (lignes.length === 0) return { ok: false, error: 'Le contrat ne génère aucune ligne (contrat vide ?)' }
+
+  const { error: delErr } = await s.from('facture_lignes').delete().eq('facture_id', facture.id)
+  if (delErr) return { ok: false, error: 'Purge lignes : ' + delErr.message }
+  const { error: insErr } = await s.from('facture_lignes').insert(lignes)
+  if (insErr) return { ok: false, facture_id: facture.id, numero: facture.numero, error: 'Lignes : ' + insErr.message }
+
+  // Resync échéancier : échéance de régularisation si le total n'est plus couvert
+  try {
+    const { data: echeances } = await s.from('cheques_prevus')
+      .select('id, montant, numero_cheque, date_echeance, mode_paiement, contrat_id')
+      .eq('famille_id', contrat.famille_id)
+    const totalFacture = lignes.reduce((sum: number, l: any) => sum + (parseFloat(l.montant) || 0), 0)
+    const totalEch = ((echeances || []) as any[]).reduce((sum: number, e: any) => sum + (parseFloat(e.montant) || 0), 0)
+    const ecartEch = Math.round((totalFacture - totalEch) * 100) / 100
+    if ((echeances || []).length > 0 && ecartEch > 1) {
+      const maxNum = Math.max(...(echeances as any[]).map((e: any) => e.numero_cheque || 0))
+      const derniereDate = (echeances as any[]).map((e: any) => e.date_echeance).sort().pop()
+      const modeEch = (echeances as any[])[0]?.mode_paiement || 'virement'
+      await s.from('cheques_prevus').insert({
+        contrat_id: (echeances as any[])[0]?.contrat_id || contrat.id,
+        famille_id: contrat.famille_id,
+        ecole_id: ecoleId,
+        numero_cheque: maxNum + 1,
+        montant: ecartEch,
+        date_echeance: derniereDate,
+        statut: modeEch === 'cheque' ? 'attente_reception' : 'prevu',
+        mode_paiement: modeEch,
+        note: 'Régularisation auto : régénération facture depuis contrat',
+        facture_id: facture.id,
+      })
+    }
+  } catch { /* best effort */ }
+
+  return { ok: true, facture_id: facture.id, numero: facture.numero }
 }

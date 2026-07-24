@@ -69,18 +69,24 @@ export async function POST(req: NextRequest) {
 
         if (!pe) continue
 
-        if (action === 'submitted' || action === 'confirmed') {
+        // FIX audit 24/07/2026 pt 12 : la branche 'confirmed' etait inatteignable
+        // (matchee par le premier if). Desormais :
+        //   submitted            -> pending (preleve chez le payeur, pas encore garanti)
+        //   confirmed | paid_out -> reglement cree (confirmed = prelevement effectif
+        //                           chez la famille ; ne pas attendre le versement
+        //                           paid_out a l'ecole, plusieurs jours plus tard)
+        if (action === 'submitted') {
           await sb.from('paiements_en_ligne').update({
             statut: 'pending',
             gocardless_payment_id: paymentId,
             updated_at: new Date().toISOString(),
           }).eq('id', pe.id)
-        } else if (action === 'paid_out' || action === 'confirmed') {
-          // Crée le règlement + marque succeeded
+        } else if (action === 'confirmed' || action === 'paid_out') {
+          // Idempotent : si un reglement est deja lie (confirmed puis paid_out), ne rien recreer
           let reglementId = pe.reglement_id
           if (pe.facture_id && !reglementId) {
             const montantEuros = Number(((pe.montant_centimes || 0) / 100).toFixed(2))
-            const { data: regl } = await sb.from('reglements').insert({
+            const { data: regl, error: reglErr } = await sb.from('reglements').insert({
               ecole_id: pe.ecole_id,
               facture_id: pe.facture_id,
               famille_id: pe.famille_id,
@@ -88,9 +94,14 @@ export async function POST(req: NextRequest) {
               mode_paiement: 'sepa',
               date_reglement: new Date().toISOString().slice(0, 10),
               reference: `GoCardless ${paymentId?.slice(0, 12) || ''}`,
-              commentaire: 'Prélèvement SEPA via GoCardless',
+              notes: 'Prélèvement SEPA via GoCardless',
             }).select('id').single()
-            reglementId = regl?.id
+            // FIX pt 13 : verifier l'erreur d'insert — ne pas marquer succeeded sans reglement
+            if (reglErr || !regl?.id) {
+              console.error('[gocardless webhook] insert reglement failed:', reglErr?.message)
+              continue
+            }
+            reglementId = regl.id
           }
           await sb.from('paiements_en_ligne').update({
             statut: 'succeeded',
@@ -98,24 +109,7 @@ export async function POST(req: NextRequest) {
             reglement_id: reglementId,
             updated_at: new Date().toISOString(),
           }).eq('id', pe.id)
-
-          // Recalcule statut facture
-          if (pe.facture_id) {
-            const { data: sol } = await sb.from('factures_solde')
-              .select('total_facture, total_regle, solde_restant').eq('id', pe.facture_id).maybeSingle()
-            if (sol) {
-              // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements uniquement).
-              // On s'appuie sur `solde_restant` pour le 'paye' et on étend 'partiel' au cas
-              // où le solde est entamé sans paiement réel (avoirs seulement).
-              const restant = Number(sol.solde_restant) || 0
-              const regle = Number(sol.total_regle) || 0
-              const total = Number(sol.total_facture) || 0
-              let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
-              if (restant <= 0.01 && total > 0) statut = 'paye'
-              else if (regle > 0 || restant < total) statut = 'partiel'
-              await sb.from('factures').update({ statut }).eq('id', pe.facture_id)
-            }
-          }
+          // Statut facture : recalcule automatiquement par le trigger BDD trg_reglements_statut
         } else if (action === 'failed' || action === 'cancelled') {
           await sb.from('paiements_en_ligne').update({
             statut: 'failed',
