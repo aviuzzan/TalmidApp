@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
 
 type Forfait = { id: string; nom: string; zone: string | null; trajet: string | null; prix: number; actif: boolean; ordre: number }
 
@@ -11,7 +12,6 @@ export default function TransportPage() {
   const [forfaits, setForfaits] = useState<Forfait[]>([])
   const [inscriptions, setInscriptions] = useState<any[]>([])
   const [depuisContrats, setDepuisContrats] = useState<any[]>([])
-  const [filtreOption, setFiltreOption] = useState<string>('toutes')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editForfait, setEditForfait] = useState<Forfait | null>(null)
@@ -28,12 +28,12 @@ export default function TransportPage() {
     setForfaits(f || [])
     setInscriptions(i || [])
 
-    // Charger les inscriptions "depuis contrat" : enfants ayant un tarif de transport dans postes JSONB
-    // On identifie les tarifs "transport" via le groupe_exclusif='transport' OU nom contenant navette/car/transport
+    // Charger les inscriptions "depuis contrat" : enfants ayant un tarif de
+    // categorie 'transport' dans leurs postes JSONB (champ explicite, fini l'heuristique)
     const { data: tarifsTransport } = await s.from('tarifs_secteur')
       .select('id, nom_poste, montant, groupe_exclusif')
       .eq('ecole_id', ecole.id)
-      .or('groupe_exclusif.eq.transport,nom_poste.ilike.%navette%,nom_poste.ilike.%car%,nom_poste.ilike.%transport%,nom_poste.ilike.%ramassage%')
+      .eq('categorie', 'transport')
     const idsTransport = new Set((tarifsTransport || []).map((t: any) => t.id))
     if (idsTransport.size > 0) {
       const { data: contratEnfants } = await s.from('contrat_enfants')
@@ -88,12 +88,6 @@ export default function TransportPage() {
   const fmt = (n: number) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €'
   const totalMensuel = inscriptions.reduce((s, i: any) => s + Number(i.transport_forfaits?.prix || 0), 0)
   const totalAnnuelContrats = depuisContrats.reduce((s: number, r: any) => s + Number(r.montant || 0), 0)
-  // Liste des options uniques (Navette / Car / etc.) pour le filtre
-  const optionsUniques = Array.from(new Set(depuisContrats.map((r: any) => r.nom_option))).sort()
-  const depuisContratsFiltres = filtreOption === 'toutes'
-    ? depuisContrats
-    : depuisContrats.filter((r: any) => r.nom_option === filtreOption)
-  const totalContratsFiltres = depuisContratsFiltres.reduce((s: number, r: any) => s + Number(r.montant || 0), 0)
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }
 
@@ -146,67 +140,7 @@ export default function TransportPage() {
       </div>
 
       {tab === 'depuis_contrats' && (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: 0 }}>Enfants ayant une option transport dans leur contrat</h3>
-              <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 3 }}>Source : contrats de scolarisation validés (Navette, Car de ramassage, etc.)</div>
-            </div>
-            {depuisContrats.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <select value={filtreOption} onChange={e => setFiltreOption(e.target.value)}
-                  style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 500, color: '#1E293B', cursor: 'pointer' }}>
-                  <option value="toutes">Toutes options ({depuisContrats.length})</option>
-                  {optionsUniques.map(opt => {
-                    const n = depuisContrats.filter((r: any) => r.nom_option === opt).length
-                    return <option key={opt} value={opt}>{opt} ({n})</option>
-                  })}
-                </select>
-                <button onClick={() => {
-                  const csv = 'Prénom;Nom;Classe;Famille;Année;Option;Montant\n' + depuisContratsFiltres.map((r: any) => [r.enfant?.prenom || '', r.enfant?.nom || '', r.enfant?.classes?.nom || '', r.enfant?.familles?.nom || '', r.annee || '', r.nom_option, r.montant].map((v: any) => String(v).replace(/;/g, ',')).join(';')).join('\n')
-                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-                  const url = URL.createObjectURL(blob)
-                  const suffix = filtreOption === 'toutes' ? '' : '-' + filtreOption.toLowerCase().replace(/\s+/g, '-')
-                  const a = document.createElement('a'); a.href = url; a.download = `transport-depuis-contrats${suffix}.csv`; a.click(); URL.revokeObjectURL(url)
-                }} style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>📥 Export CSV</button>
-              </div>
-            )}
-          </div>
-          {depuisContrats.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun enfant avec une option transport dans son contrat.</div>
-          ) : depuisContratsFiltres.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun enfant pour «&nbsp;{filtreOption}&nbsp;».</div>
-          ) : (
-            <>
-              <div style={{ marginBottom: 10, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, fontSize: 12, color: '#065F46' }}>
-                <strong>{depuisContratsFiltres.length}</strong> enfant{depuisContratsFiltres.length > 1 ? 's' : ''}
-                {filtreOption !== 'toutes' && <> · option <strong>{filtreOption}</strong></>}
-                {' · '}Total annuel : <strong>{Number(totalContratsFiltres).toLocaleString('fr-FR')} €</strong>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead style={{ borderBottom: '1px solid #E2E8F0' }}>
-                    <tr>{['Enfant','Classe','Famille','Année','Option','Montant'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {depuisContratsFiltres.map((r: any) => (
-                      <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                        <td style={{ padding: '10px 12px', fontWeight: 500 }}>{r.enfant?.prenom || ''} {r.enfant?.nom || ''}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{r.enfant?.classes?.nom || '—'}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{r.enfant?.familles?.nom || '—'}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{r.annee}</td>
-                        <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: 11, background: '#EEF2FF', color: '#4338CA', borderRadius: 5, padding: '2px 8px', fontWeight: 600 }}>{r.nom_option}</span>
-                        </td>
-                        <td style={{ padding: '10px 12px', fontWeight: 700, color: '#059669' }}>{Number(r.montant).toLocaleString('fr-FR')} €</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
+        <OptionsDepuisContrats ecoleId={ecole.id} categorie="transport" />
       )}
 
       {tab === 'forfaits' && (

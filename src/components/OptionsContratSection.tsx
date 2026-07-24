@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { chargerPlacesOptions, type PlacesOption } from '@/lib/options-vie-scolaire'
 
 interface Props {
   enfantId: string
@@ -20,6 +21,7 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
   const [contratId, setContratId] = useState<string | null>(null)
   const [tarifs, setTarifs] = useState<any[]>([])
   const [demandes, setDemandes] = useState<any[]>([])
+  const [places, setPlaces] = useState<Map<string, PlacesOption>>(new Map())
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [tarifChoisi, setTarifChoisi] = useState('')
@@ -54,6 +56,8 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
       .select('*').eq('enfant_id', enfantId).eq('annee_scolaire', anneeScolaire)
       .order('demande_le', { ascending: false })
     setDemandes(dems || [])
+    // Compteurs de places (RPC SECURITY DEFINER, accessible aussi au parent)
+    setPlaces(await chargerPlacesOptions(s, ecoleId, anneeScolaire))
     setLoading(false)
   }, [enfantId, ecoleId, anneeScolaire])
 
@@ -90,7 +94,11 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
     })
     const data = await res.json()
     if (!res.ok || !data.ok) { alert(data.error || 'Erreur'); setSaving(false); return }
-    alert('Demande envoyee. L\'ecole vous confirmera l\'ajout.')
+    if (data.listeAttente) {
+      alert(`Option complète : votre demande a été placée en liste d'attente${data.position ? ` (position ${data.position})` : ''}. L'école vous contactera si une place se libère.`)
+    } else {
+      alert('Demande envoyée. L\'école vous confirmera l\'ajout.')
+    }
     setShowAdd(false); setTarifChoisi(''); setNote(''); setSaving(false)
     await load()
   }
@@ -111,11 +119,12 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
     await load()
   }
 
-  const demandesEnAttente = demandes.filter((d: any) => d.statut === 'en_attente')
+  const demandesEnAttente = demandes.filter((d: any) => ['en_attente', 'liste_attente'].includes(d.statut))
   // Tarifs disponibles (non deja presents et pas en attente)
   const tarifsDeja = new Set(postes.map((p: any) => p.tarif_id))
   const tarifsEnAttente = new Set(demandesEnAttente.map((d: any) => d.tarif_id))
   const tarifsDispos = tarifs.filter((t: any) => !tarifsDeja.has(t.id) && !tarifsEnAttente.has(t.id))
+  const tarifChoisiComplet = tarifChoisi ? !!places.get(tarifChoisi)?.complet : false
 
   if (loading) return <div style={{ padding: 12, fontSize: 12, color: '#94A3B8' }}>Chargement des options…</div>
   if (!contratId) return null
@@ -152,8 +161,11 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
           <div style={{ fontSize: 11, fontWeight: 700, color: '#B45309', textTransform: 'uppercase', marginBottom: 6 }}>Demandes en attente</div>
           {demandesEnAttente.map((d: any) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 12, color: '#78350F' }}>
+              <div style={{ fontSize: 12, color: '#78350F', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <strong>{d.tarif_nom}</strong> ({parseFloat(d.tarif_montant || 0).toLocaleString('fr-FR')} €){d.note_famille ? ` — « ${d.note_famille} »` : ''}
+                {d.statut === 'liste_attente' && (
+                  <span style={{ background: '#EDE9FE', color: '#6D28D9', borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>Liste d&apos;attente</span>
+                )}
               </div>
               {mode === 'admin' && (
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -163,7 +175,7 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
                     style={{ background: '#fff', color: '#DC2626', border: '1px solid #FCA5A5', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✗ Refuser</button>
                 </div>
               )}
-              {mode === 'parent' && <span style={{ fontSize: 11, color: '#94A3B8' }}>En attente de validation</span>}
+              {mode === 'parent' && <span style={{ fontSize: 11, color: '#94A3B8' }}>{d.statut === 'liste_attente' ? 'Sur liste d\'attente — l\'école vous confirmera si une place se libère' : 'En attente de validation'}</span>}
             </div>
           ))}
         </div>
@@ -175,10 +187,28 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
           <select value={tarifChoisi} onChange={e => setTarifChoisi(e.target.value)}
             style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13 }}>
             <option value="">Choisir une option…</option>
-            {tarifsDispos.map((t: any) => (
-              <option key={t.id} value={t.id}>{t.nom_poste} — {parseFloat(t.montant).toLocaleString('fr-FR')} €{t.groupe_exclusif ? ` (groupe ${t.groupe_exclusif})` : ''}</option>
-            ))}
+            {tarifsDispos.map((t: any) => {
+              const p = places.get(t.id)
+              const placesTxt = p && p.places_max != null
+                ? p.complet ? ' — COMPLET' : ` — ${p.places_max - p.nb_inscrits} place(s) restante(s)`
+                : ''
+              return (
+                <option key={t.id} value={t.id} disabled={mode === 'admin' ? false : !!p?.complet && mode !== 'parent'}>
+                  {t.nom_poste} — {parseFloat(t.montant).toLocaleString('fr-FR')} €{t.groupe_exclusif ? ` (groupe ${t.groupe_exclusif})` : ''}{placesTxt}
+                </option>
+              )
+            })}
           </select>
+          {tarifChoisiComplet && mode === 'parent' && (
+            <div style={{ background: '#EDE9FE', color: '#5B21B6', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+              Cette option est complète. Votre demande sera placée en <strong>liste d&apos;attente</strong> : l&apos;école vous contactera si une place se libère.
+            </div>
+          )}
+          {tarifChoisiComplet && mode === 'admin' && (
+            <div style={{ background: '#FEF2F2', color: '#991B1B', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+              ⚠ Option complète. L&apos;ajout sera refusé — augmentez la capacité dans Paramètres &gt; Tarifs si nécessaire.
+            </div>
+          )}
           {mode === 'parent' && (
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Note pour l'école (optionnel)"
               style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontFamily: 'inherit', resize: 'vertical' }} />

@@ -41,6 +41,7 @@ export default function ContratPage() {
   const [reductionAccordee, setReductionAccordee] = useState<any>(null)
   const [contrat, setContrat] = useState<any>(null)
   const [mandatExistant, setMandatExistant] = useState<any>(null)
+  const [placesMap, setPlacesMap] = useState<Map<string, { complet: boolean; nb_inscrits: number; places_max: number | null }>>(new Map())
 
   // Alerte DDR
   const [ddrStatut, setDdrStatut] = useState<string | null>(null)
@@ -108,6 +109,14 @@ export default function ContratPage() {
     setPaiementConfig(payCfg); setDatesEncaissement(datesEnc ?? [])
     setReductions(redsf ?? []); setReductionAccordee(redAcc); setContrat(cont)
     setMandatExistant(mandat); setDdrStatut(ddr?.statut || null)
+
+    // Compteurs de places (RPC) pour bloquer les options completes
+    try {
+      const { data: placesData } = await s.rpc('places_options', { p_ecole_id: profile.ecole_id, p_annee: anneeInscription })
+      const pm = new Map<string, any>()
+      ;(placesData || []).forEach((r: any) => pm.set(r.tarif_id, { complet: !!r.complet, nb_inscrits: Number(r.nb_inscrits) || 0, places_max: r.places_max == null ? null : Number(r.places_max) }))
+      setPlacesMap(pm)
+    } catch { /* RPC absente = pas de blocage */ }
 
     // Charger les infos de l'école pour les textes dynamiques (nom institution, SEPA, assurance)
     const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa, assurance_proposee, assurance_montant_annuel').eq('id', profile.ecole_id).single()
@@ -220,6 +229,9 @@ export default function ContratPage() {
 
   function togglePoste(enfantId: string, tarif: any) {
     ks()
+    // Garde capacite : impossible de cocher une option complete (decocher reste possible)
+    const dejaCoche = enfantsContrat.find(e => e.enfant_id === enfantId)?.postes?.some((p: any) => p.tarif_id === tarif.id)
+    if (!dejaCoche && placesMap.get(tarif.id)?.complet) return
     setEnfantsContrat(prev => prev.map(e => {
       if (e.enfant_id !== enfantId) return e
       const exists = e.postes.find((p: any) => p.tarif_id === tarif.id)
@@ -339,6 +351,35 @@ export default function ContratPage() {
 
     setSaving(true)
     const s = createClient()
+
+    // Re-verification des places juste avant la soumission (une option a pu se
+    // remplir entre le chargement de la page et la signature).
+    try {
+      const { data: placesFraiches } = await s.rpc('places_options', { p_ecole_id: ecoleId, p_annee: anneeInscription })
+      const fraiche = new Map<string, any>()
+      ;(placesFraiches || []).forEach((r: any) => fraiche.set(r.tarif_id, r))
+      const optionsCompletes: string[] = []
+      enfantsContrat.forEach(e => {
+        ;(e.postes || []).forEach((p: any) => {
+          const pl = fraiche.get(p.tarif_id)
+          if (pl?.complet) optionsCompletes.push(p.nom || 'Option')
+        })
+      })
+      if (optionsCompletes.length > 0) {
+        alert(`L'option « ${Array.from(new Set(optionsCompletes)).join(' », « ')} » est désormais complète. Elle a été retirée de votre sélection — vous pourrez demander une place en liste d'attente après la signature.`)
+        setEnfantsContrat(prev => prev.map(e => {
+          const postesOk = (e.postes || []).filter((p: any) => !fraiche.get(p.tarif_id)?.complet)
+          return { ...e, postes: postesOk, sous_total: postesOk.reduce((sum: number, p: any) => sum + (parseFloat(p.montant) || 0), 0) }
+        }))
+        setPlacesMap(() => {
+          const pm = new Map<string, any>()
+          fraiche.forEach((r: any, id: string) => pm.set(id, { complet: !!r.complet, nb_inscrits: Number(r.nb_inscrits) || 0, places_max: r.places_max == null ? null : Number(r.places_max) }))
+          return pm
+        })
+        setSaving(false)
+        return
+      }
+    } catch { /* RPC indisponible : on laisse passer */ }
 
     if (famModified) {
       await s.from('familles').update({
@@ -613,6 +654,9 @@ export default function ContratPage() {
                           const sel = enf.postes?.find((p: any) => p.tarif_id === t.id)
                           const hintAAfficher = t.groupe_exclusif && groupesAvecHint.has(t.groupe_exclusif) && !groupesAffiches.has(t.groupe_exclusif)
                           if (hintAAfficher) groupesAffiches.add(t.groupe_exclusif)
+                          const pl = placesMap.get(t.id)
+                          const estComplet = !!pl?.complet && !sel
+                          const placesRestantes = pl && pl.places_max != null && !pl.complet ? pl.places_max - pl.nb_inscrits : null
                           return (
                             <div key={t.id}>
                               {hintAAfficher && (
@@ -620,10 +664,15 @@ export default function ContratPage() {
                                   ↔ Choisissez une seule option de «&nbsp;{t.groupe_exclusif}&nbsp;»
                                 </div>
                               )}
-                              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: t.obligatoire ? 'default' : 'pointer', background: sel ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${sel ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: t.obligatoire || estComplet ? 'default' : 'pointer', background: estComplet ? '#F8FAFC' : sel ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${sel ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 6, opacity: estComplet ? 0.6 : 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <input type="checkbox" checked={!!sel || t.obligatoire} disabled={t.obligatoire} onChange={() => !t.obligatoire && togglePoste(enfant.id, t)} />
-                                  <span style={{ fontSize: 13 }}>{t.nom_poste}{t.obligatoire && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(inclus)</span>}</span>
+                                  <input type="checkbox" checked={!!sel || t.obligatoire} disabled={t.obligatoire || estComplet} onChange={() => !t.obligatoire && togglePoste(enfant.id, t)} />
+                                  <span style={{ fontSize: 13 }}>
+                                    {t.nom_poste}
+                                    {t.obligatoire && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(inclus)</span>}
+                                    {estComplet && <span style={{ fontSize: 10, fontWeight: 700, color: '#B45309', background: '#FEF3C7', borderRadius: 5, padding: '2px 6px', marginLeft: 6 }}>Complet</span>}
+                                    {placesRestantes != null && placesRestantes <= 5 && <span style={{ fontSize: 10, fontWeight: 600, color: '#9A3412', marginLeft: 6 }}>({placesRestantes} place{placesRestantes > 1 ? 's' : ''} restante{placesRestantes > 1 ? 's' : ''})</span>}
+                                  </span>
                                 </div>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: '#059669', flexShrink: 0 }}>{(parseFloat(t.montant) || 0).toLocaleString('fr-FR')} €</span>
                               </label>

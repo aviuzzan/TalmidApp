@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { CATEGORIES_OPTION, labelCategorie, chargerPlacesOptions, type PlacesOption } from '@/lib/options-vie-scolaire'
 
 type EditForm = {
   secteur_id: string
@@ -13,6 +14,8 @@ type EditForm = {
   code_comptable: string
   inclus_dans_reduction: boolean
   groupe_exclusif: string
+  categorie: string
+  places_max: string
 }
 
 export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
@@ -21,9 +24,10 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
   const [secteurs, setSecteurs] = useState<any[]>([])
   const [tranches, setTranches] = useState<any[]>([])
   const [tarifs, setTarifs] = useState<any[]>([])
-  const [newT, setNewT] = useState({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '' })
+  const [newT, setNewT] = useState({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '', categorie: '', places_max: '' })
   const [editing, setEditing] = useState<any | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '', categorie: '', places_max: '' })
+  const [places, setPlaces] = useState<Map<string, PlacesOption>>(new Map())
   const [saving, setSaving] = useState(false)
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
   useEffect(() => { load() // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,12 +44,13 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
     ;((tra ?? []) as any[]).forEach(t => tranchesMap.set(t.id, t))
     const tarifsEnriched = ((tar ?? []) as any[]).map(t => ({ ...t, tranches_facturation: t.tranche_id ? tranchesMap.get(t.tranche_id) : null }))
     setSecteurs(sec ?? []); setTarifs(tarifsEnriched); setTranches(tra ?? [])
+    setPlaces(await chargerPlacesOptions(s, ecoleId, annee))
   }
   async function ajouter() {
     if (!newT.nom_poste.trim() || !newT.montant || parseFloat(newT.montant) <= 0) { toast.error('Poste obligatoire et montant > 0'); return }
-    const { error } = await createClient().from('tarifs_secteur').insert({ ecole_id: ecoleId, annee_scolaire: annee, secteur_id: newT.secteur_id || null, tranche_id: newT.tranche_id || null, nom_poste: newT.nom_poste, montant: parseFloat(newT.montant), obligatoire: newT.obligatoire, code_comptable: newT.code_comptable || null, inclus_dans_reduction: newT.inclus_dans_reduction, groupe_exclusif: newT.groupe_exclusif.trim() || null, ordre: tarifs.length })
+    const { error } = await createClient().from('tarifs_secteur').insert({ ecole_id: ecoleId, annee_scolaire: annee, secteur_id: newT.secteur_id || null, tranche_id: newT.tranche_id || null, nom_poste: newT.nom_poste, montant: parseFloat(newT.montant), obligatoire: newT.obligatoire, code_comptable: newT.code_comptable || null, inclus_dans_reduction: newT.inclus_dans_reduction, groupe_exclusif: newT.groupe_exclusif.trim().toLowerCase() || null, categorie: newT.categorie || null, places_max: newT.places_max ? parseInt(newT.places_max) : null, ordre: tarifs.length })
     if (error) { toast.error('Erreur : ' + error.message); return }
-    setNewT({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '' })
+    setNewT({ secteur_id: '', tranche_id: '', nom_poste: '', montant: '', obligatoire: false, code_comptable: '', inclus_dans_reduction: true, groupe_exclusif: '', categorie: '', places_max: '' })
     toast.success('Tarif ajouté')
     await load()
   }
@@ -59,12 +64,24 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
       code_comptable: t.code_comptable || '',
       inclus_dans_reduction: t.inclus_dans_reduction !== false,
       groupe_exclusif: t.groupe_exclusif || '',
+      categorie: t.categorie || '',
+      places_max: t.places_max != null ? String(t.places_max) : '',
     })
     setEditing(t)
   }
   async function enregistrerEdition() {
     if (!editing) return
     if (!editForm.nom_poste.trim() || !editForm.montant || parseFloat(editForm.montant) <= 0) { toast.error('Poste obligatoire et montant > 0'); return }
+    // Avertir si on reduit places_max sous le nombre d'inscrits actuels
+    const nouveauMax = editForm.places_max ? parseInt(editForm.places_max) : null
+    const p = places.get(editing.id)
+    if (nouveauMax != null && p && p.nb_inscrits > nouveauMax) {
+      const ok = await confirmDialog({
+        title: 'Capacité inférieure aux inscrits',
+        message: `Il y a déjà ${p.nb_inscrits} inscrit(s) pour ce tarif. Les inscriptions existantes seront conservées, mais toute nouvelle inscription sera bloquée. Continuer ?`,
+      })
+      if (!ok) return
+    }
     setSaving(true)
     const { error } = await createClient().from('tarifs_secteur').update({
       secteur_id: editForm.secteur_id || null,
@@ -74,7 +91,9 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
       obligatoire: editForm.obligatoire,
       code_comptable: editForm.code_comptable || null,
       inclus_dans_reduction: editForm.inclus_dans_reduction,
-      groupe_exclusif: editForm.groupe_exclusif.trim() || null,
+      groupe_exclusif: editForm.groupe_exclusif.trim().toLowerCase() || null,
+      categorie: editForm.categorie || null,
+      places_max: nouveauMax,
     }).eq('id', editing.id)
     if (error) { toast.error('Erreur : ' + error.message); setSaving(false); return }
     toast.success('Tarif modifié')
@@ -113,10 +132,25 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
             <span style={{ display: 'block', fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Coché = ce tarif est couvert par le tarif accordé en réduction. Décoché = ce tarif s&apos;ajoute EN PLUS au tarif accordé (typique pour options : cantine, navette, instruction religieuse...).</span>
           </span>
         </label>
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>GROUPE EXCLUSIF (optionnel)</div>
-          <input style={{ ...inp, maxWidth: 280 }} value={newT.groupe_exclusif} onChange={e => setNewT(p => ({ ...p, groupe_exclusif: e.target.value }))} placeholder="ex : transport" />
-          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Les tarifs partageant la même valeur sont mutuellement exclusifs (ex : Car et Navette dans «&nbsp;transport&nbsp;» → on ne peut choisir qu&apos;une option). Laisser vide si pas de groupe.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>GROUPE EXCLUSIF (optionnel)</div>
+            <input style={inp} value={newT.groupe_exclusif} onChange={e => setNewT(p => ({ ...p, groupe_exclusif: e.target.value }))} placeholder="ex : transport" />
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Tarifs du même groupe = choix unique (ex : Car OU Navette).</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>CATÉGORIE VIE SCOLAIRE</div>
+            <select style={inp} value={newT.categorie} onChange={e => setNewT(p => ({ ...p, categorie: e.target.value }))}>
+              <option value="">Aucune (tarif ordinaire)</option>
+              {CATEGORIES_OPTION.map(c => <option key={c.value} value={c.value}>{c.icone} {c.label}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Rattache le tarif à la page Transport / Cantine.</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>PLACES MAX (optionnel)</div>
+            <input style={inp} type="number" min="1" value={newT.places_max} onChange={e => setNewT(p => ({ ...p, places_max: e.target.value }))} placeholder="Vide = illimité" />
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Capacité de ce tarif pour l&apos;année. Complet = blocage + liste d&apos;attente.</div>
+          </div>
         </div>
       </div>
       {tarifs.length === 0 ? <div style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun tarif pour {annee}</div> : (
@@ -136,6 +170,22 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
                     {t.groupe_exclusif && (
                       <span title={`Mutuellement exclusif avec les autres tarifs du groupe "${t.groupe_exclusif}"`} style={{ fontSize: 10, background: '#EDE9FE', color: '#6D28D9', borderRadius: 5, padding: '2px 6px', fontWeight: 600 }}>↔ {t.groupe_exclusif}</span>
                     )}
+                    {t.categorie && (
+                      <span title="Catégorie Vie scolaire" style={{ fontSize: 10, background: '#E0F2FE', color: '#0369A1', borderRadius: 5, padding: '2px 6px', fontWeight: 600 }}>{labelCategorie(t.categorie)}</span>
+                    )}
+                    {(() => {
+                      const p = places.get(t.id)
+                      if (!p || p.places_max == null) return null
+                      const depassement = p.nb_inscrits > p.places_max
+                      const bg = depassement ? '#FEF2F2' : p.complet ? '#FFF7ED' : '#ECFDF5'
+                      const color = depassement ? '#991B1B' : p.complet ? '#9A3412' : '#065F46'
+                      return (
+                        <span title={depassement ? 'Dépassement de capacité' : p.complet ? 'Complet — nouvelles inscriptions bloquées' : 'Places disponibles'} style={{ fontSize: 10, background: bg, color, borderRadius: 5, padding: '2px 6px', fontWeight: 700 }}>
+                          {p.nb_inscrits}/{p.places_max}{depassement ? ' ⚠' : p.complet ? ' Complet' : ''}
+                          {p.nb_attente > 0 ? ` · ${p.nb_attente} att.` : ''}
+                        </span>
+                      )
+                    })()}
                   </span>
                 </td>
                 <td style={{ padding: '11px 14px', fontWeight: 700, color: '#059669' }}>{t.montant?.toLocaleString('fr-FR')}€</td>
@@ -202,6 +252,23 @@ export default function TarifsTab({ ecoleId, annee }: { ecoleId: string; annee: 
                 <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>GROUPE EXCLUSIF (optionnel)</div>
                 <input style={inp} value={editForm.groupe_exclusif} onChange={e => setEditForm(p => ({ ...p, groupe_exclusif: e.target.value }))} placeholder="ex : transport" />
                 <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Les tarifs partageant la même valeur sont mutuellement exclusifs dans le contrat (ex : Car et Navette dans «&nbsp;transport&nbsp;»).</div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>CATÉGORIE VIE SCOLAIRE</div>
+                  <select style={inp} value={editForm.categorie} onChange={e => setEditForm(p => ({ ...p, categorie: e.target.value }))}>
+                    <option value="">Aucune (tarif ordinaire)</option>
+                    {CATEGORIES_OPTION.map(c => <option key={c.value} value={c.value}>{c.icone} {c.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>PLACES MAX</div>
+                  <input style={inp} type="number" min="1" value={editForm.places_max} onChange={e => setEditForm(p => ({ ...p, places_max: e.target.value }))} placeholder="Vide = illimité" />
+                  {(() => {
+                    const p = editing ? places.get(editing.id) : null
+                    return p && p.places_max != null ? <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Actuellement : {p.nb_inscrits} inscrit(s){p.nb_attente > 0 ? ` · ${p.nb_attente} en attente` : ''}</div> : null
+                  })()}
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>

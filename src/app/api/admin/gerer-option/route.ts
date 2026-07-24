@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         .select('id, enfant_id, tarif_id, ecole_id, annee_scolaire, statut')
         .eq('id', demandeId).maybeSingle()
       if (!demande) return NextResponse.json({ ok: false, error: 'Demande introuvable' }, { status: 404 })
-      if (demande.statut !== 'en_attente') {
+      if (!['en_attente', 'liste_attente'].includes(demande.statut)) {
         return NextResponse.json({ ok: false, error: 'Demande deja traitee' }, { status: 400 })
       }
       if (profile.role !== 'super_admin' && profile.ecole_id !== demande.ecole_id) {

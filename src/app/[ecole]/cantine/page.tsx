@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
 
 type Forfait = { id: string; nom: string; type: string; jours_par_semaine: number | null; prix: number; actif: boolean; ordre: number }
 type Inscription = { id: string; enfant_id: string; forfait_id: string | null; date_debut: string; date_fin: string | null; jours_choisis: string[] | null; statut: string }
@@ -10,7 +11,7 @@ const JOURS = ['lundi','mardi','mercredi','jeudi','vendredi']
 
 export default function CantinePage() {
   const ecole = useEcole()
-  const [tab, setTab] = useState<'inscriptions'|'forfaits'>('inscriptions')
+  const [tab, setTab] = useState<'depuis_contrats'|'inscriptions'|'forfaits'>('depuis_contrats')
   const [forfaits, setForfaits] = useState<Forfait[]>([])
   const [inscriptions, setInscriptions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,17 +87,21 @@ export default function CantinePage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4 }}>
-        {(['inscriptions','forfaits'] as const).map(t => (
+      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, flexWrap: 'wrap' }}>
+        {(['depuis_contrats','inscriptions','forfaits'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
               background: tab === t ? '#fff' : 'transparent',
               color: tab === t ? '#1E293B' : '#64748B', fontSize: 13, fontWeight: tab === t ? 600 : 400,
-              boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', textTransform: 'capitalize' }}>
-            {t === 'inscriptions' ? '👨‍👩‍👧 Inscriptions' : '💶 Forfaits'}
+              boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+            {t === 'depuis_contrats' ? '📝 Depuis contrats' : t === 'inscriptions' ? '👨‍👩‍👧 Inscriptions manuelles' : '💶 Forfaits'}
           </button>
         ))}
       </div>
+
+      {tab === 'depuis_contrats' && (
+        <OptionsDepuisContrats ecoleId={ecole.id} categorie="cantine" />
+      )}
 
       {tab === 'forfaits' && (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>

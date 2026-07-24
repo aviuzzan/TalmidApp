@@ -24,6 +24,8 @@ export interface AjouterOptionResult {
   factureModifiee?: boolean
   factureNumero?: string
   factureId?: string
+  /** true si le refus est du a une capacite atteinte (places_max) — permet de proposer la liste d'attente */
+  complet?: boolean
 }
 
 export async function ajouterOptionAuContrat(
@@ -34,9 +36,26 @@ export async function ajouterOptionAuContrat(
 
   // 1. Charger le tarif cible
   const { data: tarif } = await sb.from('tarifs_secteur')
-    .select('id, nom_poste, montant, inclus_dans_reduction, groupe_exclusif')
+    .select('id, nom_poste, montant, inclus_dans_reduction, groupe_exclusif, places_max, annee_scolaire')
     .eq('id', tarifId).maybeSingle()
   if (!tarif) return { ok: false, error: 'Tarif introuvable' }
+
+  // 1bis. Check capacite (places_max) : compter les inscrits actuels via la vue
+  // v_options_inscrits, en excluant l'enfant lui-meme (cas re-coche / swap).
+  if ((tarif as any).places_max != null) {
+    const { data: inscrits } = await sb.from('v_options_inscrits')
+      .select('enfant_id')
+      .eq('tarif_id', tarifId)
+      .eq('annee_scolaire', (tarif as any).annee_scolaire)
+    const enfantsUniques = new Set((inscrits || []).map((r: any) => r.enfant_id).filter((id: string) => id !== enfantId))
+    if (enfantsUniques.size >= (tarif as any).places_max) {
+      return {
+        ok: false,
+        complet: true,
+        error: `Option « ${tarif.nom_poste} » complète (${enfantsUniques.size}/${(tarif as any).places_max} places). Proposer la liste d'attente ou augmenter la capacité dans Paramètres > Tarifs.`,
+      }
+    }
+  }
 
   // 2. Charger le contrat de la famille pour cette annee
   const { data: enfant } = await sb.from('enfants').select('famille_id').eq('id', enfantId).maybeSingle()
