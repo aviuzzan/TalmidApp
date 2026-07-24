@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     // Charger l'ecole (pour nom expediteur + URL portail)
     const { data: ecole } = await sb.from('ecoles').select('nom, slug').eq('id', ecoleId).single()
     const fromName = (ecole as any)?.nom || 'TalmidApp'
-    const portailUrl = 'https://talmidapp.fr/portail'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
+    const portailUrl = baseUrl + '/portail'
 
     // Charger les familles
     const { data: familles } = await sb
@@ -54,6 +55,42 @@ export async function POST(req: NextRequest) {
 
     if (!familles || familles.length === 0) {
       return NextResponse.json({ ok: false, error: 'Aucune famille trouvee' }, { status: 404 })
+    }
+
+    // Charger TOUS les users auth une fois (pagination) pour detecter les comptes
+    // jamais actives (pas de mot de passe cree = last_sign_in_at null).
+    // Ces parents recoivent un LIEN MAGIQUE valable 24 h au lieu du lien portail
+    // (sinon la relance mene a une page de login infranchissable).
+    const usersParEmail = new Map<string, any>()
+    {
+      let page = 1
+      const perPage = 200
+      while (true) {
+        const { data: pageData } = await sb.auth.admin.listUsers({ page, perPage })
+        const users = pageData?.users || []
+        users.forEach((u: any) => { if (u.email) usersParEmail.set(u.email.toLowerCase(), u) })
+        if (users.length < perPage) break
+        page++
+        if (page > 50) break
+      }
+    }
+
+    /** Retourne { url, lienMagique } pour un destinataire : lien magique 24h si compte jamais active, sinon portail. */
+    async function resoudreLien(email: string): Promise<{ url: string; lienMagique: boolean }> {
+      const user = usersParEmail.get(email.toLowerCase().trim())
+      // Compte inexistant ou deja utilise (connecte au moins une fois) -> lien portail classique
+      if (!user || user.last_sign_in_at) return { url: portailUrl, lienMagique: false }
+      // Compte jamais active -> lien magique (recovery) vers la creation de mot de passe
+      try {
+        const { data: linkData } = await sb.auth.admin.generateLink({
+          type: 'recovery',
+          email: user.email,
+          options: { redirectTo: baseUrl + '/auth/set-password?invited=1' },
+        })
+        const action = linkData?.properties?.action_link
+        if (action) return { url: action, lienMagique: true }
+      } catch { /* fallback portail */ }
+      return { url: portailUrl, lienMagique: false }
     }
 
     const results: { famille_id: string; nom: string; ok: boolean; error?: string }[] = []
@@ -79,23 +116,35 @@ export async function POST(req: NextRequest) {
           <p>Merci de vous connecter a votre espace parent pour le finaliser dans les meilleurs delais.</p>
         `
 
-      const html = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1E293B;">
-          <div style="background: #F8FAFC; padding: 24px; border-radius: 12px;">
-            <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #1E293B;">${fromName}</h2>
-            ${messageBody}
-            <div style="margin: 24px 0; text-align: center;">
-              <a href="${portailUrl}" style="display: inline-block; background: #2563EB; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">Acceder a mon espace parent</a>
+      // Envoi INDIVIDUEL par destinataire : chaque parent recoit son propre lien
+      // (magique 24h si compte jamais active, portail sinon).
+      let success = false
+      let lastError: string | undefined
+      for (const dest of destinataires) {
+        const { url, lienMagique } = await resoudreLien(dest.email)
+        const boutonLabel = lienMagique ? 'Activer mon espace et completer le contrat' : 'Acceder a mon espace parent'
+        const mentionLien = lienMagique
+          ? `<p style="font-size: 12px; color: #B45309; background: #FEF3C7; border-radius: 8px; padding: 10px 14px; margin-top: 12px;">⏱ <strong>Ce lien est valable 24 heures.</strong> Il vous permet de creer votre mot de passe et d'acceder directement a votre espace. Passe ce delai, contactez l'ecole pour en recevoir un nouveau.</p>`
+          : ''
+        const html = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1E293B;">
+            <div style="background: #F8FAFC; padding: 24px; border-radius: 12px;">
+              <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #1E293B;">${fromName}</h2>
+              ${messageBody}
+              <div style="margin: 24px 0; text-align: center;">
+                <a href="${url}" style="display: inline-block; background: #2563EB; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">${boutonLabel}</a>
+              </div>
+              ${mentionLien}
+              <p style="font-size: 12px; color: #64748B; margin-top: 24px;">Si vous rencontrez la moindre difficulte, n'hesitez pas a nous contacter directement en repondant a ce message.</p>
+              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;" />
+              <p style="font-size: 11px; color: #94A3B8; margin: 0;">Cordialement,<br/>${fromName}</p>
             </div>
-            <p style="font-size: 12px; color: #64748B; margin-top: 24px;">Si vous rencontrez la moindre difficulte, n'hesitez pas a nous contacter directement en repondant a ce message.</p>
-            <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;" />
-            <p style="font-size: 11px; color: #94A3B8; margin: 0;">Cordialement,<br/>${fromName}</p>
           </div>
-        </div>
-      `
-
-      const sendRes = await sendEmail({ to: destinataires, subject: sujet, html, fromName })
-      const success = !!sendRes.ok
+        `
+        const sendRes = await sendEmail({ to: dest, subject: sujet, html, fromName })
+        if (sendRes.ok) success = true
+        else lastError = sendRes.error
+      }
 
       // Trace en BDD (meme si echec pour savoir qu'on a essaye)
       await sb.from('relances_contrat').insert({
@@ -110,7 +159,7 @@ export async function POST(req: NextRequest) {
         succes: success,
       })
 
-      results.push({ famille_id: f.id, nom: f.nom, ok: success, error: success ? undefined : (sendRes.error || 'Erreur envoi') })
+      results.push({ famille_id: f.id, nom: f.nom, ok: success, error: success ? undefined : (lastError || 'Erreur envoi') })
     }
 
     const nbSucces = results.filter(r => r.ok).length
