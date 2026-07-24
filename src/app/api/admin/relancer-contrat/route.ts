@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     /** Retourne { url, lienMagique } pour un destinataire : lien magique 24h si compte jamais active, sinon portail. */
-    async function resoudreLien(email: string): Promise<{ url: string; lienMagique: boolean }> {
+    const resoudreLien = async (email: string): Promise<{ url: string; lienMagique: boolean }> => {
       const user = usersParEmail.get(email.toLowerCase().trim())
       // Compte inexistant ou deja utilise (connecte au moins une fois) -> lien portail classique
       if (!user || user.last_sign_in_at) return { url: portailUrl, lienMagique: false }
