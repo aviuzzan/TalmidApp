@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
         decide_le: new Date().toISOString(),
       }).eq('id', demandeId)
 
-      return NextResponse.json({ ok: true, acceptee: true, ...res })
+      return NextResponse.json({ ...res, acceptee: true })
     }
 
     return NextResponse.json({ ok: false, error: 'Action inconnue' }, { status: 400 })
