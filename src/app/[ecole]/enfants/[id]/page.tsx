@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { getScolaritesEnfant } from '@/lib/scolarite'
 import { logAction } from '@/lib/audit-log'
+import OptionsContratSection from '@/components/OptionsContratSection'
+import { getExerciceInscription } from '@/lib/annee-inscription'
 
 export default function EnfantDetailPage() {
   const router = useRouter()
@@ -26,6 +28,7 @@ export default function EnfantDetailPage() {
   const [historique, setHistorique] = useState<any[]>([])
   const [scolarites, setScolarites] = useState<any[]>([])
   const [optionsConfig, setOptionsConfig] = useState<any[]>([])
+  const [anneeCourante, setAnneeCourante] = useState<string>('')
   const [showSortieModal, setShowSortieModal] = useState(false)
   const [sortieForm, setSortieForm] = useState({ date_sortie: new Date().toISOString().slice(0, 10), motif_sortie: '' })
 
@@ -85,6 +88,13 @@ export default function EnfantDetailPage() {
     setHistorique(hist ?? [])
 
     setScolarites(await getScolaritesEnfant(s, enfantId))
+
+    // Charger l'annee d'inscription courante pour la section Options
+    if (ecole?.id) {
+      const { code } = await getExerciceInscription(s, ecole.id)
+      setAnneeCourante(code)
+    }
+
     setLoading(false)
   }
 
@@ -406,6 +416,11 @@ export default function EnfantDetailPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Options du contrat (admin) */}
+      {anneeCourante && ecole?.id && (
+        <OptionsContratSection enfantId={enfantId} ecoleId={ecole.id} anneeScolaire={anneeCourante} mode="admin" enfantPrenom={enfant?.prenom} />
       )}
 
       {/* Contrats */}

@@ -2,10 +2,14 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useI18n } from '@/lib/i18n'
+import { useAnneeInscription } from '@/lib/inscription-context'
+import OptionsContratSection from '@/components/OptionsContratSection'
 
 export default function PortailEnfantsPage() {
   const { t } = useI18n()
+  const { anneeInscription } = useAnneeInscription()
   const [enfants, setEnfants] = useState<any[]>([])
+  const [ecoleId, setEcoleId] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -15,8 +19,9 @@ export default function PortailEnfantsPage() {
       if (!session) return
 
       const { data: profile } = await supabase
-        .from('profiles').select('famille_id').eq('id', session.user.id).single()
+        .from('profiles').select('famille_id, ecole_id').eq('id', session.user.id).single()
       if (!profile?.famille_id) { setLoading(false); return }
+      setEcoleId(profile.ecole_id || '')
 
       const { data } = await supabase
         .from('enfants').select('*')
@@ -107,6 +112,11 @@ export default function PortailEnfantsPage() {
                 ))}
               </div>
               <PersonnesAutorisees enfantId={e.id} familleId={e.famille_id} />
+              {ecoleId && anneeInscription && (
+                <div style={{ marginTop: 12 }}>
+                  <OptionsContratSection enfantId={e.id} ecoleId={ecoleId} anneeScolaire={anneeInscription} mode="parent" enfantPrenom={e.prenom} />
+                </div>
+              )}
             </div>
           ))}
         </div>
