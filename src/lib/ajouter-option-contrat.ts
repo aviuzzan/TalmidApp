@@ -222,6 +222,37 @@ export async function ajouterOptionAuContrat(
     })
   }
 
+  // 10. Resynchroniser l'echeancier : si la somme des echeances ne couvre plus
+  // le nouveau total de la facture, ajouter une echeance de regularisation.
+  // (Sans ca, les prelevements/cheques prevus encaissent moins que le du —
+  // constat de l'audit facturation du 24/07/2026.)
+  try {
+    const [{ data: lignesFinales }, { data: echeances }] = await Promise.all([
+      sb.from('facture_lignes').select('montant').eq('facture_id', facture.id),
+      sb.from('cheques_prevus').select('id, montant, numero_cheque, date_echeance, mode_paiement, contrat_id, ecole_id').eq('famille_id', enfant.famille_id),
+    ])
+    const totalFacture = (lignesFinales || []).reduce((s: number, l: any) => s + (parseFloat(l.montant) || 0), 0)
+    const totalEch = (echeances || []).reduce((s: number, e: any) => s + (parseFloat(e.montant) || 0), 0)
+    const ecartEch = Math.round((totalFacture - totalEch) * 100) / 100
+    if ((echeances || []).length > 0 && ecartEch > 1) {
+      const maxNum = Math.max(...(echeances || []).map((e: any) => e.numero_cheque || 0))
+      const derniereDate = (echeances || []).map((e: any) => e.date_echeance).sort().pop()
+      const modeEch = (echeances || [])[0]?.mode_paiement || 'virement'
+      await sb.from('cheques_prevus').insert({
+        contrat_id: (echeances || [])[0]?.contrat_id || contrat.id,
+        famille_id: enfant.famille_id,
+        ecole_id: ecoleId,
+        numero_cheque: maxNum + 1,
+        montant: ecartEch,
+        date_echeance: derniereDate,
+        statut: modeEch === 'cheque' ? 'attente_reception' : 'prevu',
+        mode_paiement: modeEch,
+        note: `Régularisation auto : ajout option ${tarif.nom_poste}`,
+        facture_id: facture.id,
+      })
+    }
+  } catch { /* best effort : la facture est correcte, l'echeancier sera regularisable a la main */ }
+
   return {
     ok: true,
     posteAjoute: { tarif_id: tarifId, nom: tarif.nom_poste, montant },

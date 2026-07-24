@@ -58,14 +58,23 @@ function AttestationFiscaleInner() {
 
     const debut = `${annee}-01-01`
     const fin = `${annee}-12-31`
+    // FIX audit 24/07/2026 : exclure les reglements mode_paiement='avoir'
+    // (imputations d'avoirs = argent jamais verse par la famille, ne doit
+    // JAMAIS apparaitre sur une attestation fiscale) + exclure les reglements
+    // rattaches a des factures annulees.
     let regQuery = s.from('reglements')
-      .select('id, montant, date_reglement, mode_paiement, reference, facture_id, factures(numero)')
+      .select('id, montant, date_reglement, mode_paiement, reference, facture_id, factures(numero, statut)')
       .eq('famille_id', familleId)
+      .neq('mode_paiement', 'avoir')
       .gte('date_reglement', debut)
       .lte('date_reglement', fin)
       .order('date_reglement', { ascending: true })
     if (parentFiltre !== 'tous') regQuery = regQuery.eq('paye_par', parentFiltre)
-    const { data: regs } = await regQuery
+    const { data: regsBruts } = await regQuery
+    const regs = (regsBruts || []).filter((r: any) => {
+      const st = String(r.factures?.statut || '').toLowerCase()
+      return st !== 'annule' && st !== 'annulee'
+    })
 
     // Part deductible : ratio des lignes deductibles de chaque facture reglee
     const factureIds = Array.from(new Set((regs || []).map((r: any) => r.facture_id).filter(Boolean)))

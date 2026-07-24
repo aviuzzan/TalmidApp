@@ -46,10 +46,13 @@ export async function calcDuADate(
   supabase: SupabaseClient,
   factureId: string,
 ): Promise<DuADateResult | null> {
-  // 1. Facture
+  // 1. Facture — via la vue factures_solde qui expose total_facture (somme des lignes).
+  // FIX audit 24/07/2026 : on lisait factures.montant_total, colonne qui N'EXISTE PAS
+  // sur la table factures -> totalFacture etait toujours 0 (impaye masque dans le
+  // fallback "pas d'echeancier").
   const { data: facture } = await supabase
-    .from('factures')
-    .select('id, famille_id, annee_scolaire, montant_total, statut')
+    .from('factures_solde')
+    .select('id, famille_id, annee_scolaire, total_facture, statut')
     .eq('id', factureId)
     .maybeSingle()
   if (!facture) return null
@@ -83,7 +86,7 @@ export async function calcDuADate(
 
   // 5. Calculs
   const today = new Date().toISOString().split('T')[0]
-  const totalFacture = Number(facture.montant_total) || 0
+  const totalFacture = Number((facture as any).total_facture) || 0
   const totalRegle = (reglements || []).reduce((s, r) => s + Number(r.montant), 0)
   const echeancesEchues = echeances.filter(e => e.date_echeance <= today)
   const totalEcheances = echeances.reduce((s, e) => s + Number(e.montant), 0)
@@ -126,10 +129,12 @@ export async function calcDuADateBatch(
   if (factureIds.length === 0) return {}
   const today = new Date().toISOString().split('T')[0]
 
+  // FIX audit 24/07/2026 : lecture via factures_solde (total_facture = somme des
+  // lignes) au lieu de factures.montant_total qui n'existe pas en BDD.
   const [{ data: factures }, { data: reglements }] = await Promise.all([
     supabase
-      .from('factures')
-      .select('id, famille_id, annee_scolaire, montant_total, statut')
+      .from('factures_solde')
+      .select('id, famille_id, annee_scolaire, total_facture, statut')
       .in('id', factureIds),
     supabase
       .from('reglements')
@@ -181,7 +186,7 @@ export async function calcDuADateBatch(
     const contratId = contratParCle[cle]
     const ech = (contratId && echeancesParContrat[contratId]) ? echeancesParContrat[contratId]! : []
     const echEchues = ech.filter(e => e.date_echeance <= today)
-    const totalFacture = Number(f.montant_total) || 0
+    const totalFacture = Number((f as any).total_facture) || 0
     const totalRegle = regleParFacture[f.id] || 0
     const totalEcheances = ech.reduce((s, e) => s + Number(e.montant), 0)
     const totalEcheancesEchues = echEchues.reduce((s, e) => s + Number(e.montant), 0)
