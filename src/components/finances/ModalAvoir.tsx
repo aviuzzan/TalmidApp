@@ -75,20 +75,11 @@ export default function ModalAvoir({ ecoleId, exerciceId, familles, familleIdIni
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
 
-    // Numéro A-AAAA-NNNN (aligné avec la page famille)
+    // Numéro A-AAAA-NNNN : sequence BDD atomique (audit 24/07/2026 pt 7 —
+    // remplace le max+1 non atomique, aligne avec la page famille avoirs)
     const year = new Date().getFullYear()
-    const { data: last } = await s.from('avoirs')
-      .select('numero')
-      .like('numero', `A-${year}-%`)
-      .order('numero', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    let nextNum = 1
-    if (last?.numero) {
-      const match = last.numero.match(/A-\d+-(\d+)$/)
-      if (match) nextNum = parseInt(match[1]) + 1
-    }
-    const numero = `A-${year}-${String(nextNum).padStart(4, '0')}`
+    const { data: numData } = await s.rpc('prochain_numero_avoir', { p_annee: String(year) })
+    const numero = numData || `A-${year}-${Date.now() % 10000}`
 
     const { error: errIns } = await s.from('avoirs').insert({
       ecole_id: ecoleId,

@@ -16,7 +16,16 @@ type Reglement = {
 }
 type Famille = { id: string; nom: string; email: string | null; numero: string | null }
 
-const MODES = ['Espèces', 'Chèque', 'Virement', 'CB', 'SEPA', 'Autre']
+// FIX audit 24/07/2026 pt 5 : codes lowercase normalises (valeur stockee) + label affiche.
+// Avant, on stockait 'Espèces'/'Chèque'/'CB' capitalises -> filtres, FEC et stats les rataient.
+const MODES: { value: string; label: string }[] = [
+  { value: 'especes', label: 'Espèces' },
+  { value: 'cheque', label: 'Chèque' },
+  { value: 'virement', label: 'Virement' },
+  { value: 'cb', label: 'CB' },
+  { value: 'sepa', label: 'SEPA' },
+  { value: 'autre', label: 'Autre' },
+]
 
 export default function CompteFamillePage() {
   const params = useParams()
@@ -30,7 +39,7 @@ export default function CompteFamillePage() {
   const [pointes, setPointes] = useState<Set<string>>(new Set())
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState<any>({
-    facture_id: '', montant: '', mode_paiement: 'Chèque',
+    facture_id: '', montant: '', mode_paiement: 'cheque',
     date_reglement: new Date().toISOString().slice(0,10),
     reference: '', notes: '',
   })
@@ -81,7 +90,7 @@ export default function CompteFamillePage() {
     if (error) { alert('Erreur: ' + error.message); return }
     setShowModal(false)
     setForm({
-      facture_id: '', montant: '', mode_paiement: 'Chèque',
+      facture_id: '', montant: '', mode_paiement: 'cheque',
       date_reglement: new Date().toISOString().slice(0,10),
       reference: '', notes: '',
     })
@@ -341,7 +350,7 @@ export default function CompteFamillePage() {
 
             <Field label="Mode">
               <select value={form.mode_paiement} onChange={e => setForm({ ...form, mode_paiement: e.target.value })} style={inp}>
-                {MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                {MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </Field>
 

@@ -69,7 +69,13 @@ export default function AvoirsFamillePage() {
     if (!form.montant) return alert('Montant obligatoire')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    const numero = editId ? undefined : `A-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`
+    // FIX audit 24/07/2026 pt 7 : numerotation atomique via sequence BDD
+    // (remplace le random A-YYYY-{1000-9999} qui garantissait des collisions a terme)
+    let numero: string | undefined = undefined
+    if (!editId) {
+      const { data: numData } = await createClient().rpc('prochain_numero_avoir', { p_annee: String(new Date().getFullYear()) })
+      numero = numData || `A-${new Date().getFullYear()}-${Date.now() % 10000}`
+    }
     const payload: any = {
       famille_id: familleId, ecole_id: ecole.id,
       type: form.type, montant: parseFloat(form.montant),

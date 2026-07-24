@@ -125,7 +125,7 @@ export default function RapprochementPage() {
     const { data: regl, error: e1 } = await s.from('reglements').insert({
       facture_id: factureId, famille_id: fac.famille_id,
       montant: Number(mvt.montant), date_reglement: mvt.date_op,
-      mode_paiement: 'Virement', reference: mvt.reference || mvt.libelle.slice(0, 80),
+      mode_paiement: 'virement', reference: mvt.reference || mvt.libelle.slice(0, 80),
       notes: 'Rapprochement bancaire',
     }).select('id').single()
     if (e1 || !regl) { toast.error(e1?.message || 'Création règlement échouée'); return }
