@@ -59,16 +59,29 @@ export async function GET(req: NextRequest) {
     }
 
     // Récupération données
+    // FIX audit 24/07/2026 :
+    //  - filtre ecole_id sur les 3 requetes (service-role bypasse la RLS : sans
+    //    filtre, le FEC contenait les ecritures de TOUTES les ecoles)
+    //  - mode_paiement (colonne reelle) au lieu de mode (inexistante)
+    //  - exclusion des reglements mode_paiement='avoir' des flux BQ (imputations
+    //    d'avoir, deja comptabilisees via l'ecriture OD de l'avoir : les inclure
+    //    ferait un double comptage)
+    //  - exclusion des avoirs annules
     const [{ data: ecole }, { data: factures }, { data: reglements }, { data: avoirs }] = await Promise.all([
       supa.from('ecoles').select('nom, siret').eq('id', ecole_id).single(),
       supa.from('factures')
-        .select('id, numero, date_emission, statut, famille_id, familles(nom, numero, parent1_nom, parent1_prenom), facture_lignes(montant, description)')
+        .select('id, numero, date_emission, statut, famille_id, familles!inner(nom, numero, parent1_nom, parent1_prenom, ecole_id), facture_lignes(montant, description)')
+        .eq('familles.ecole_id', ecole_id)
         .gte('date_emission', debut).lte('date_emission', fin),
       supa.from('reglements')
-        .select('id, date_reglement, montant, mode, reference, factures!inner(numero, famille_id, familles(nom, numero))')
+        .select('id, date_reglement, montant, mode_paiement, reference, factures!inner(numero, famille_id, familles!inner(nom, numero, ecole_id))')
+        .eq('factures.familles.ecole_id', ecole_id)
+        .neq('mode_paiement', 'avoir')
         .gte('date_reglement', debut).lte('date_reglement', fin),
       supa.from('avoirs')
-        .select('id, numero, date_emission, montant, motif, famille_id, familles(nom, numero)')
+        .select('id, numero, date_emission, montant, motif, statut, famille_id, familles!inner(nom, numero, ecole_id)')
+        .eq('familles.ecole_id', ecole_id)
+        .neq('statut', 'annule')
         .gte('date_emission', debut).lte('date_emission', fin),
     ])
 
@@ -112,23 +125,21 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Écritures de règlement (BQ - banque)
-    // TODO : depuis la refonte de la vue `factures_solde`, les règlements `mode_paiement='avoir'`
-    // sont des imputations d'avoir (pas des flux bancaires). Ils devraient être filtrés ici
-    // ou rangés dans une partie distincte (OD). Le code utilise `r.mode` (champ inexistant ?),
-    // ce qui suggère un bug pré-existant à investiguer séparément.
+    // Les règlements mode_paiement='avoir' sont exclus en amont (imputations, pas des flux).
     for (const r of (reglements || []) as any[]) {
       const date = formatDate(r.date_reglement || debut)
       const num = String(ecritureNum++).padStart(6, '0')
       const aux = `F-${(r.factures?.familles?.numero || r.factures?.famille_id || '').toString().substring(0, 20)}`
       const auxLib = r.factures?.familles?.nom || ''
       const ref = r.reference || r.factures?.numero || `R-${r.id.substring(0, 8)}`
-      const lib = `Règlement ${r.mode || ''} - ${r.factures?.numero || ''}`
-      const compteEncaiss = r.mode === 'especes' ? COMPTE.CAISSE : COMPTE.BANQUE
+      const modePaiement = String(r.mode_paiement || '').toLowerCase()
+      const lib = `Règlement ${modePaiement || ''} - ${r.factures?.numero || ''}`
+      const compteEncaiss = modePaiement === 'especes' ? COMPTE.CAISSE : COMPTE.BANQUE
       const m = Number(r.montant)
 
       lines.push([
         'BQ', 'Banque', num, date,
-        compteEncaiss, r.mode === 'especes' ? 'Caisse' : 'Banque', '', '',
+        compteEncaiss, modePaiement === 'especes' ? 'Caisse' : 'Banque', '', '',
         escape(ref), date, escape(lib), formatMontant(m), '0,00',
         '', '', date, '0,00', 'EUR',
       ].join('\t'))

@@ -391,8 +391,14 @@ export default function FamilleDetailPage() {
   async function deleteReglement(reglId: string) {
     const ok = await confirm({ title: 'Supprimer ce règlement ?', message: 'Le solde de la facture sera recalculé.', danger: true })
     if (!ok) return
+    const { data: regAvant } = await supabase.from('reglements').select('montant, mode_paiement, facture_id, famille_id').eq('id', reglId).maybeSingle()
     const { error } = await supabase.from('reglements').delete().eq('id', reglId)
     if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    // Statut facture recalcule par le trigger BDD trg_reglements_statut
+    await logAction(supabase, ecole.id, 'reglement_supprime', {
+      reglement_id: reglId, montant: regAvant?.montant, mode_paiement: regAvant?.mode_paiement,
+      facture_id: regAvant?.facture_id, famille_id: regAvant?.famille_id,
+    })
     toast.success('Règlement supprimé')
     load()
   }

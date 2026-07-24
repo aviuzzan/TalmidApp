@@ -41,7 +41,8 @@ export default function FinancesDashboardPage() {
       .select('*, familles(id, nom, numero)')
       .eq('annee_scolaire', annee)
 
-    const f = factures || []
+    // FIX audit 24/07/2026 : exclure les factures annulees des KPI (regression du fix B4)
+    const f = (factures || []).filter((x: any) => !['annule', 'annulee'].includes(String(x.statut || '').toLowerCase()))
     const ca_facture = f.reduce((sum, x: any) => sum + Number(x.total_facture || 0), 0)
     const ca_encaisse = f.reduce((sum, x: any) => sum + Number(x.total_regle || 0), 0)
     const solde_restant = f.reduce((sum, x: any) => sum + Number(x.solde_restant || 0), 0)

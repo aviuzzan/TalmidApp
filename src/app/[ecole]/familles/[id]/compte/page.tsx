@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { labelStatutFacture, labelModePaiement } from '@/lib/statuts'
+import { logAction } from '@/lib/audit-log'
 
 type Facture = {
   id: string; numero: string; date_emission: string; statut: string;
@@ -90,8 +91,14 @@ export default function CompteFamillePage() {
   async function supprimerReglement(id: string) {
     if (!confirm('Supprimer ce règlement ? Cette action est irréversible.')) return
     const s = createClient()
+    const { data: regAvant } = await s.from('reglements').select('montant, mode_paiement, facture_id, famille_id').eq('id', id).maybeSingle()
     const { error } = await s.from('reglements').delete().eq('id', id)
     if (error) { alert('Erreur: ' + error.message); return }
+    // Statut facture recalcule par le trigger BDD trg_reglements_statut
+    await logAction(s, ecole.id, 'reglement_supprime', {
+      reglement_id: id, montant: regAvant?.montant, mode_paiement: regAvant?.mode_paiement,
+      facture_id: regAvant?.facture_id, famille_id: regAvant?.famille_id,
+    })
     await load()
   }
 

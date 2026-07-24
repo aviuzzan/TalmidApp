@@ -9,6 +9,7 @@ import { labelModePaiement, labelStatutFacture, couleurStatutFacture } from '@/l
 import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
+import { logAction } from '@/lib/audit-log'
 
 type Tab = 'factures' | 'paiements'
 // Fallback si la table modes_reglement_ecole est vide ou indisponible.
@@ -165,8 +166,18 @@ export default function FinancesPage() {
       danger: true,
     })
     if (!ok) return
+    // Capturer les infos avant suppression pour l'audit-log
+    const { data: regAvant } = await supabase.from('reglements').select('montant, mode_paiement, facture_id, famille_id').eq('id', id).maybeSingle()
     const { error } = await supabase.from('reglements').delete().eq('id', id)
     if (error) { toast.error('Suppression impossible : ' + error.message); return }
+    // Statut facture recalcule automatiquement par le trigger BDD trg_reglements_statut
+    await logAction(supabase, ecole.id, 'reglement_supprime', {
+      reglement_id: id,
+      montant: regAvant?.montant,
+      mode_paiement: regAvant?.mode_paiement,
+      facture_id: regAvant?.facture_id,
+      famille_id: regAvant?.famille_id,
+    })
     toast.success('Règlement supprimé')
     load()
   }

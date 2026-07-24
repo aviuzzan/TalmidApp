@@ -123,8 +123,9 @@ export default function ExportsPage() {
     setLoading('reglements'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'reglements' })
     const s = createClient()
+    // FIX audit 24/07/2026 (#372) : colonne mode_paiement, pas mode (inexistante — la requete echouait)
     const { data, error } = await s.from('reglements')
-      .select('date_reglement, montant, mode, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
+      .select('date_reglement, montant, mode_paiement, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
       .eq('factures.annee_scolaire', annee)
       .order('date_reglement', { ascending: false })
     if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
@@ -132,7 +133,7 @@ export default function ExportsPage() {
     const rows = data.map((r: any) => [
       formatDateCSV(r.date_reglement),
       formatMontantCSV(r.montant),
-      r.mode || '',
+      r.mode_paiement || '',
       r.reference || '',
       r.factures?.numero || '',
       r.factures?.familles?.numero || '',
