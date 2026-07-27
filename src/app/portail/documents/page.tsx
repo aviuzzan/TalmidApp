@@ -18,6 +18,8 @@ export default function PortailDocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [docs, setDocs] = useState<Doc[]>([])
   const [filter, setFilter] = useState<string>('tous')
+  // Contrat papier (hhhh2) : scan du contrat signe a la main, joint par l'ecole
+  const [contratsPapier, setContratsPapier] = useState<{ annee_scolaire: string; contrat_papier_url: string }[]>([])
 
   const TYPE_LABEL: Record<string, string> = {
     justificatif: t('portail.documents.type.justificatif'),
@@ -37,12 +39,21 @@ export default function PortailDocumentsPage() {
     if (!session) { setLoading(false); return }
     const { data: profile } = await s.from('profiles').select('famille_id').eq('id', session.user.id).single()
     if (!profile?.famille_id) { setLoading(false); return }
-    const { data: list } = await s.from('documents_famille')
-      .select('id, type, nom, storage_path, taille, mime_type, created_at')
-      .eq('famille_id', profile.famille_id)
-      .eq('visible_famille', true)
-      .order('created_at', { ascending: false })
+    const [{ data: list }, { data: cps }] = await Promise.all([
+      s.from('documents_famille')
+        .select('id, type, nom, storage_path, taille, mime_type, created_at')
+        .eq('famille_id', profile.famille_id)
+        .eq('visible_famille', true)
+        .order('created_at', { ascending: false }),
+      // Contrats papier scannes (lien signe 1 an, meme pattern que les autres docs)
+      s.from('contrats_scolarisation')
+        .select('annee_scolaire, contrat_papier_url')
+        .eq('famille_id', profile.famille_id)
+        .eq('statut', 'valide')
+        .not('contrat_papier_url', 'is', null),
+    ])
     setDocs(list || [])
+    setContratsPapier((cps || []) as any[])
     setLoading(false)
   }
 
@@ -78,6 +89,25 @@ export default function PortailDocumentsPage() {
           {t('portail.documents.subtitle', { n: docs.length, s: docs.length > 1 ? 's' : '' })}
         </p>
       </div>
+
+      {contratsPapier.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
+          {contratsPapier.map((c, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: i < contratsPapier.length - 1 ? '1px solid #F1F5F9' : 'none', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B', marginBottom: 3 }}>
+                  📄 {t('portail.documents.contrat_papier', { annee: c.annee_scolaire }, `Contrat de scolarisation signé ${c.annee_scolaire}`)}
+                </div>
+                <div style={{ fontSize: 11, color: '#64748B' }}>{t('portail.documents.contrat_papier_sub', undefined, 'Document signé remis à l\'école')}</div>
+              </div>
+              <a href={c.contrat_papier_url} target="_blank" rel="noreferrer"
+                style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 16px', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                {t('portail.common.download')}
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
 
       {docs.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>

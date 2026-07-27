@@ -224,6 +224,44 @@ export default function ContratAdminDetailPage() {
         )}
       </div>
 
+      {/* Contrat papier (hhhh2) : scan du document signe consultable */}
+      {(contrat.saisi_par_admin || contrat.contrat_papier_url) && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>📄 Contrat saisi sur papier</span>
+          {contrat.contrat_papier_url ? (
+            <a href={contrat.contrat_papier_url} target="_blank" rel="noreferrer"
+              style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '6px 12px', textDecoration: 'none' }}>
+              📎 Voir le document signé
+            </a>
+          ) : (
+            <span style={{ fontSize: 12, color: '#B45309' }}>Aucun scan joint pour le moment</span>
+          )}
+          <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
+            {contrat.contrat_papier_url ? '🔁 Remplacer le scan' : '📷 Joindre le scan'}
+            <input type="file" accept="application/pdf,image/jpeg,image/png" style={{ display: 'none' }}
+              onChange={async e => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                try {
+                  const s2 = createClient()
+                  const { data: { session: sess } } = await s2.auth.getSession()
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('familleId', contrat.famille_id)
+                  fd.append('label', `Contrat papier signé ${contrat.annee_scolaire || ''}`)
+                  const up = await fetch('/api/upload', { method: 'POST', headers: { Authorization: 'Bearer ' + (sess?.access_token || '') }, body: fd })
+                  const json = await up.json()
+                  const url = json?.url || json?.publicUrl || json?.signedUrl
+                  if (!up.ok || !url) { alert('Échec upload : ' + (json?.error || 'inconnue')); return }
+                  const { error: upErr } = await s2.from('contrats_scolarisation').update({ contrat_papier_url: url }).eq('id', contrat.id)
+                  if (upErr) { alert('Enregistrement impossible : ' + upErr.message); return }
+                  setContrat({ ...contrat, contrat_papier_url: url })
+                } catch (err: any) { alert('Erreur : ' + (err?.message || 'inconnue')) }
+              }} />
+          </label>
+        </div>
+      )}
+
       {contrat.statut === 'annule' && contrat.motif_annulation && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', marginBottom: 4 }}>CONTRAT ANNULÉ</div>

@@ -3,10 +3,12 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { uploadAttachments, fileIcon, formatSize, Attachment } from '@/lib/messages-upload'
+import { useI18n } from '@/lib/i18n'
 
 export default function PortailThreadPage() {
   const params = useParams()
   const router = useRouter()
+  const { t } = useI18n()
   const threadId = params.id as string
 
   const [profile, setProfile] = useState<any>(null)
@@ -27,11 +29,11 @@ export default function PortailThreadPage() {
     if (!session) { router.push('/login'); return }
     const { data: p } = await s.from('profiles').select('*').eq('id', session.user.id).single()
     setProfile(p)
-    const [{ data: t }, { data: msgs }] = await Promise.all([
+    const [{ data: th }, { data: msgs }] = await Promise.all([
       s.from('message_threads').select('*, services(nom)').eq('id', threadId).single(),
       s.from('messages').select('*, profiles:auteur_profile_id(prenom, nom, role)').eq('thread_id', threadId).order('created_at'),
     ])
-    setThread(t); setMessages(msgs ?? [])
+    setThread(th); setMessages(msgs ?? [])
     // Marquer comme lu (upsert thread_participants)
     if (p) {
       await s.from('thread_participants').upsert({ thread_id: threadId, profile_id: p.id, last_read_at: new Date().toISOString() }, { onConflict: 'thread_id,profile_id' })
@@ -67,16 +69,16 @@ export default function PortailThreadPage() {
     await load(); setSending(false)
   }
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
-  if (!thread) return <div style={{ padding: 60, textAlign: 'center', color: '#DC2626' }}>Conversation introuvable</div>
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
+  if (!thread) return <div style={{ padding: 60, textAlign: 'center', color: '#DC2626' }}>{t('portail.messages.thread.not_found')}</div>
 
   const statutColor = thread.statut === 'ouvert' ? '#2563EB' : thread.statut === 'resolu' ? '#059669' : '#94A3B8'
-  const statutLabel = thread.statut === 'ouvert' ? 'Ouvert' : thread.statut === 'resolu' ? 'Résolu' : 'Archivé'
+  const statutLabel = thread.statut === 'ouvert' ? t('portail.messages.status.open') : thread.statut === 'resolu' ? t('portail.messages.status.resolved') : t('portail.messages.status.archived')
 
   return (
     <div>
       <div style={{ marginBottom: 14 }}>
-        <a href="/portail/messages" style={{ fontSize: 13, color: '#64748B', textDecoration: 'none' }}>← Mes conversations</a>
+        <a href="/portail/messages" style={{ fontSize: 13, color: '#64748B', textDecoration: 'none' }}>{t('portail.messages.back_to_list')}</a>
       </div>
 
       <div className="card" style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
@@ -85,7 +87,7 @@ export default function PortailThreadPage() {
             <div>
               <h1 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 4px', color: '#1E293B' }}>{thread.sujet}</h1>
               <div style={{ fontSize: 12, color: '#64748B' }}>
-                Destinataire : <strong>{thread.services?.nom || '—'}</strong>
+                {t('portail.messages.thread.recipient')} <strong>{thread.services?.nom || '—'}</strong>
               </div>
             </div>
             <span style={{ background: statutColor, color: '#fff', fontSize: 10, padding: '4px 9px', borderRadius: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{statutLabel}</span>
@@ -93,15 +95,15 @@ export default function PortailThreadPage() {
         </div>
 
         <div style={{ padding: '18px 22px', maxHeight: 520, overflowY: 'auto', background: '#FAFBFC' }}>
-          {messages.length === 0 && <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: 20 }}>Aucun message</div>}
+          {messages.length === 0 && <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: 20 }}>{t('portail.messages.thread.empty')}</div>}
           {messages.map(m => {
             const isMe = m.auteur_profile_id === profile?.id
-            const auteurNom = m.profiles ? `${m.profiles.prenom ?? ''} ${m.profiles.nom ?? ''}`.trim() || (m.profiles.role === 'parent' ? 'Vous' : 'École') : 'Inconnu'
+            const auteurNom = m.profiles ? `${m.profiles.prenom ?? ''} ${m.profiles.nom ?? ''}`.trim() || (m.profiles.role === 'parent' ? t('portail.messages.thread.you') : t('portail.messages.thread.school')) : t('portail.messages.thread.unknown')
             return (
               <div key={m.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: 14 }}>
                 <div style={{ maxWidth: '75%', background: isMe ? '#2563EB' : '#fff', color: isMe ? '#fff' : '#1E293B', padding: '10px 14px', borderRadius: 12, border: isMe ? 'none' : '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4, fontWeight: 600 }}>
-                    {isMe ? 'Vous' : auteurNom} · {new Date(m.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {isMe ? t('portail.messages.thread.you') : auteurNom} · {new Date(m.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </div>
                   <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.contenu}</div>
                   {Array.isArray(m.fichiers_urls) && m.fichiers_urls.length > 0 && (
@@ -124,11 +126,11 @@ export default function PortailThreadPage() {
 
         {thread.statut !== 'archive' ? (
           <form onSubmit={sendReply} style={{ padding: '16px 22px', borderTop: '1px solid #F1F5F9', background: '#fff' }}>
-            <textarea value={reply} onChange={e => setReply(e.target.value)} rows={3} placeholder="Votre réponse…"
+            <textarea value={reply} onChange={e => setReply(e.target.value)} rows={3} placeholder={t('portail.messages.thread.reply_placeholder')}
               style={{ width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
             <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-                📎 Joindre des fichiers
+                {t('portail.messages.thread.attach')}
                 <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files || []))} style={{ display: 'none' }} />
               </label>
               {files.length > 0 && files.map((f, i) => (
@@ -141,13 +143,13 @@ export default function PortailThreadPage() {
             {error && <div style={{ background: '#FEF2F2', color: '#991B1B', padding: 8, borderRadius: 6, fontSize: 12, marginTop: 8 }}>{error}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
               <button type="submit" disabled={sending || !reply.trim()} style={{ background: sending || !reply.trim() ? '#94A3B8' : '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: sending || !reply.trim() ? 'not-allowed' : 'pointer' }}>
-                {sending ? 'Envoi…' : 'Envoyer'}
+                {sending ? t('portail.messages.sending') : t('portail.messages.send')}
               </button>
             </div>
           </form>
         ) : (
           <div style={{ padding: 20, textAlign: 'center', color: '#94A3B8', fontSize: 13, background: '#F8FAFC' }}>
-            Cette conversation a été archivée.
+            {t('portail.messages.thread.archived_notice')}
           </div>
         )}
       </div>

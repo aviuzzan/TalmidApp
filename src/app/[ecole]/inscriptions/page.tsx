@@ -7,6 +7,7 @@ import { formatStatut } from '@/lib/inscriptions'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { labelModePaiement } from '@/lib/statuts'
 import { creerFactureDepuisContrat } from '@/lib/facture-contrat'
+import { logAction } from '@/lib/audit-log'
 import { useI18n } from '@/lib/i18n'
 import { useToast } from '@/components/ui/Toast'
 
@@ -413,6 +414,39 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       return
     }
 
+    // FIX audit 27/07 (hhhh2) : la validation depuis la LISTE ne creait pas les
+    // scolarites N+1 ni le log d'audit, contrairement a la page detail — unifie.
+    try {
+      let exId = contrat.exercice_id
+      if (!exId && contrat.annee_scolaire) {
+        const { data: ex } = await s.from('exercices').select('id').eq('ecole_id', ecoleId).eq('code', contrat.annee_scolaire).maybeSingle()
+        exId = ex?.id || null
+        if (exId) await s.from('contrats_scolarisation').update({ exercice_id: exId }).eq('id', id)
+      }
+      if (exId) {
+        const { data: classesEcole } = await s.from('classes').select('id, nom').eq('ecole_id', ecoleId)
+        const findClasseId = (nom: string | null | undefined) =>
+          nom ? (classesEcole || []).find((c: any) => c.nom.trim().toLowerCase() === nom.trim().toLowerCase())?.id ?? null : null
+        const rows = ((contrat.contrat_enfants || []) as any[])
+          .map((ce: any) => ({
+            enfant_id: ce.enfant_id,
+            exercice_id: exId,
+            ecole_id: ecoleId,
+            classe_id: findClasseId(ce.classe_prevue),
+            statut_inscription: 'inscrit',
+            annee_scolaire: contrat.annee_scolaire,
+          }))
+          .filter((r: any) => r.enfant_id && r.exercice_id)
+        if (rows.length > 0) {
+          await s.from('scolarites').upsert(rows, { onConflict: 'enfant_id,exercice_id' })
+        }
+      }
+      await logAction(s, ecoleId, 'contrat_valide', {
+        contrat_id: id, famille_id: contrat.famille_id,
+        exercice_id: exId, montant_total: contrat.montant_total,
+      })
+    } catch (e) { console.warn('Création scolarités N+1 échouée :', e) }
+
     // Notifier la famille par email (best-effort)
     let emailEnvoye = false
     try {
@@ -455,14 +489,18 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Filtres */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      {/* Filtres + saisie papier */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {filtres.map(f => (
           <button key={f} onClick={() => setFiltre(f)}
             style={{ padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: filtre === f ? 600 : 400, background: filtre === f ? '#2563EB' : '#F1F5F9', color: filtre === f ? '#fff' : '#64748B' }}>
             {f.charAt(0).toUpperCase() + f.slice(1)} {f === 'tous' ? `(${contrats.length})` : `(${contrats.filter(c => c.statut === f).length})`}
           </button>
         ))}
+        <a href={`/${ecoleSlug}/inscriptions/contrat/nouveau`}
+          style={{ marginLeft: 'auto', background: '#10B981', color: '#fff', borderRadius: 20, padding: '7px 16px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+          📄 + Saisir contrat papier
+        </a>
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>

@@ -2,8 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-
-const TRIMESTRES = ['', '1er trimestre', '2e trimestre', '3e trimestre']
+import { useI18n } from '@/lib/i18n'
 
 type Bulletin = {
   id: string
@@ -17,6 +16,7 @@ type Bulletin = {
 
 export default function PortailBulletinsPage() {
   const router = useRouter()
+  const { t } = useI18n()
   const [loading, setLoading] = useState(true)
   const [bulletins, setBulletins] = useState<Bulletin[]>([])
 
@@ -45,28 +45,28 @@ export default function PortailBulletinsPage() {
     setLoading(false)
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>{t('portail.common.loading')}</div>
 
   // Group bulletins par enfant
   const parEnfant: Record<string, { nom: string; bulletins: Bulletin[] }> = {}
   for (const b of bulletins) {
     const key = b.enfant_id
-    const nom = b.enfants ? b.enfants.prenom + ' ' + b.enfants.nom : 'Élève'
+    const nom = b.enfants ? b.enfants.prenom + ' ' + b.enfants.nom : t('portail.bulletins.student')
     if (!parEnfant[key]) parEnfant[key] = { nom, bulletins: [] }
     parEnfant[key].bulletins.push(b)
   }
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 48px' }}>
-      <a href="/portail/enfants" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>← Mes enfants</a>
+      <a href="/portail/enfants" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>{t('portail.enfants.back_link')}</a>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>📋 Bulletins scolaires</h1>
-        <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>Les bulletins de vos enfants, par trimestre</p>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>{t('portail.bulletins.title')}</h1>
+        <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>{t('portail.bulletins.subtitle')}</p>
       </div>
 
       {Object.keys(parEnfant).length === 0 ? (
         <div style={{ padding: 50, textAlign: 'center', color: '#94A3B8', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12 }}>
-          Aucun bulletin disponible pour le moment.
+          {t('portail.bulletins.empty')}
         </div>
       ) : Object.entries(parEnfant).map(([enfantId, { nom, bulletins: bs }]) => (
         <div key={enfantId} style={{ marginBottom: 24 }}>
@@ -82,7 +82,7 @@ export default function PortailBulletinsPage() {
                 <div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ background: '#EFF6FF', color: '#1E40AF', borderRadius: 6, padding: '2px 10px', fontSize: 12, fontWeight: 600 }}>
-                      {TRIMESTRES[b.trimestre] || 'Trim. ?'}
+                      {[1, 2, 3].includes(b.trimestre) ? t('portail.bulletins.trimestre.' + b.trimestre) : t('portail.bulletins.trimestre_unknown')}
                     </span>
                     {b.exercices?.code && (
                       <span style={{ fontSize: 11, color: '#64748B' }}>📅 {b.exercices.code}</span>
@@ -90,7 +90,7 @@ export default function PortailBulletinsPage() {
                   </div>
                   {b.moyenne_generale != null && (
                     <div style={{ fontSize: 13, marginTop: 6 }}>
-                      Moyenne générale :{' '}
+                      {t('portail.bulletins.average_label')}{' '}
                       <strong style={{ color: b.moyenne_generale >= 10 ? '#059669' : '#DC2626', fontSize: 16 }}>
                         {Number(b.moyenne_generale).toFixed(2)} / 20
                       </strong>
@@ -98,7 +98,7 @@ export default function PortailBulletinsPage() {
                   )}
                 </div>
                 <button onClick={() => router.push('/portail/bulletins/' + b.id)} className="btn-primary" style={{ fontSize: 12, padding: '8px 14px' }}>
-                  📄 Voir le bulletin
+                  {t('portail.bulletins.view')}
                 </button>
               </div>
             ))}

@@ -337,11 +337,11 @@ export default function PortailFacturesPage() {
             const totalRegle = reglees.reduce((s, e) => s + Number(e.montant), 0)
             const totalRestant = aRegler.reduce((s, e) => s + Number(e.montant), 0)
             const modeLabel = (m: string) => {
-              if (m === 'cheque') return 'Chèque'
-              if (m === 'sepa' || m === 'prelevement') return 'Prélèvement'
-              if (m === 'virement') return 'Virement'
-              if (m === 'especes') return 'Espèces'
-              if (m === 'carte') return 'Carte'
+              if (m === 'cheque') return t('portail.factures.mode.cheque')
+              if (m === 'sepa' || m === 'prelevement') return t('portail.factures.mode.sepa')
+              if (m === 'virement') return t('portail.factures.mode.virement')
+              if (m === 'especes') return t('portail.factures.mode.especes')
+              if (m === 'carte') return t('portail.factures.mode.carte')
               return labelModePaiement(m)
             }
             const modeIcon = (m: string) => {
@@ -355,45 +355,45 @@ export default function PortailFacturesPage() {
             function badge(e: any) {
               const dateEch = new Date(e.date_echeance); dateEch.setHours(0, 0, 0, 0)
               const enRetard = !['encaisse', 'paye', 'rejete', 'recu'].includes(e.statut) && dateEch < today
-              if (e.statut === 'encaisse') return { label: 'Encaissé', bg: '#ECFDF5', color: '#065F46' }
-              if (e.statut === 'paye') return { label: 'Payé', bg: '#ECFDF5', color: '#065F46' }
-              if (e.statut === 'rejete') return { label: 'Rejeté', bg: '#FEF2F2', color: '#991B1B' }
-              if (e.statut === 'recu') return { label: 'Reçu', bg: '#EEF2FF', color: '#3730A3' }
-              if (enRetard) return { label: 'En retard', bg: '#FEF2F2', color: '#991B1B' }
-              if (prochaine && prochaine.id === e.id) return { label: 'Prochaine', bg: '#DBEAFE', color: '#1E40AF' }
-              return { label: 'À venir', bg: '#F1F5F9', color: '#475569' }
+              if (e.statut === 'encaisse') return { label: t('portail.factures.sched.status.encaisse'), bg: '#ECFDF5', color: '#065F46' }
+              if (e.statut === 'paye') return { label: t('portail.factures.sched.status.paye'), bg: '#ECFDF5', color: '#065F46' }
+              if (e.statut === 'rejete') return { label: t('portail.factures.sched.status.rejete'), bg: '#FEF2F2', color: '#991B1B' }
+              if (e.statut === 'recu') return { label: t('portail.factures.sched.status.recu'), bg: '#EEF2FF', color: '#3730A3' }
+              if (enRetard) return { label: t('portail.factures.sched.status.late'), bg: '#FEF2F2', color: '#991B1B' }
+              if (prochaine && prochaine.id === e.id) return { label: t('portail.factures.sched.status.next'), bg: '#DBEAFE', color: '#1E40AF' }
+              return { label: t('portail.factures.sched.status.upcoming'), bg: '#F1F5F9', color: '#475569' }
             }
             const joursAvant = prochaine ? Math.ceil((new Date(prochaine.date_echeance).getTime() - today.getTime()) / 86400000) : 0
             return (
               <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#1E293B', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    📅 Mon échéancier
+                    {t('portail.factures.sched.title')}
                   </div>
                   <div style={{ fontSize: 12, color: '#64748B' }}>
-                    {echeances.length} échéance{echeances.length > 1 ? 's' : ''} · {echeances[0] ? modeLabel(echeances[0].mode_paiement) : ''}
+                    {t('portail.factures.sched.count', { n: echeances.length, s: echeances.length > 1 ? 's' : '' })} · {echeances[0] ? modeLabel(echeances[0].mode_paiement) : ''}
                   </div>
                 </div>
                 {/* KPI strip */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, padding: '14px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                   <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Échéances réglées</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>{t('portail.factures.sched.paid_label')}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{reglees.length} / {echeances.length}</div>
-                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{totalRegle.toLocaleString('fr-FR')} € encaissés</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{t('portail.factures.sched.collected', { montant: totalRegle.toLocaleString('fr-FR') })}</div>
                   </div>
                   {prochaine && (
                     <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
-                      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Prochaine échéance</div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>{t('portail.factures.sched.next_label')}</div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{new Date(prochaine.date_echeance).toLocaleDateString('fr-FR')}</div>
                       <div style={{ fontSize: 11, color: joursAvant < 0 ? '#DC2626' : '#64748B', marginTop: 1 }}>
-                        {joursAvant < 0 ? `en retard de ${Math.abs(joursAvant)} j` : joursAvant === 0 ? "aujourd'hui" : `dans ${joursAvant} jour${joursAvant > 1 ? 's' : ''}`}
+                        {joursAvant < 0 ? t('portail.factures.sched.late_by', { n: Math.abs(joursAvant) }) : joursAvant === 0 ? t('portail.factures.sched.today') : t('portail.factures.sched.in_days', { n: joursAvant, s: joursAvant > 1 ? 's' : '' })}
                       </div>
                     </div>
                   )}
                   <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Reste à régler</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>{t('portail.factures.remaining_to_pay')}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{totalRestant.toLocaleString('fr-FR')} €</div>
-                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>sur {(totalRegle + totalRestant).toLocaleString('fr-FR')} €</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{t('portail.factures.sched.out_of', { montant: (totalRegle + totalRestant).toLocaleString('fr-FR') })}</div>
                   </div>
                 </div>
                 {/* Tableau desktop */}
@@ -401,7 +401,7 @@ export default function PortailFacturesPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead style={{ background: '#F8FAFC' }}>
                       <tr>
-                        {['N°', 'Date prévue', 'Montant', 'Mode', 'Statut'].map((h, i) => (
+                        {[t('portail.factures.credits.col.number'), t('portail.factures.sched.col.due_date'), t('portail.factures.col.amount'), t('portail.factures.col.mode'), t('portail.factures.credits.col.status')].map((h, i) => (
                           <th key={h} style={{ textAlign: i === 2 ? 'right' : 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
                         ))}
                       </tr>
@@ -450,7 +450,7 @@ export default function PortailFacturesPage() {
                 </div>
                 <div style={{ padding: '10px 16px', borderTop: '1px solid #E2E8F0', background: '#FFFBEB', fontSize: 11, color: '#92400E', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <span>💡</span>
-                  <div>Les dates indiquées sont les dates prévues d'encaissement. En cas de difficulté, contactez l'école <strong>avant</strong> la date d'échéance.</div>
+                  <div dangerouslySetInnerHTML={{ __html: t('portail.factures.sched.note') }} />
                 </div>
                 <style jsx>{`
                   @media (max-width: 640px) {

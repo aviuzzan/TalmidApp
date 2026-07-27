@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useI18n } from '@/lib/i18n'
 
 type Devoir = {
   id: string
@@ -18,6 +19,7 @@ type Enfant = { id: string; prenom: string; nom: string; classe_id: string | nul
 
 export default function PortailDevoirsPage() {
   const router = useRouter()
+  const { t } = useI18n()
   const [loading, setLoading] = useState(true)
   const [enfants, setEnfants] = useState<Enfant[]>([])
   const [devoirsParEnfant, setDevoirsParEnfant] = useState<Record<string, Devoir[]>>({})
@@ -70,41 +72,41 @@ export default function PortailDevoirsPage() {
     const d = new Date(dateStr)
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const diff = Math.round((d.getTime() - today.getTime()) / 86400000)
-    if (diff === 0) return 'Aujourd\'hui'
-    if (diff === 1) return 'Demain'
-    if (diff < 7) return 'Dans ' + diff + ' j'
+    if (diff === 0) return t('portail.devoirs.due.today')
+    if (diff === 1) return t('portail.devoirs.due.tomorrow')
+    if (diff < 7) return t('portail.devoirs.due.in_days', { n: diff })
     return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>{t('portail.common.loading')}</div>
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 48px' }}>
-      <a href="/portail/enfants" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>← Mes enfants</a>
+      <a href="/portail/enfants" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 13, textDecoration: 'none', width: 'fit-content' }}>{t('portail.enfants.back_link')}</a>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>📓 Devoirs</h1>
-          <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>Cahier de textes en ligne</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', margin: 0 }}>{t('portail.devoirs.title')}</h1>
+          <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>{t('portail.devoirs.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 8, padding: 4 }}>
           <button onClick={() => setFiltre('semaine')}
             style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
               background: filtre === 'semaine' ? '#fff' : 'transparent',
               color: filtre === 'semaine' ? '#1E293B' : '#64748B' }}>
-            Cette semaine
+            {t('portail.devoirs.filter.week')}
           </button>
           <button onClick={() => setFiltre('tous')}
             style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
               background: filtre === 'tous' ? '#fff' : 'transparent',
               color: filtre === 'tous' ? '#1E293B' : '#64748B' }}>
-            À venir
+            {t('portail.devoirs.filter.upcoming')}
           </button>
         </div>
       </div>
 
       {enfants.length === 0 ? (
         <div style={{ padding: 50, textAlign: 'center', color: '#94A3B8', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12 }}>
-          Aucun enfant rattaché à une classe.
+          {t('portail.devoirs.empty_no_class')}
         </div>
       ) : enfants.map(e => {
         const devs = filtrerDevoirs(devoirsParEnfant[e.id] || [])
@@ -115,11 +117,11 @@ export default function PortailDevoirsPage() {
                 {e.prenom[0]}
               </span>
               {e.prenom} {e.nom}
-              <span style={{ fontSize: 12, color: '#64748B', fontWeight: 400 }}>· {devs.length} devoir{devs.length > 1 ? 's' : ''}</span>
+              <span style={{ fontSize: 12, color: '#64748B', fontWeight: 400 }}>· {t('portail.devoirs.count', { n: devs.length, s: devs.length > 1 ? 's' : '' })}</span>
             </h2>
             {devs.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13, background: '#F8FAFC', borderRadius: 10 }}>
-                🎉 Aucun devoir {filtre === 'semaine' ? 'cette semaine' : 'à venir'}
+                {filtre === 'semaine' ? t('portail.devoirs.none_week') : t('portail.devoirs.none_upcoming')}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -130,7 +132,7 @@ export default function PortailDevoirsPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                           {d.matiere_nom && <span style={{ background: '#FFFBEB', color: '#92400E', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{d.matiere_nom}</span>}
-                          {d.duree_estimee_min && <span style={{ fontSize: 11, color: '#64748B' }}>⏱ ~{d.duree_estimee_min} min</span>}
+                          {d.duree_estimee_min && <span style={{ fontSize: 11, color: '#64748B' }}>⏱ {t('portail.devoirs.duration', { n: d.duree_estimee_min })}</span>}
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 600, color: isUrgent ? '#DC2626' : '#1E40AF', whiteSpace: 'nowrap' }}>
                           📅 {joursAvant(d.date_pour)}
