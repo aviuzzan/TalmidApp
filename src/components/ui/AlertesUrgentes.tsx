@@ -7,7 +7,7 @@
  *  - Demandes de réduction soumises (statut = 'soumise' / 'en_attente')
  *  - Contrats de scolarisation N+1 soumis non validés
  *  - Demandes d'inscription externes en attente
- *  - Factures en retard (date d'émission > 30j et solde_restant > 0)
+ *  - Familles en retard REEL (du a date > 0 : echeances echues non couvertes)
  *  - Chèques prévus à encaisser ce mois (date_echeance dans le mois courant)
  *
  * Si rien d'urgent, affiche un message positif "Tout est à jour".
@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { calcDuADateBatch } from '@/lib/du-a-date'
 
 type Alerte = {
   icon: string
@@ -34,7 +35,6 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
     ;(async () => {
       const s = createClient()
       const now = new Date()
-      const il30Joursj = new Date(now.getTime() - 30 * 86400 * 1000).toISOString().slice(0, 10)
       const moisDebut = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
       const moisFin = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
 
@@ -42,7 +42,7 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
         { count: ddrCount },
         { count: contratCount },
         { count: demandesCount },
-        { count: factCount },
+        { data: factAvecSolde },
         { count: chequesCount },
       ] = await Promise.all([
         s.from('demandes_reduction').select('id', { count: 'exact', head: true })
@@ -51,10 +51,12 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
           .eq('ecole_id', ecoleId).eq('statut', 'soumis'),
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecoleId).eq('statut', 'en_attente'),
-        s.from('factures_solde').select('id, familles!inner(ecole_id)', { count: 'exact', head: true })
+        // Candidats retard : factures avec solde. Le VRAI retard est calcule ensuite
+        // via du-a-date (echeances echues non couvertes), pas date_emission + 30j
+        // qui marquait "en retard" toute facture annuelle emise 30j avant.
+        s.from('factures_solde').select('id, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecoleId)
           .gt('solde_restant', 0)
-          .lte('date_emission', il30Joursj)
           .neq('statut', 'annule'),
         // Alerte "chèques à encaisser ce mois" -> uniquement les vrais chèques (l'action
         // pointe vers le bordereau de remise qui n'accepte que des chèques physiques).
@@ -65,11 +67,19 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
           .gte('date_echeance', moisDebut).lte('date_echeance', moisFin),
       ])
 
+      // Vrai retard : du a date > 0 uniquement.
+      let factCount = 0
+      const idsAvecSolde = ((factAvecSolde ?? []) as any[]).map(f => f.id)
+      if (idsAvecSolde.length > 0) {
+        const duMap = await calcDuADateBatch(s, idsAvecSolde)
+        factCount = Object.values(duMap).filter(r => r.enRetard).length
+      }
+
       const list: Alerte[] = []
       if ((ddrCount ?? 0) > 0) list.push({ icon: '🧾', label: 'demande(s) de réduction à traiter', count: ddrCount!, href: `/${ecoleSlug}/inscriptions?onglet=ddr`, couleur: 'orange' })
       if ((contratCount ?? 0) > 0) list.push({ icon: '📝', label: 'contrat(s) N+1 à valider', count: contratCount!, href: `/${ecoleSlug}/inscriptions?onglet=contrats`, couleur: 'orange' })
       if ((demandesCount ?? 0) > 0) list.push({ icon: '📨', label: 'demande(s) d\'inscription externe en attente', count: demandesCount!, href: `/${ecoleSlug}/demandes-inscription`, couleur: 'bleu' })
-      if ((factCount ?? 0) > 0) list.push({ icon: '💰', label: 'facture(s) en retard > 30 jours', count: factCount!, href: `/${ecoleSlug}/finances/relances`, couleur: 'rouge' })
+      if (factCount > 0) list.push({ icon: '💰', label: 'famille(s) en retard sur échéance', count: factCount, href: `/${ecoleSlug}/finances/relances`, couleur: 'rouge' })
       if ((chequesCount ?? 0) > 0) list.push({ icon: '✉️', label: 'chèque(s) à encaisser ce mois', count: chequesCount!, href: `/${ecoleSlug}/finances/bordereau`, couleur: 'bleu' })
 
       setAlertes(list)

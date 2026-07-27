@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { calcDuADateBatch } from '@/lib/du-a-date'
 
 type KPI = {
   familles: number
@@ -39,7 +40,6 @@ export default function TableauBordDirectionPage() {
     ;(async () => {
       setLoading(true)
       const s = createClient()
-      const il30Joursj = new Date(Date.now() - 30 * 86400 * 1000).toISOString().slice(0, 10)
       const exerciceId = exerciceSelectionne.id
 
       const [
@@ -57,7 +57,7 @@ export default function TableauBordDirectionPage() {
       ] = await Promise.all([
         s.from('familles').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
         s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
-        s.from('factures_solde').select('total_facture, total_regle, solde_restant, statut, date_emission, familles!inner(ecole_id)').eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
+        s.from('factures_solde').select('id, total_facture, total_regle, solde_restant, statut, familles!inner(ecole_id)').eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
         s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).eq('statut_inscription', 'sorti'),
         s.from('exercices').select('id, code').eq('ecole_id', ecole.id).order('code', { ascending: false }),
         s.from('demandes_reduction').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('exercice_id', exerciceId).eq('statut', 'accordee'),
@@ -70,9 +70,17 @@ export default function TableauBordDirectionPage() {
       const totalFacture = ((factures ?? []) as any[]).reduce((sum: number, f: any) => sum + Number(f.total_facture || 0), 0)
       const totalRegle = ((factures ?? []) as any[]).reduce((sum: number, f: any) => sum + Number(f.total_regle || 0), 0)
       const totalRestant = ((factures ?? []) as any[]).reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
-      const retards = ((factures ?? []) as any[]).filter((f: any) => Number(f.solde_restant) > 0 && f.date_emission && f.date_emission <= il30Joursj)
-      const facturesRetard30 = retards.length
-      const montantRetard30 = retards.reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
+      // Vrai retard = du a date (echeances echues non couvertes), plus "emission + 30j"
+      // qui marquait mecaniquement en retard toute facture annuelle emise avant l'ete.
+      let facturesRetard30 = 0
+      let montantRetard30 = 0
+      const idsAvecSolde = ((factures ?? []) as any[]).filter((f: any) => Number(f.solde_restant) > 0).map((f: any) => f.id)
+      if (idsAvecSolde.length > 0) {
+        const duMap = await calcDuADateBatch(s, idsAvecSolde)
+        for (const r of Object.values(duMap)) {
+          if (r.enRetard) { facturesRetard30++; montantRetard30 += r.duAdate }
+        }
+      }
 
       // Inscriptions N+1
       const exList = (exsList ?? []) as { id: string; code: string }[]
@@ -126,8 +134,8 @@ export default function TableauBordDirectionPage() {
       ['Total réglé (€)', kpi.totalRegle.toFixed(2)],
       ['Reste à recouvrer (€)', kpi.totalRestant.toFixed(2)],
       ['Taux de recouvrement (%)', taux],
-      ['Factures en retard >30j', String(kpi.facturesRetard30)],
-      ['Montant retard >30j (€)', kpi.montantRetard30.toFixed(2)],
+      ['Factures en retard (échéances échues)', String(kpi.facturesRetard30)],
+      ['Montant dû à ce jour (€)', kpi.montantRetard30.toFixed(2)],
       ['Sorties (élèves)', String(kpi.sorties)],
       ['Contrats N+1 validés', String(kpi.inscriptionsN1Contrats)],
       ['Scolarités N+1 créées', String(kpi.inscriptionsN1Scolarites)],
@@ -205,8 +213,8 @@ export default function TableauBordDirectionPage() {
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: 18 }}>
               <h2 style={{ fontSize: 14, fontWeight: 700, color: '#991B1B', margin: 0, marginBottom: 12 }}>⚠️ Retards de paiement</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                <Kpi label="Factures en retard >30j" value={kpi.facturesRetard30.toString()} color="#991B1B" bg="#fff" />
-                <Kpi label="Montant en retard >30j" value={fmt(kpi.montantRetard30)} color="#991B1B" bg="#fff" />
+                <Kpi label="Familles en retard sur échéance" value={kpi.facturesRetard30.toString()} color="#991B1B" bg="#fff" />
+                <Kpi label="Montant dû à ce jour" value={fmt(kpi.montantRetard30)} color="#991B1B" bg="#fff" />
               </div>
               <button onClick={() => router.push(`/${ecole.slug}/finances/relances`)}
                 style={{ marginTop: 12, background: '#fff', border: '1px solid #FCA5A5', color: '#991B1B', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>

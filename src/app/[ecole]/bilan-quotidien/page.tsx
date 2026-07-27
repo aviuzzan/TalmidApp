@@ -21,6 +21,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { getExerciceInscription } from '@/lib/annee-inscription'
+import { calcDuADateBatch } from '@/lib/du-a-date'
 
 type Bilan = {
   // Section 1
@@ -87,7 +88,6 @@ export default function BilanQuotidienPage() {
     setLoading(true)
     const s = createClient()
     const aujourdhui = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-    const ilYa30Jours = new Date(Date.now() - 30 * 86400 * 1000).toISOString().slice(0, 10)
     const ilYa24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
     const ilYa3jours = new Date(Date.now() - 3 * 86400 * 1000).toISOString()
     const dansUneSemaine = new Date(Date.now() + 7 * 86400 * 1000).toISOString().slice(0, 10)
@@ -146,7 +146,7 @@ export default function BilanQuotidienPage() {
           .eq('factures.familles.ecole_id', ecole.id)
           .eq('date_reglement', aujourdhui),
         // Toutes les factures de l'école (vue factures_solde) — sert au "reste à encaisser" et aux retards
-        s.from('factures_solde').select('solde_restant, date_emission, statut, familles!inner(ecole_id)')
+        s.from('factures_solde').select('id, solde_restant, statut, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id)
           .neq('statut', 'annule'),
         // Échéances cette semaine
@@ -204,7 +204,16 @@ export default function BilanQuotidienPage() {
       const avoirsImputesAujourdhui = avoirsImputes.reduce((sum, r) => sum + Number(r.montant || 0), 0)
       const factAll = (facturesAll ?? []) as any[]
       const resteAEncaisser = factAll.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
-      const retards30 = factAll.filter(f => Number(f.solde_restant) > 0 && f.date_emission && f.date_emission <= ilYa30Jours)
+      // Vrai retard = du a date (echeances echues non couvertes), plus "emission + 30j".
+      let retardCount = 0
+      let retardMontant = 0
+      const idsAvecSolde = factAll.filter(f => Number(f.solde_restant) > 0).map(f => f.id)
+      if (idsAvecSolde.length > 0) {
+        const duMap = await calcDuADateBatch(s, idsAvecSolde)
+        for (const r of Object.values(duMap)) {
+          if (r.enRetard) { retardCount++; retardMontant += r.duAdate }
+        }
+      }
       const echSem = (echeancesSemaine ?? []) as any[]
       const echRetard = (echeancesRetard ?? []) as any[]
 
@@ -248,8 +257,8 @@ export default function BilanQuotidienPage() {
         avoirsImputesAujourdhui,
         nbAvoirsImputesAujourdhui: avoirsImputes.length,
         resteAEncaisser,
-        facturesRetard30Count: retards30.length,
-        facturesRetard30Montant: retards30.reduce((s, f) => s + Number(f.solde_restant || 0), 0),
+        facturesRetard30Count: retardCount,
+        facturesRetard30Montant: retardMontant,
         echeancesSemaineCount: echSem.length,
         echeancesSemaineMontant: echSem.reduce((s, c) => s + Number(c.montant || 0), 0),
         echeancesRetardCount: echRetard.length,
@@ -383,7 +392,7 @@ export default function BilanQuotidienPage() {
         </KpiGrid>
         <div style={{ height: 12 }} />
         <KpiGrid>
-          <Kpi label="Factures impayées >30j"
+          <Kpi label="Retard réel (échéances échues)"
             value={`${bilan.facturesRetard30Count} · ${fmtEur(bilan.facturesRetard30Montant)}`}
             color={bilan.facturesRetard30Count > 0 ? '#991B1B' : '#065F46'}
             onClick={() => go('finances/relances')} />

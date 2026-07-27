@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive } from '@/lib/exercice-context'
 import { labelStatutFacture } from '@/lib/statuts'
+import { calcDuADateBatch } from '@/lib/du-a-date'
 
 type Kpi = {
   ca_facture: number
@@ -14,8 +15,9 @@ type Kpi = {
   nb_factures_payees: number
   nb_factures_partiel: number
   nb_factures_attente: number
-  nb_familles_a_jour: number
+  nb_familles_avec_solde: number
   nb_familles_en_retard: number
+  montant_du_a_date: number
   top_debiteurs: Array<{ famille_id: string; nom: string; solde: number; numero: string }>
   encaissements_par_mois: Array<{ mois: string; total: number }>
   factures_recentes: Array<{ id: string; numero: string; famille_nom: string; date_emission: string; total: number; solde: number; statut: string }>
@@ -67,9 +69,24 @@ export default function FinancesDashboardPage() {
       .sort((a, b) => b.solde - a.solde)
       .slice(0, 10)
 
-    const nb_familles_a_jour = Object.keys(dette_par_famille).length === 0 ? 0 :
-      new Set(f.filter((x: any) => Number(x.solde_restant || 0) <= 0).map((x: any) => x.famille_id)).size
-    const nb_familles_en_retard = Object.keys(dette_par_famille).length
+    // "Familles avec solde" = solde annuel > 0 (normal en cours d'annee, info neutre).
+    // "Familles en retard" = du a date > 0 (echeance echue non couverte) — le seul vrai rouge.
+    const nb_familles_avec_solde = Object.keys(dette_par_famille).length
+    let nb_familles_en_retard = 0
+    let montant_du_a_date = 0
+    const idsAvecSolde = f.filter((x: any) => Number(x.solde_restant || 0) > 0).map((x: any) => x.id)
+    if (idsAvecSolde.length > 0) {
+      const duMap = await calcDuADateBatch(s, idsAvecSolde)
+      const famillesEnRetard = new Set<string>()
+      for (const [fid, r] of Object.entries(duMap)) {
+        if (r.enRetard) {
+          montant_du_a_date += r.duAdate
+          const fact = (f as any[]).find((x: any) => x.id === fid)
+          if (fact?.famille_id) famillesEnRetard.add(fact.famille_id)
+        }
+      }
+      nb_familles_en_retard = famillesEnRetard.size
+    }
 
     // Encaissements par mois (12 derniers mois)
     const debut = new Date()
@@ -113,7 +130,7 @@ export default function FinancesDashboardPage() {
     setKpi({
       ca_facture, ca_encaisse, solde_restant,
       nb_factures, nb_factures_payees, nb_factures_partiel, nb_factures_attente,
-      nb_familles_a_jour, nb_familles_en_retard,
+      nb_familles_avec_solde, nb_familles_en_retard, montant_du_a_date,
       top_debiteurs, encaissements_par_mois, factures_recentes,
     })
     setLoading(false)
@@ -173,7 +190,11 @@ export default function FinancesDashboardPage() {
         <div style={card}>
           <div style={cardLabel}>Familles en retard</div>
           <div style={{ ...cardValue, color: kpi.nb_familles_en_retard > 0 ? '#EF4444' : '#10B981' }}>{kpi.nb_familles_en_retard}</div>
-          <div style={cardSub}>Solde non réglé &gt; 0 €</div>
+          <div style={cardSub}>
+            {kpi.nb_familles_en_retard > 0
+              ? `${fmt(kpi.montant_du_a_date)} dus à ce jour`
+              : `Échéances à venir · ${kpi.nb_familles_avec_solde} famille${kpi.nb_familles_avec_solde > 1 ? 's' : ''} avec solde annuel`}
+          </div>
         </div>
       </div>
 

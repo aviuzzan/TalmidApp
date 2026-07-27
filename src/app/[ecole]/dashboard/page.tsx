@@ -7,6 +7,7 @@ import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau, Categorie } fro
 import { useAccesFinances } from '@/lib/acces-finances'
 import AlertesUrgentes from '@/components/ui/AlertesUrgentes'
 import { useI18n } from '@/lib/i18n'
+import { calcDuADateBatch } from '@/lib/du-a-date'
 
 type Stats = {
   familles: number
@@ -14,8 +15,10 @@ type Stats = {
   incomplets: number
   attente: number
   msgNonLus: number
-  factures_impayees: number
-  montant_impayes: number
+  // Vrai retard = echeances echues non couvertes (du a date), PAS solde annuel > 0.
+  factures_en_retard: number
+  montant_du_a_date: number
+  solde_annuel: number
   professeurs: number
   classes: number
 }
@@ -29,7 +32,7 @@ export default function DashboardPage() {
   const [perms, setPerms] = useState<Record<string, Niveau>>({})
   const [isAdminPrincipal, setIsAdminPrincipal] = useState(false)
   const { acces: accesFinances } = useAccesFinances()
-  const [stats, setStats] = useState<Stats>({ familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_impayees: 0, montant_impayes: 0, professeurs: 0, classes: 0 })
+  const [stats, setStats] = useState<Stats>({ familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_en_retard: 0, montant_du_a_date: 0, solde_annuel: 0, professeurs: 0, classes: 0 })
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
@@ -54,7 +57,7 @@ export default function DashboardPage() {
       ['messagerie', 'documents'].some(m => (p.perms[m] || 'aucun') !== 'aucun')
 
     const now = new Date().toISOString().split('T')[0]
-    const newStats: Stats = { familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_impayees: 0, montant_impayes: 0, professeurs: 0, classes: 0 }
+    const newStats: Stats = { familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_en_retard: 0, montant_du_a_date: 0, solde_annuel: 0, professeurs: 0, classes: 0 }
 
     if (accessAdmin) {
       const [famR, enfR, incR, attR, factR, profR, clsR] = await Promise.all([
@@ -65,7 +68,7 @@ export default function DashboardPage() {
           .or(`date_sortie.is.null,date_sortie.gte.${now}`),
         s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet'),
         s.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_inscription', 'en_attente'),
-        // Factures impayées (solde > 0, non annulées) via vue + jointure famille
+        // Factures avec solde (non annulées) : sert au solde annuel + calcul du "dû à date"
         s.from('factures_solde').select('id, solde_restant, familles!inner(ecole_id)')
           .gt('solde_restant', 0).neq('statut', 'annule')
           .eq('familles.ecole_id', ecole.id),
@@ -76,10 +79,23 @@ export default function DashboardPage() {
       newStats.eleves = enfR?.count ?? 0
       newStats.incomplets = incR?.count ?? 0
       newStats.attente = attR?.count ?? 0
-      newStats.factures_impayees = (factR.data || []).length
-      newStats.montant_impayes = (factR.data || []).reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
       newStats.professeurs = profR?.count ?? 0
       newStats.classes = clsR?.count ?? 0
+
+      // Vrai retard = du a date (echeances echues - reglements), pas solde annuel.
+      // Une facture annuelle emise en juillet avec echeancier sept->juin a un solde
+      // toute l'annee sans que la famille soit en retard.
+      const factAvecSolde = (factR.data || []) as any[]
+      newStats.solde_annuel = factAvecSolde.reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
+      if (factAvecSolde.length > 0) {
+        const duMap = await calcDuADateBatch(s, factAvecSolde.map((f: any) => f.id))
+        for (const r of Object.values(duMap)) {
+          if (r.enRetard) {
+            newStats.factures_en_retard++
+            newStats.montant_du_a_date += r.duAdate
+          }
+        }
+      }
     }
     setStats(newStats)
     setLoading(false)
@@ -97,9 +113,15 @@ export default function DashboardPage() {
       return { text: 'Aucune famille', tone: 'normal' }
     }
     if (cat.code === 'finances') {
-      if (stats.montant_impayes > 0) {
-        const montant = Math.round(stats.montant_impayes).toLocaleString('fr-FR')
-        return { text: `💰 ${stats.factures_impayees} impayée${stats.factures_impayees > 1 ? 's' : ''} · ${montant} €`, tone: 'alert' }
+      // Rouge uniquement si du a date > 0 (echeance echue non reglee).
+      if (stats.montant_du_a_date > 0) {
+        const montant = Math.round(stats.montant_du_a_date).toLocaleString('fr-FR')
+        return { text: `💰 ${stats.factures_en_retard} en retard · ${montant} € dus à ce jour`, tone: 'alert' }
+      }
+      // Solde annuel restant = info neutre (echeancier a venir, rien d'anormal).
+      if (stats.solde_annuel > 0) {
+        const montant = Math.round(stats.solde_annuel).toLocaleString('fr-FR')
+        return { text: `${montant} € à encaisser sur l'année · aucun retard`, tone: 'normal' }
       }
       return { text: '✓ Tous les comptes à jour', tone: 'normal' }
     }
