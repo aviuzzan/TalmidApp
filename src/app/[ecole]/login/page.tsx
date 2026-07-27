@@ -36,6 +36,26 @@ export default function EcoleLoginPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setError(t('login.error')); setLoading(false); return }
 
+    // MULTI-ECOLES (gggg2) : la carte choisie (Direction / Professeur / Parent)
+    // determine l'espace. On active le rattachement correspondant a CETTE ecole
+    // et cet espace — le meme email peut donc etre parent ici et admin ailleurs.
+    const espace = mode === 'admin' ? 'admin' : mode === 'professeur' ? 'prof' : 'parent'
+    try {
+      const res = await fetch('/api/auth/activer-contexte', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ ecoleSlug: ecole.slug, espace }),
+      })
+      const json = await res.json()
+      if (json?.ok) {
+        if (json.role === 'parent') router.push('/portail')
+        else if (json.role === 'teacher' || json.role === 'prof') router.push('/portail/prof')
+        else router.push(`/${ecole.slug}/dashboard`)
+        return
+      }
+    } catch { /* fallback comportement historique ci-dessous */ }
+
+    // Fallback : pas de rattachement pour cet espace/ecole -> verif du profil actif
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')

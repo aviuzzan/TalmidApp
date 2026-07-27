@@ -23,9 +23,13 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     const { data: { user: caller } } = await supa.auth.getUser(token)
     if (!caller) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
-    const { data: profile } = await supa.from('profiles').select('role').eq('id', caller.id).single()
+    const { data: profile } = await supa.from('profiles').select('role, ecole_id').eq('id', caller.id).single()
     if (!['admin', 'super_admin'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu 27/07 : check tenant — un admin ne peut relancer que les factures de sa propre école
+    if (profile?.role !== 'super_admin' && profile?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
     }
 
     const { data: config } = await supa
@@ -47,8 +51,13 @@ export async function POST(req: NextRequest) {
     // Récupère email parent depuis familles (pas profiles.email qui n'existe pas)
     const { data: famille } = await supa
       .from('familles')
-      .select('parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email, nom, situation_maritale, part_pere, part_mere')
+      .select('ecole_id, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email, nom, situation_maritale, part_pere, part_mere')
       .eq('id', facture.famille_id).single()
+    // FIX secu 27/07 : vérifier que la facture chargée appartient bien à l'école demandée
+    // (sinon un admin pouvait relancer une facture d'une autre école en passant son propre ecoleId)
+    if (!famille || famille.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Facture hors de cette école' }, { status: 403 })
+    }
     if (!famille?.parent1_email) {
       return NextResponse.json({ error: 'Aucun email parent enregistré' }, { status: 400 })
     }

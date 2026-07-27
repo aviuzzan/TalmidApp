@@ -493,9 +493,11 @@ export default function ContratPage() {
 
     // Notification email aux admins (best-effort)
     try {
+      // FIX secu 27/07 : notify-admin exige désormais un Bearer token
+      const { data: { session } } = await s.auth.getSession()
       await fetch('/api/notify-admin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ ecole_id: ecoleId, famille_id: familleId, type: 'contrat_soumis' }),
       })
     } catch {}

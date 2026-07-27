@@ -50,6 +50,23 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // FIX secu 27/07 : route auparavant sans auth — accepté si
+    // (a) appel serveur→serveur avec x-internal-key, ou
+    // (b) user authentifié appartenant à l'école ciblée (un parent peut notifier ses admins)
+    const internalKey = req.headers.get('x-internal-key')
+    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isInternal) {
+      const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+      if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+      const { data: profile } = await supabase
+        .from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
+      if (!profile || (profile.role !== 'super_admin' && profile.ecole_id !== ecole_id)) {
+        return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+      }
+    }
+
     // Récup config école + famille
     const [{ data: ecole }, { data: famille }] = await Promise.all([
       supabase

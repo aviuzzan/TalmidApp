@@ -22,12 +22,37 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } },
     )
 
+    // FIX secu 27/07 : route auparavant sans auth — double règle :
+    // (a) appel serveur→serveur avec x-internal-key, ou (b) admin/super_admin authentifié + tenant check
+    let adminId: string | null = null
+    const internalKey = req.headers.get('x-internal-key')
+    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isInternal) {
+      const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+      if (!token) return NextResponse.json({ ok: false, error: 'Non autorisé' }, { status: 401 })
+      const { data: { user } } = await sb.auth.getUser(token)
+      if (!user) return NextResponse.json({ ok: false, error: 'Token invalide' }, { status: 401 })
+      const { data: profile } = await sb
+        .from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
+      if (!['admin', 'super_admin'].includes(profile?.role)) {
+        return NextResponse.json({ ok: false, error: 'Accès refusé' }, { status: 403 })
+      }
+      if (profile?.role !== 'super_admin' && profile?.ecole_id !== ecoleId) {
+        return NextResponse.json({ ok: false, error: 'Accès refusé à cette école' }, { status: 403 })
+      }
+      adminId = user.id
+    }
+
     const [{ data: famille }, { data: ex }, { data: ecole }] = await Promise.all([
-      sb.from('familles').select('id, nom, parent1_prenom, parent1_email, parent2_prenom, parent2_email').eq('id', familleId).single(),
+      sb.from('familles').select('id, nom, ecole_id, parent1_prenom, parent1_email, parent2_prenom, parent2_email').eq('id', familleId).single(),
       sb.from('exercices').select('id, code, libelle').eq('id', exerciceId).single(),
       sb.from('ecoles').select('nom, email_contact, telephone, adresse').eq('id', ecoleId).single(),
     ])
     if (!famille || !ex) return NextResponse.json({ ok: false, error: 'Famille ou exercice introuvable' }, { status: 404 })
+    // FIX secu 27/07 : la famille ciblée doit appartenir à l'école demandée (tenant check)
+    if ((famille as any).ecole_id !== ecoleId) {
+      return NextResponse.json({ ok: false, error: 'Famille hors de cette école' }, { status: 403 })
+    }
 
     const destinataires: { email: string; name?: string }[] = []
     if ((famille as any).parent1_email) destinataires.push({ email: (famille as any).parent1_email, name: `${(famille as any).parent1_prenom || ''} ${(famille as any).nom}`.trim() })
@@ -128,7 +153,7 @@ export async function POST(req: NextRequest) {
     // Audit log (non bloquant)
     try {
       await sb.from('admin_logs').insert({
-        admin_id: null,
+        admin_id: adminId, // FIX secu 27/07 : vrai admin authentifié (null uniquement pour un appel interne)
         ecole_id: ecoleId,
         action: 'envoi_engagement',
         details: { famille_id: familleId, exercice_id: exerciceId, destinataires: destinataires.length },

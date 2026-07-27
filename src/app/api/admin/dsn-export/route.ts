@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
     if (!['admin', 'super_admin'].includes(caller?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
+    // FIX secu 27/07 : check tenant — un admin ne peut exporter la DSN que de sa propre école
+    if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
 
     const { data: ecole } = await sb.from('ecoles').select('nom, adresse, code_postal, ville, siren').eq('id', ecoleId).single()
     if (!ecole?.siren) return NextResponse.json({ error: 'SIREN de l\'école manquant (à renseigner dans Paramètres)' }, { status: 400 })

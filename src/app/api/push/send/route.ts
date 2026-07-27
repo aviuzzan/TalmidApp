@@ -34,16 +34,23 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabaseAdmin.auth.getUser(token)
     if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     const { data: caller } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', user.id).single()
+      .from('profiles').select('role, ecole_id').eq('id', user.id).single()
     if (!['admin', 'super_admin'].includes(caller?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu 27/07 : check tenant — un admin ne peut envoyer des push qu'à sa propre école
+    if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
     }
 
     // Détermine les profile_ids cibles
     let profileIds: string[] = []
     if (cibleType === 'unitaire') {
       if (!cibleId) return NextResponse.json({ error: 'cibleId requis' }, { status: 400 })
-      profileIds = [cibleId]
+      // FIX secu 27/07 : vérifier que le profil ciblé appartient bien à l'école (filtre ecole_id)
+      const { data: cible } = await supabaseAdmin.from('profiles').select('id').eq('id', cibleId).eq('ecole_id', ecoleId).maybeSingle()
+      if (!cible) return NextResponse.json({ error: 'Destinataire introuvable dans cette école' }, { status: 404 })
+      profileIds = [cible.id]
     } else if (cibleType === 'famille') {
       if (!cibleId) return NextResponse.json({ error: 'cibleId requis' }, { status: 400 })
       const { data: ps } = await supabaseAdmin.from('profiles').select('id').eq('famille_id', cibleId).eq('ecole_id', ecoleId)

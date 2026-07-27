@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
+// FIX secu 27/07 : rate limiting sur route publique
+import { rateLimit } from '@/lib/rate-limit'
 
 /**
  * POST /api/contact-landing
@@ -11,6 +13,12 @@ import { sendEmail, isEmailConfigured } from '@/lib/email'
  */
 export async function POST(req: NextRequest) {
   try {
+    // FIX secu 27/07 : max 5 requetes / 10 min par IP (route publique, anti-spam)
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown'
+    if (!rateLimit(`contact-landing:${ip}`, 5, 10 * 60 * 1000)) {
+      return NextResponse.json({ ok: false, error: 'Trop de requêtes, réessayez plus tard' }, { status: 429 })
+    }
+
     const { email, school } = await req.json()
     const cleanEmail = String(email || '').trim()
     const cleanSchool = String(school || '').trim()

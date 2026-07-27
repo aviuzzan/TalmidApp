@@ -47,10 +47,20 @@ export async function POST(req: NextRequest) {
     if (!caller) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
 
     const { data: callerProfile } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', caller.id).single()
+      .from('profiles').select('role, ecole_id').eq('id', caller.id).single()
 
     if (!['admin', 'super_admin'].includes(callerProfile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu 27/07 : check tenant — un admin ne peut créer un parent que dans sa propre école
+    if (callerProfile?.role !== 'super_admin' && callerProfile?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
+    // FIX secu 27/07 : la famille ciblée doit appartenir à l'école demandée
+    const { data: familleCible } = await supabaseAdmin
+      .from('familles').select('id, ecole_id').eq('id', familleId).single()
+    if (!familleCible || familleCible.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Famille hors de cette école' }, { status: 403 })
     }
 
     // Vérifier si un compte existe déjà avec cet email
@@ -63,15 +73,34 @@ export async function POST(req: NextRequest) {
     let estNouveau = false
 
     if (existing) {
-      // Le compte existe déjà — on met juste à jour le profil
-      const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
-        id: existing.id,
+      // MULTI-ECOLES (gggg2) : le compte existe deja. AVANT, on ecrasait son profil
+      // (role/ecole/famille) -> un parent d'Eschel cree a Beth Hanna PERDAIT son acces
+      // Eschel. Desormais on AJOUTE un rattachement, et on ne touche au contexte actif
+      // (profiles) que s'il n'existe pas ou s'il est deja sur cette ecole.
+      const { error: rattErr } = await supabaseAdmin.from('profils_rattachements').upsert({
+        user_id: existing.id,
+        ecole_id: ecoleId,
         role: 'parent',
         famille_id: familleId,
-        ecole_id: ecoleId,
         parent_slot: slot,
-      })
-      if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 500 })
+        actif: true,
+      }, { onConflict: 'user_id,ecole_id,role' })
+      if (rattErr) return NextResponse.json({ error: rattErr.message }, { status: 500 })
+
+      const { data: profilActuel } = await supabaseAdmin
+        .from('profiles').select('id, ecole_id').eq('id', existing.id).maybeSingle()
+      if (!profilActuel || profilActuel.ecole_id === ecoleId || !profilActuel.ecole_id) {
+        const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
+          id: existing.id,
+          role: 'parent',
+          famille_id: familleId,
+          ecole_id: ecoleId,
+          parent_slot: slot,
+        })
+        if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 500 })
+      }
+      // Sinon : contexte actif d'une autre ecole preserve — le parent basculera
+      // via la page de connexion de cette ecole ou le selecteur "Changer d'espace".
       userId = existing.id
     } else {
       // Créer le compte
@@ -96,6 +125,11 @@ export async function POST(req: NextRequest) {
         await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
         return NextResponse.json({ error: profileErr.message }, { status: 500 })
       }
+      // MULTI-ECOLES (gggg2) : enregistrer aussi le rattachement
+      await supabaseAdmin.from('profils_rattachements').upsert({
+        user_id: newUser.user.id, ecole_id: ecoleId, role: 'parent',
+        famille_id: familleId, parent_slot: slot, actif: true,
+      }, { onConflict: 'user_id,ecole_id,role' })
       userId = newUser.user.id
       estNouveau = true
     }

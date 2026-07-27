@@ -91,9 +91,10 @@ export default function NotificationsPage() {
       setSending(false); return
     }
 
+    // FIX secu 27/07 : /api/emails exige désormais un Bearer token
     const res = await fetch('/api/emails', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
       body: JSON.stringify({
         famille_ids,
         sujet,

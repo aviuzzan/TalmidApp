@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
     if (!['admin', 'super_admin'].includes(caller?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
+    // FIX secu 27/07 : check tenant — un admin ne peut exporter le LSU que de sa propre école
+    if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
 
     const [{ data: ecole }, { data: ex }, { data: classe }] = await Promise.all([
       sb.from('ecoles').select('id, nom, code_uai').eq('id', ecoleId).single(),

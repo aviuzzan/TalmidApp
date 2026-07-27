@@ -17,9 +17,10 @@ export async function GET(req: NextRequest)  { return handle(req) }
 export async function POST(req: NextRequest) { return handle(req) }
 
 async function handle(req: NextRequest) {
+  // FIX secu 27/07 : fail-closed — si CRON_SECRET absent on refuse (avant : cron ouvert à tous),
+  // et comparaison stricte du header au lieu d'un includes()
   const cronSecret = process.env.CRON_SECRET
-  const authHeader = req.headers.get('authorization') || ''
-  if (cronSecret && !authHeader.includes(cronSecret)) {
+  if (!cronSecret || req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

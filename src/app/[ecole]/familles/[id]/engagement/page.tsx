@@ -147,9 +147,12 @@ export default function EngagementFamillePage() {
     })
     if (!ok) return
     setSending(true)
+    // FIX secu 27/07 : envoyer-engagement exige désormais un Bearer token
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
     const res = await fetch('/api/admin/envoyer-engagement', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
       body: JSON.stringify({ familleId, exerciceId, ecoleId: ecole.id }),
     })
     const data = await res.json()

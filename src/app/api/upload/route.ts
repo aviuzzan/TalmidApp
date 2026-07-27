@@ -28,9 +28,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Fichier et familleId requis' }, { status: 400 })
     }
 
+    // FIX secu 27/07 : vérifier que l'appelant a le droit d'uploader pour cette famille
+    // - parent : uniquement sa propre famille
+    // - admin/agent : uniquement une famille de son école
+    // - super_admin : ok
+    const { data: profile } = await supabaseAdmin
+      .from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Profil introuvable' }, { status: 403 })
+    // FIX secu 27/07 : cas "document école" — familleId synthétique 'doc-ecole-<ecoleId>'
+    // (voir DocumentsEcoleTab) : pas de famille à vérifier, réservé aux admins de l'école ciblée
+    const isDocEcole = typeof familleId === 'string' && familleId.startsWith('doc-ecole-')
+    if (isDocEcole) {
+      const ecoleCibleId = familleId.slice('doc-ecole-'.length)
+      if (!['admin', 'super_admin'].includes(profile.role)) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+      if (profile.role !== 'super_admin' && profile.ecole_id !== ecoleCibleId) {
+        return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+      }
+    } else if (profile.role === 'parent') {
+      if (profile.famille_id !== familleId) {
+        return NextResponse.json({ error: 'Accès refusé à cette famille' }, { status: 403 })
+      }
+    } else if (profile.role !== 'super_admin') {
+      const { data: fam } = await supabaseAdmin
+        .from('familles').select('ecole_id').eq('id', familleId).single()
+      if (!fam || fam.ecole_id !== profile.ecole_id) {
+        return NextResponse.json({ error: 'Accès refusé à cette famille' }, { status: 403 })
+      }
+    }
+
+    // FIX secu 27/07 : taille max 10 Mo
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Fichier trop volumineux (max 10 Mo)' }, { status: 413 })
+    }
+    // FIX secu 27/07 : whitelist MIME (pdf, jpeg, png, webp, heic)
+    const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']
+    // FIX secu 27/07 : les documents école (upload admin) acceptent aussi le .docx,
+    // aligné sur l'accept de l'UI DocumentsEcoleTab (.pdf,.jpg,.jpeg,.png,.webp,.docx)
+    if (isDocEcole) {
+      ALLOWED_MIME.push('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    }
+    if (!ALLOWED_MIME.includes(file.type)) {
+      return NextResponse.json({ error: 'Type de fichier non autorisé (PDF, JPEG, PNG, WebP, HEIC uniquement)' }, { status: 415 })
+    }
+    // FIX secu 27/07 : sanitisation du nom de fichier (évite path traversal / caractères spéciaux)
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+
     // Upload dans le bucket
-    const ext = file.name.split('.').pop()
-    const path = `${familleId}/${demandeId || enfantId || 'temp'}/${Date.now()}_${file.name}`
+    const path = `${familleId}/${demandeId || enfantId || 'temp'}/${Date.now()}_${safeName}`
     const buffer = await file.arrayBuffer()
 
     const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage

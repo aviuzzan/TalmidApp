@@ -25,6 +25,23 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // FIX secu 27/07 : route auparavant sans auth — accepté si
+    // (a) appel serveur→serveur avec x-internal-key, ou
+    // (b) user authentifié dont le profil appartient à l'école du thread (vérifié après chargement du thread)
+    let callerProfile: any = null
+    const internalKey = req.headers.get('x-internal-key')
+    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isInternal) {
+      const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+      if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+      const { data: profile } = await supabase
+        .from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
+      if (!profile) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      callerProfile = profile
+    }
+
     // Récup thread + dernière message + service + famille + ecole
     const [{ data: thread }, { data: lastMsgs }] = await Promise.all([
       supabase
@@ -41,6 +58,10 @@ export async function POST(req: NextRequest) {
     ])
 
     if (!thread) return NextResponse.json({ error: 'Thread introuvable' }, { status: 404 })
+    // FIX secu 27/07 : le user authentifié doit appartenir à l'école du thread
+    if (callerProfile && callerProfile.role !== 'super_admin' && callerProfile.ecole_id !== thread.ecole_id) {
+      return NextResponse.json({ error: 'Accès refusé à ce thread' }, { status: 403 })
+    }
     const lastMsg = lastMsgs?.[0]
     if (!lastMsg) return NextResponse.json({ skipped: true, reason: 'Aucun message' })
 

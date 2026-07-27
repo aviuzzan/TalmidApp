@@ -31,6 +31,11 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 
     if (!demande) return NextResponse.json({ error: 'Lien invalide ou expire' }, { status: 404 })
 
+    // FIX secu 27/07 : expiration du lien d'inscription 60 jours apres l'envoi
+    if (demande.envoye_le && Date.now() - new Date(demande.envoye_le).getTime() > 60 * 24 * 60 * 60 * 1000) {
+      return NextResponse.json({ error: 'Lien expiré, contactez l\'école' }, { status: 410 })
+    }
+
     const { data: ecole } = await s
       .from('ecoles')
       .select('id, nom, slug, couleur_primaire, logo_url')
@@ -111,11 +116,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     const { data: demande } = await s
       .from('demandes_inscription')
-      .select('id, statut')
+      .select('id, statut, envoye_le')
       .eq('token', token)
       .maybeSingle()
 
     if (!demande) return NextResponse.json({ error: 'Lien invalide ou expire' }, { status: 404 })
+    // FIX secu 27/07 : expiration du lien d'inscription 60 jours apres l'envoi
+    if (demande.envoye_le && Date.now() - new Date(demande.envoye_le).getTime() > 60 * 24 * 60 * 60 * 1000) {
+      return NextResponse.json({ error: 'Lien expiré, contactez l\'école' }, { status: 410 })
+    }
     if (demande.statut === 'accepte' || demande.statut === 'refuse') {
       return NextResponse.json({ error: 'Cette demande a deja ete traitee par l\'etablissement.' }, { status: 409 })
     }
@@ -191,7 +200,8 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
         await fetch(`${baseUrl}/api/notify-admin`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          // FIX secu 27/07 : appel serveur→serveur — clé interne pour l'auth de notify-admin
+          headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.SUPABASE_SERVICE_ROLE_KEY! },
           body: JSON.stringify({
             ecole_id: dem.ecole_id,
             type: 'demande_inscription',

@@ -57,8 +57,10 @@ export default function PortailThreadPage() {
     setReply(''); setFiles([])
     // notif (best-effort)
     try {
+      // FIX secu 27/07 : notify-message exige désormais un Bearer token
+      const { data: { session } } = await s.auth.getSession()
       await fetch('/api/notify-message', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ thread_id: threadId, type: 'reponse' }),
       })
     } catch {}

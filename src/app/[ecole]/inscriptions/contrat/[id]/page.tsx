@@ -85,9 +85,10 @@ export default function ContratAdminDetailPage() {
 
     // Notifier la famille
     try {
+      // FIX secu 27/07 : notify-famille exige désormais un Bearer token
       await fetch('/api/notify-famille', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ ecole_id: ecole.id, famille_id: contrat.famille_id, type: 'contrat_valide' }),
       })
     } catch {}
@@ -170,9 +171,10 @@ export default function ContratAdminDetailPage() {
 
     // 4. Notifier la famille
     try {
+      // FIX secu 27/07 : notify-famille exige désormais un Bearer token
       await fetch('/api/notify-famille', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ ecole_id: ecole.id, famille_id: contrat.famille_id, type: 'contrat_annule', motif: motif.trim() }),
       })
     } catch {}

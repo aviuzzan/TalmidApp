@@ -26,14 +26,16 @@ export async function POST(req: NextRequest) {
   const integration = await getIntegration(ecole.id, 'yousign')
   if (!integration) return NextResponse.json({ error: 'YouSign non configuré' }, { status: 400 })
   const webhookSecret = integration.secrets.webhook_secret
-  // Webhook secret optionnel — si présent on vérifie, sinon on accepte
+  // FIX secu 27/07 : signature obligatoire — sans webhook_secret configuré on refuse
+  // (avant : webhook accepté sans aucune vérification si le secret manquait)
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'Webhook secret non configuré pour cette école' }, { status: 401 })
+  }
 
   const payload = await req.text()
-  if (webhookSecret) {
-    const sig = req.headers.get('x-yousign-signature-256')
-    const verified = verifyWebhookSignature(payload, sig, webhookSecret)
-    if (!verified.ok) return NextResponse.json({ error: verified.error }, { status: 400 })
-  }
+  const sig = req.headers.get('x-yousign-signature-256')
+  const verified = verifyWebhookSignature(payload, sig, webhookSecret)
+  if (!verified.ok) return NextResponse.json({ error: verified.error }, { status: 400 })
 
   let event: any
   try { event = JSON.parse(payload) } catch (e) {

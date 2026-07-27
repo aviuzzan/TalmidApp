@@ -72,9 +72,11 @@ export default function NotificationsTab({ ecoleId }: { ecoleId: string }) {
       // On prend la 1ère famille de l'école pour faire un test réel via le même endpoint
       const { data: fam } = await s.from('familles').select('id').eq('ecole_id', ecoleId).limit(1).single()
       if (!fam) { setTestMsg({ ok: false, text: 'Aucune famille trouvée pour faire le test.' }); setTesting(null); return }
+      // FIX secu 27/07 : notify-admin exige désormais un Bearer token
+      const { data: { session } } = await s.auth.getSession()
       const res = await fetch('/api/notify-admin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ ecole_id: ecoleId, famille_id: fam.id, type: type === 'ddr' ? 'ddr_soumis' : 'contrat_soumis' }),
       })
       const json = await res.json()

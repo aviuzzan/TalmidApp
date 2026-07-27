@@ -84,8 +84,10 @@ export default function EcoleMessagesPage() {
     if (errT || !th) { setError(errT?.message || 'Erreur'); setSending(false); return }
     await s.from('messages').insert({ thread_id: th.id, auteur_profile_id: profile.id, contenu: newMessage.trim() })
     try {
+      // FIX secu 27/07 : notify-message exige désormais un Bearer token
+      const { data: { session } } = await s.auth.getSession()
       await fetch('/api/notify-message', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ thread_id: th.id, type: 'nouveau' }),
       })
     } catch {}

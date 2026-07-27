@@ -53,9 +53,12 @@ export default function GlobalSearch() {
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 50) }, [open])
 
   const search = useCallback(async (q: string) => {
-    if (!q.trim() || !ecole?.id) { setResults([]); return }
+    // FIX secu 27/07 : neutralise les caracteres speciaux PostgREST (injection dans .or/.ilike)
+    const sanitize = (s: string) => s.replace(/[,()%\\]/g, ' ').trim()
+    const clean = sanitize(q)
+    if (!clean || !ecole?.id) { setResults([]); return }
     setLoading(true)
-    const term = `%${q.trim()}%`
+    const term = `%${clean}%`
 
     const [{ data: fams }, { data: enfs }, { data: facts }, { data: profs }] = await Promise.all([
       supabase.from('familles')

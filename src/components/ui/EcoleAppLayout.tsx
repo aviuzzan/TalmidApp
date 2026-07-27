@@ -6,6 +6,7 @@ import EcoleSidebar from '@/components/ui/EcoleSidebar'
 import ChatbotWidget from '@/components/ui/ChatbotWidget'
 import GlobalSearch from '@/components/ui/GlobalSearch'
 import ExerciceSelector from '@/components/ui/ExerciceSelector'
+import EspaceSwitcher from '@/components/EspaceSwitcher'
 import { useEcole } from '@/lib/ecole-context'
 import { AccesFinancesProvider } from '@/lib/acces-finances'
 
@@ -27,22 +28,52 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, ecole_id')
         .eq('id', session.user.id)
         .single()
 
-      if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
-        // Parent ou non reconnu → portail
-        router.push('/portail')
+      const estAdmin = profile && (profile.role === 'admin' || profile.role === 'super_admin')
+
+      // GARDE MULTI-ECOLES (gggg2) : le contexte actif doit correspondre a l'ecole
+      // de l'URL. Avant : aucun controle -> un admin d'Eschel pouvait ouvrir
+      // /beth-hanna/* (seule la RLS protegeait). Desormais :
+      //  - contexte deja sur cette ecole (ou super_admin) -> ok
+      //  - sinon, si le compte a un rattachement admin sur CETTE ecole -> bascule auto
+      //    (c'est aussi ce qui permet a un parent d'Eschel d'etre admin de Beth Hanna)
+      //  - sinon -> renvoi vers son propre espace
+      const contexteOk = estAdmin && (profile!.role === 'super_admin' || profile!.ecole_id === ecole.id)
+      if (!contexteOk) {
+        try {
+          const res = await fetch('/api/auth/activer-contexte', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+            body: JSON.stringify({ ecoleSlug: ecole.slug, espace: 'admin' }),
+          })
+          const json = await res.json()
+          if (json?.ok) {
+            // Contexte bascule sur cette ecole -> recharger proprement
+            window.location.reload()
+            return
+          }
+        } catch { /* tombe dans les redirections ci-dessous */ }
+
+        // Aucun acces admin a cette ecole : renvoyer chacun chez soi
+        if (profile?.role === 'parent') { router.push('/portail'); return }
+        if (profile?.role === 'teacher' || profile?.role === 'prof') { router.push('/portail/prof'); return }
+        if (estAdmin && profile?.ecole_id) {
+          const { data: monEcole } = await supabase.from('ecoles').select('slug').eq('id', profile.ecole_id).maybeSingle()
+          if (monEcole?.slug && monEcole.slug !== ecole.slug) { router.push(`/${monEcole.slug}/dashboard`); return }
+        }
+        router.push(`/${ecole.slug}/login`)
         return
       }
 
       setEmail(session.user.email ?? '')
-      setRole(profile.role)
+      setRole(profile!.role)
       setReady(true)
     }
     check()
-  }, [router, ecole.slug])
+  }, [router, ecole.slug, ecole.id])
 
   if (!ready) return (
     <div style={{
@@ -67,6 +98,7 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
           padding: '10px 28px',
           display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12,
         }}>
+          <EspaceSwitcher compact />
           <ExerciceSelector />
         </div>
         <div style={{ flex: 1 }}>

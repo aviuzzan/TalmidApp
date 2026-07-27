@@ -416,9 +416,10 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
     // Notifier la famille par email (best-effort)
     let emailEnvoye = false
     try {
+      // FIX secu 27/07 : notify-famille exige désormais un Bearer token
       const notifRes = await fetch('/api/notify-famille', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({
           ecole_id: ecoleId,
           famille_id: contrat.famille_id,

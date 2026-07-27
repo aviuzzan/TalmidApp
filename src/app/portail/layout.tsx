@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
 import ChatbotWidget from '@/components/ui/ChatbotWidget'
 import LangSwitcher from '@/components/LangSwitcher'
+import EspaceSwitcher from '@/components/EspaceSwitcher'
 import { useI18n } from '@/lib/i18n'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { InscriptionContext } from '@/lib/inscription-context'
@@ -172,6 +173,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff' }}>
             {email[0]?.toUpperCase()}
           </div>
+          <EspaceSwitcher compact />
           <LangSwitcher compact />
           <button onClick={logout} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '10px 14px', minHeight: 40, cursor: 'pointer', fontSize: 12, color: '#475569', fontWeight: 500 }}>
             {t('portail.logout')}

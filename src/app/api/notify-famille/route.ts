@@ -36,17 +36,40 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // FIX secu 27/07 : route auparavant sans auth — accepté si
+    // (a) appel serveur→serveur avec x-internal-key, ou
+    // (b) admin/super_admin de l'école de la famille ciblée
+    let callerProfile: any = null
+    const internalKey = req.headers.get('x-internal-key')
+    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isInternal) {
+      const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+      if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+      const { data: profile } = await supabase
+        .from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
+      if (!['admin', 'super_admin'].includes(profile?.role)) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+      callerProfile = profile
+    }
+
     const [{ data: ecole }, { data: famille }] = await Promise.all([
       supabase.from('ecoles').select('nom, slug, email_contact').eq('id', ecole_id).single(),
       supabase
         .from('familles')
-        .select('nom, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email')
+        .select('ecole_id, nom, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email')
         .eq('id', famille_id)
         .single(),
     ])
 
     if (!ecole) return NextResponse.json({ error: 'École introuvable' }, { status: 404 })
     if (!famille) return NextResponse.json({ error: 'Famille introuvable' }, { status: 404 })
+    // FIX secu 27/07 : tenant check — l'admin appelant doit être de l'école de la famille ciblée
+    if (callerProfile && callerProfile.role !== 'super_admin' && callerProfile.ecole_id !== (famille as any).ecole_id) {
+      return NextResponse.json({ error: 'Accès refusé à cette famille' }, { status: 403 })
+    }
 
     const dests: { email: string; name?: string }[] = []
     if (famille.parent1_email) {

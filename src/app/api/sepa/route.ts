@@ -17,9 +17,14 @@ export async function POST(req: NextRequest) {
     const { ecoleId, dateEncaissement, anneeScolaire } = await req.json()
 
     // Vérifier que l'appelant est admin
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    // FIX secu 27/07 : le select inclut ecole_id pour le check tenant
+    const { data: profile } = await supabase.from('profiles').select('role, ecole_id').eq('id', user.id).single()
     if (!['admin', 'super_admin'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu 27/07 : check tenant — un admin ne peut générer le SEPA que pour sa propre école
+    if (profile?.role !== 'super_admin' && profile?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
     }
 
     // Récupérer les infos de l'école (ICS, créancier, IBAN école)

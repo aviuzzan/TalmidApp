@@ -59,8 +59,10 @@ export default function EcoleThreadPage() {
     if (errM) { setError(errM.message); setSending(false); return }
     setReply(''); setFiles([])
     try {
+      // FIX secu 27/07 : notify-message exige désormais un Bearer token
+      const { data: { session } } = await s.auth.getSession()
       await fetch('/api/notify-message', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: JSON.stringify({ thread_id: threadId, type: 'reponse' }),
       })
     } catch {}

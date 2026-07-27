@@ -64,6 +64,34 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // FIX secu 27/07 : route auparavant sans auth — double règle :
+    // (a) appel serveur→serveur avec x-internal-key, ou (b) admin/super_admin authentifié + tenant check
+    let envoyeParId: string | null = admin_id || null
+    const internalKey = req.headers.get('x-internal-key')
+    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isInternal) {
+      const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+      if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+      const { data: profile } = await supabase
+        .from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
+      if (!['admin', 'super_admin'].includes(profile?.role)) {
+        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      }
+      // Tenant check : toutes les familles ciblées doivent appartenir à l'école de l'appelant
+      if (profile?.role !== 'super_admin') {
+        const { data: famsCheck } = await supabase
+          .from('familles').select('id, ecole_id').in('id', famille_ids)
+        const horsEcole = (famsCheck || []).some((f: any) => f.ecole_id !== profile?.ecole_id)
+        if (horsEcole || (famsCheck || []).length !== famille_ids.length) {
+          return NextResponse.json({ error: 'Une ou plusieurs familles n\'appartiennent pas à votre école' }, { status: 403 })
+        }
+      }
+      // FIX secu 27/07 : admin_id du body remplacé par l'id du user réellement authentifié
+      envoyeParId = user.id
+    }
+
     const results = []
 
     // Charger le nom de l'école pour le fromName (toutes les familles partagent normalement la même école)
@@ -113,7 +141,7 @@ export async function POST(req: NextRequest) {
             sujet: sujetResolu,
             statut: 'erreur',
             erreur: result.error ?? 'Erreur SMTP',
-            envoye_par: admin_id,
+            envoye_par: envoyeParId, // FIX secu 27/07 : id authentifié, pas celui du body
           })
           results.push({ familleId, famille: famille.nom, status: 'erreur', error: result.error })
         } else {
@@ -123,7 +151,7 @@ export async function POST(req: NextRequest) {
             destinataire: famille.parent1_email,
             sujet: sujetResolu,
             statut: 'envoye',
-            envoye_par: admin_id,
+            envoye_par: envoyeParId, // FIX secu 27/07 : id authentifié, pas celui du body
           })
           results.push({ familleId, famille: famille.nom, status: 'envoye' })
         }

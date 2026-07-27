@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await sb.auth.getUser(token)
     if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     const { data: caller } = await sb.from('profiles').select('role, ecole_id, famille_id').eq('id', user.id).single()
-    const isAdmin = ['admin', 'super_admin'].includes(caller?.role)
-    if (!isAdmin && caller?.ecole_id !== ecoleId) {
+    // FIX secu 27/07 : seul un super_admin peut agir hors de son école — un admin d'une autre
+    // école passait la garde précédente (if (!isAdmin && ...)) alors qu'il n'est pas de ce tenant
+    if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 

@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
+// FIX secu 27/07 : generation crypto des mots de passe temporaires (Math.random previsible)
+import { randomBytes } from 'crypto'
 
 /**
  * Traitement d'une demande d'inscription par l'admin.
@@ -256,7 +258,8 @@ export async function POST(req: NextRequest) {
         })
         inviteLink = linkData?.properties?.action_link || null
       } else {
-        const randomPwd = 'Tmp!' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase()
+        // FIX secu 27/07 : mot de passe temporaire cryptographiquement sur
+        const randomPwd = 'Tmp!' + randomBytes(9).toString('base64url')
         const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
           email: loginEmail, password: randomPwd, email_confirm: true,
           user_metadata: { role: 'parent', ecole_id: demande.ecole_id },

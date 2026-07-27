@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
+// FIX secu 27/07 : generation crypto des mots de passe temporaires (Math.random previsible)
+import { randomBytes } from 'crypto'
 
 /**
  * Création d'un compte professeur :
@@ -58,9 +60,13 @@ export async function POST(req: NextRequest) {
     const { data: { user: caller } } = await supabaseAdmin.auth.getUser(token)
     if (!caller) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     const { data: callerProfile } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', caller.id).single()
+      .from('profiles').select('role, ecole_id').eq('id', caller.id).single()
     if (!['admin', 'super_admin'].includes(callerProfile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu 27/07 : check tenant — un admin ne peut créer un prof que dans sa propre école
+    if (callerProfile?.role !== 'super_admin' && callerProfile?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
     }
 
     const { data: ecoleRec } = await supabaseAdmin
@@ -89,7 +95,8 @@ export async function POST(req: NextRequest) {
         invited = true
       }
     } else {
-      const randomPwd = 'Tmp!' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase()
+      // FIX secu 27/07 : mot de passe temporaire cryptographiquement sur
+      const randomPwd = 'Tmp!' + randomBytes(9).toString('base64url')
       const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email, password: randomPwd, email_confirm: true,
         user_metadata: { role: 'teacher', ecole_id: ecoleId, prenom, nom },
@@ -110,11 +117,20 @@ export async function POST(req: NextRequest) {
       invited = true
     }
 
-    const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
-      id: userId, role: 'teacher', ecole_id: ecoleId, prenom, nom,
-    })
-    if (profileErr) {
-      return NextResponse.json({ error: profileErr.message }, { status: 500 })
+    // MULTI-ECOLES (gggg2) : rattachement enregistre ; le contexte actif (profiles)
+    // n'est ecrase que s'il n'existe pas ou s'il est deja sur cette ecole.
+    await supabaseAdmin.from('profils_rattachements').upsert({
+      user_id: userId, ecole_id: ecoleId, role: 'teacher', actif: true,
+    }, { onConflict: 'user_id,ecole_id,role' })
+    const { data: profilActuel } = await supabaseAdmin
+      .from('profiles').select('id, ecole_id').eq('id', userId).maybeSingle()
+    if (!profilActuel || !profilActuel.ecole_id || profilActuel.ecole_id === ecoleId) {
+      const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
+        id: userId, role: 'teacher', ecole_id: ecoleId, prenom, nom,
+      })
+      if (profileErr) {
+        return NextResponse.json({ error: profileErr.message }, { status: 500 })
+      }
     }
 
     const { data: existingProf } = await supabaseAdmin

@@ -77,12 +77,21 @@ export async function POST(req: NextRequest) {
       invited = true
     }
 
-    // Upsert profile role=admin + ecole_id + prenom/nom
-    const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
-      id: userId, role: 'admin', ecole_id: ecoleId, prenom, nom,
-    })
-    if (profileErr) {
-      return NextResponse.json({ error: profileErr.message }, { status: 500 })
+    // MULTI-ECOLES (gggg2) : rattachement admin enregistre ; le contexte actif
+    // (profiles) n'est ecrase que s'il n'existe pas ou s'il est deja sur cette ecole.
+    // -> un parent d'Eschel peut devenir admin de Beth Hanna sans perdre son acces parent.
+    await supabaseAdmin.from('profils_rattachements').upsert({
+      user_id: userId, ecole_id: ecoleId, role: 'admin', actif: true,
+    }, { onConflict: 'user_id,ecole_id,role' })
+    const { data: profilActuel } = await supabaseAdmin
+      .from('profiles').select('id, ecole_id').eq('id', userId).maybeSingle()
+    if (!profilActuel || !profilActuel.ecole_id || profilActuel.ecole_id === ecoleId) {
+      const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
+        id: userId, role: 'admin', ecole_id: ecoleId, prenom, nom,
+      })
+      if (profileErr) {
+        return NextResponse.json({ error: profileErr.message }, { status: 500 })
+      }
     }
 
     // Appliquer le template de permissions

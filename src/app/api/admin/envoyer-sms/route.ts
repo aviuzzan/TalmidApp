@@ -43,6 +43,10 @@ export async function POST(req: NextRequest) {
     if (!['admin', 'super_admin'].includes(caller?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
+    // FIX secu 27/07 : check tenant — un admin ne peut envoyer des SMS qu'à sa propre école
+    if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
 
     // Charge l'intégration Brevo SMS (apiKey chiffrée + config publique)
     const integration = await getIntegration(ecoleId, 'brevo_sms')
@@ -69,8 +73,9 @@ export async function POST(req: NextRequest) {
     } else if (cibleType === 'unitaire') {
       // cibleId = profile_id
       if (!cibleId) return NextResponse.json({ error: 'cibleId requis' }, { status: 400 })
+      // FIX secu 27/07 : filtre ecole_id — le profil ciblé doit appartenir à l'école
       const { data: p } = await supabaseAdmin
-        .from('profiles').select('id, prenom, nom, telephone').eq('id', cibleId).maybeSingle()
+        .from('profiles').select('id, prenom, nom, telephone').eq('id', cibleId).eq('ecole_id', ecoleId).maybeSingle()
       if (p?.telephone) destinataires.push({ telephone: p.telephone, profile_id: p.id, prenom: p.prenom, nom: p.nom })
     } else if (cibleType === 'famille') {
       if (!cibleId) return NextResponse.json({ error: 'cibleId requis' }, { status: 400 })
