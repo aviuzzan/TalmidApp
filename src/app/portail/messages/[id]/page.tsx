@@ -4,11 +4,12 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { uploadAttachments, fileIcon, formatSize, Attachment } from '@/lib/messages-upload'
 import { useI18n } from '@/lib/i18n'
+import { dateLocale } from '@/lib/format-date'
 
 export default function PortailThreadPage() {
   const params = useParams()
   const router = useRouter()
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const threadId = params.id as string
 
   const [profile, setProfile] = useState<any>(null)
@@ -103,7 +104,7 @@ export default function PortailThreadPage() {
               <div key={m.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: 14 }}>
                 <div style={{ maxWidth: '75%', background: isMe ? '#2563EB' : '#fff', color: isMe ? '#fff' : '#1E293B', padding: '10px 14px', borderRadius: 12, border: isMe ? 'none' : '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4, fontWeight: 600 }}>
-                    {isMe ? t('portail.messages.thread.you') : auteurNom} · {new Date(m.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {isMe ? t('portail.messages.thread.you') : auteurNom} · {new Date(m.created_at).toLocaleString(dateLocale(lang), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </div>
                   <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.contenu}</div>
                   {Array.isArray(m.fichiers_urls) && m.fichiers_urls.length > 0 && (

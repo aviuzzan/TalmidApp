@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
+import { useI18n } from '@/lib/i18n'
 
 // IMPORTANT : Section est défini AU NIVEAU MODULE (hors du composant page).
 // Si on le définit dans le composant, à chaque render React voit une nouvelle
@@ -21,6 +22,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 const CUSTOM_INP: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' }
 const CUSTOM_LBL: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }
 function CustomQuestionField({ q, value, onChange }: { q: any; value: any; onChange: (v: any) => void }) {
+  const { t } = useI18n()
   const labelWithReq = q.label + (q.obligatoire ? ' *' : '')
   const opts: string[] = Array.isArray(q.options) ? q.options : []
   if (q.type === 'select') {
@@ -28,7 +30,7 @@ function CustomQuestionField({ q, value, onChange }: { q: any; value: any; onCha
       <div>
         <label style={CUSTOM_LBL}>{labelWithReq}</label>
         <select style={CUSTOM_INP} value={value ?? ''} onChange={e => onChange(e.target.value)}>
-          <option value="">— Choisir —</option>
+          <option value="">{t('portail.reduction.choose')}</option>
           {opts.map((o: string) => <option key={o} value={o}>{o}</option>)}
         </select>
         {q.aide && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{q.aide}</div>}
@@ -85,6 +87,7 @@ export default function DemandeReductionPage() {
   const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
   const parent = useParentCtx()
+  const { t } = useI18n()
   // ks() est un no-op gardé pour compat avec les onChange existants — le hack scroll précédent
   // (useLayoutEffect + window.scrollTo) cassait la saisie en remontant la page à chaque caractère.
   const ks = () => {}
@@ -381,10 +384,10 @@ export default function DemandeReductionPage() {
 
   // ── Soumission ──
   async function soumettre() {
-    if (enfantsDossier.length === 0) { alert('Sélectionnez au moins un enfant'); return }
-    if (!tarifPropose) { alert('Saisissez votre tarif annuel proposé'); return }
-    if (!attestationLieu) { alert('Renseignez le lieu de l\'attestation'); return }
-    if (!signatureData) { alert('Veuillez signer l\'attestation'); return }
+    if (enfantsDossier.length === 0) { alert(t('portail.reduction.err.select_child')); return }
+    if (!tarifPropose) { alert(t('portail.reduction.err.tarif')); return }
+    if (!attestationLieu) { alert(t('portail.reduction.err.lieu')); return }
+    if (!signatureData) { alert(t('portail.reduction.err.sign')); return }
 
     // Validation des questions custom obligatoires
     const customManquantes = questionsConfig
@@ -396,7 +399,7 @@ export default function DemandeReductionPage() {
         return v === undefined || v === null || String(v).trim() === ''
       })
     if (customManquantes.length > 0) {
-      alert('Veuillez compléter les questions obligatoires :\n• ' + customManquantes.map((q: any) => q.label).join('\n• '))
+      alert(t('portail.reduction.err.custom_required') + '\n• ' + customManquantes.map((q: any) => q.label).join('\n• '))
       return
     }
 
@@ -406,11 +409,11 @@ export default function DemandeReductionPage() {
         .filter((d: any) => d.actif !== false && d.obligatoire)
         .filter((d: any) => !docsUploaded[d.id])
       if (docsManquants.length > 0) {
-        alert('Veuillez fournir les pieces justificatives obligatoires :\n• ' + docsManquants.map((d: any) => d.label).join('\n• ') + '\n\nSi vous n\'avez aucun justificatif, cochez la case "Je declare sur l\'honneur que je ne dispose d\'aucun justificatif de revenus".')
+        alert(t('portail.reduction.err.docs_required') + '\n• ' + docsManquants.map((d: any) => d.label).join('\n• ') + '\n\n' + t('portail.reduction.err.docs_required_hint'))
         return
       }
     } else if (!pasDeJustificatifDetail.trim()) {
-      alert('Veuillez preciser dans le champ texte pourquoi vous ne disposez d\'aucun justificatif (ex: situation, demarches en cours, etc.).')
+      alert(t('portail.reduction.err.no_justif_detail'))
       return
     }
 
@@ -470,7 +473,7 @@ export default function DemandeReductionPage() {
       const { data: upd, error: updErr } = await s.from('demandes_reduction').update(payload).eq('id', demandeId).select()
       if (updErr || !upd || upd.length === 0) {
         setSaving(false)
-        alert('Erreur lors de la soumission : ' + (updErr?.message || 'aucune ligne modifiée. Contactez l\'administration.'))
+        alert(t('portail.reduction.err.submit', { msg: updErr?.message || t('portail.common.err.no_row') }))
         return
       }
       await s.from('demandes_reduction_revenus').delete().eq('demande_id', demandeId)
@@ -478,7 +481,7 @@ export default function DemandeReductionPage() {
       const { data: nd, error: insErr } = await s.from('demandes_reduction').insert(payload).select().single()
       if (insErr || !nd) {
         setSaving(false)
-        alert('Erreur lors de la création de la demande : ' + (insErr?.message || 'inconnue'))
+        alert(t('portail.reduction.err.create', { msg: insErr?.message || t('portail.common.err.unknown') }))
         return
       }
       demandeId = nd.id
@@ -510,15 +513,15 @@ export default function DemandeReductionPage() {
     router.push('/portail/inscriptions')
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
 
   if (!parent.estPrincipal) return (
     <div style={{ maxWidth: 640, margin: '40px auto', padding: '0 20px' }}>
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '32px 28px', textAlign: 'center' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Démarche réservée au parent principal</h2>
-        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>Cette démarche est gérée par le parent principal de la famille. Vous pouvez en suivre l&apos;avancement depuis la page « Année {anneeInscription} ».</p>
-        <button onClick={() => router.push('/portail/inscriptions')} style={{ marginTop: 18, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Retour</button>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>{t('portail.peda.restricted.title')}</h2>
+        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>{t('portail.peda.restricted.body', { annee: anneeInscription })}</p>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ marginTop: 18, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{t('portail.peda.back')}</button>
       </div>
     </div>
   )
@@ -527,7 +530,7 @@ export default function DemandeReductionPage() {
   // on redirige silencieusement vers le portail. Si une demande existe déjà, on autorise.
   if (eligible === false) {
     if (typeof window !== 'undefined') router.push('/portail/inscriptions')
-    return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 13 }}>Redirection…</div>
+    return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 13 }}>{t('portail.reduction.redirecting')}</div>
   }
 
   // Cas spécifique : DDR refusée. Décision définitive pour l'année,
@@ -535,19 +538,19 @@ export default function DemandeReductionPage() {
   if (demande && demande.statut === 'refuse') {
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
-        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>← Retour</button>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>{t('portail.peda.back')}</button>
         <div style={{ fontSize: 48, marginBottom: 16, color: '#991B1B' }}>✕</div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>Demande refusée</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>{t('portail.reduction.refused.title')}</h2>
         <p style={{ color: '#64748B', fontSize: 14, margin: '8px 0 20px', lineHeight: 1.6 }}>
-          Votre demande de réduction pour l&apos;année {anneeInscription} a été refusée par la commission. Cette décision est définitive pour cette année. Le contrat de scolarisation est désormais ouvert au tarif normal.
+          {t('portail.reduction.refused.body', { annee: anneeInscription })}
         </p>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', padding: '8px 20px', borderRadius: 20 }}>✕ Refusée</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', padding: '8px 20px', borderRadius: 20 }}>{t('portail.reduction.refused.badge')}</span>
         <div style={{ marginTop: 28, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, fontSize: 12, color: '#64748B', lineHeight: 1.6 }}>
-          Pour toute question relative à cette décision, contactez l&apos;administration de l&apos;école.
+          {t('portail.reduction.refused.contact')}
         </div>
         <button onClick={() => router.push('/portail/inscriptions/contrat')}
           style={{ marginTop: 20, background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 44 }}>
-          Aller au contrat de scolarisation →
+          {t('portail.reduction.refused.goto_contract')}
         </button>
       </div>
     )
@@ -557,14 +560,14 @@ export default function DemandeReductionPage() {
     const st = formatStatut(demande.statut)
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
-        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>← Retour</button>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>{t('portail.peda.back')}</button>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📨</div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>Demande soumise</h2>
-        <p style={{ color: '#64748B', fontSize: 14, margin: '8px 0 20px' }}>Votre dossier est en cours d'examen par la commission.</p>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>{t('portail.reduction.submitted.title')}</h2>
+        <p style={{ color: '#64748B', fontSize: 14, margin: '8px 0 20px' }}>{t('portail.reduction.submitted.body')}</p>
         <span style={{ fontSize: 14, fontWeight: 700, color: st.color, background: st.bg, padding: '8px 20px', borderRadius: 20 }}>{st.label}</span>
         {demande.tarif_accorde && (
           <div style={{ marginTop: 24, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 12, padding: 20 }}>
-            <div style={{ fontSize: 13, color: '#059669', fontWeight: 600 }}>Tarif accordé</div>
+            <div style={{ fontSize: 13, color: '#059669', fontWeight: 600 }}>{t('portail.reduction.tarif_accorde')}</div>
             <div style={{ fontSize: 28, fontWeight: 800, color: '#059669', marginTop: 4 }}>{parseFloat(demande.tarif_accorde).toLocaleString('fr-FR')} €</div>
           </div>
         )}
@@ -580,48 +583,48 @@ export default function DemandeReductionPage() {
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>← Retour</button>
+      <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>{t('portail.peda.back')}</button>
       <div>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Demande de réduction {anneeInscription}</h1>
-        <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>Toutes les informations restent confidentielles. Les champs * sont obligatoires.</p>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('portail.reduction.title', { annee: anneeInscription })}</h1>
+        <p style={{ color: '#64748B', fontSize: 13, marginTop: 6 }}>{t('portail.reduction.intro')}</p>
       </div>
 
       {/* ── 1. RESPONSABLE 1 ── */}
-      <Section title="1. Vos informations — Responsable 1">
-        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Vérifiez et corrigez si nécessaire.</p>
+      <Section title={t('portail.reduction.section.resp1')}>
+        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>{t('portail.common.verify_correct')}</p>
         <div>
-          <label style={lbl}>Situation familiale *</label>
+          <label style={lbl}>{t('portail.reduction.situation')}</label>
           <select style={inp} value={situation} onChange={e => { ks(); setSituation(e.target.value); setFamModified(true) }}>
-            <option value="marie">Marié(e)</option><option value="veuf">Veuf/Veuve</option>
-            <option value="divorce">Divorcé(e)</option><option value="autre">Autre</option>
+            <option value="marie">{t('portail.reduction.situation.marie')}</option><option value="veuf">{t('portail.reduction.situation.veuf')}</option>
+            <option value="divorce">{t('portail.reduction.situation.divorce')}</option><option value="autre">{t('portail.reduction.situation.autre')}</option>
           </select>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          <div><label style={lbl}>Prénom *</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_prenom: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Nom *</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_nom: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Adresse *</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_adresse: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.prenom')}</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_prenom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.nom')}</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_nom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.adresse')}</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_adresse: e.target.value })); setFamModified(true) }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-            <div><label style={lbl}>CP *</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_code_postal: e.target.value })); setFamModified(true) }} /></div>
-            <div><label style={lbl}>Ville *</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_ville: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.reduction.field.cp')}</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_code_postal: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.reduction.field.ville')}</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_ville: e.target.value })); setFamModified(true) }} /></div>
           </div>
-          <div><label style={lbl}>Téléphone *</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_telephone: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Email *</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_email: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.tel')}</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_telephone: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.email')}</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_email: e.target.value })); setFamModified(true) }} /></div>
         </div>
       </Section>
 
       {/* ── 2. RESPONSABLE 2 ── */}
-      <Section title="2. Responsable 2 (si applicable)">
+      <Section title={t('portail.reduction.section.resp2')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          <div><label style={lbl}>Prénom</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_prenom: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Nom</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_nom: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Téléphone</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_telephone: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Email</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_email: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.prenom2')}</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_prenom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.nom2')}</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_nom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.tel2')}</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_telephone: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.reduction.field.email2')}</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_email: e.target.value })); setFamModified(true) }} /></div>
         </div>
       </Section>
 
       {/* ── 3. ENFANTS ── */}
-      <Section title="3. Enfants concernés par la demande *">
-        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Sélectionnez les enfants et indiquez la classe souhaitée pour {anneeInscription}.</p>
+      <Section title={t('portail.reduction.section.enfants')}>
+        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>{t('portail.reduction.enfants.intro', { annee: anneeInscription })}</p>
         {enfants.map((enfant: any) => {
           const selected = enfantsDossier.find((e: any) => e.enfant_id === enfant.id)
           const classeSuivante = getClasseSuivante(enfant.classes?.nom || '')
@@ -634,17 +637,17 @@ export default function DemandeReductionPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
                     {enfant.statut_inscription === 'en_attente' && (
-                      <span style={{ background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em' }}>⏳ En attente</span>
+                      <span style={{ background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em' }}>{t('portail.reduction.badge.pending')}</span>
                     )}
                   </div>
-                  {enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Classe actuelle : {enfant.classes.nom}</div>}
+                  {enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{t('portail.common.current_class', { classe: enfant.classes.nom })}</div>}
                 </div>
               </div>
               {selected && (
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #BFDBFE' }}>
-                  <label style={lbl}>Classe souhaitée *</label>
+                  <label style={lbl}>{t('portail.reduction.field.classe_souhaitee')}</label>
                   <select style={inp} value={selected.classe_souhaitee || ''} onChange={e => setClasseEnfant(enfant.id, e.target.value)}>
-                    <option value="">— Choisir —</option>
+                    <option value="">{t('portail.reduction.choose')}</option>
                     {classes.map((c: any) => <option key={c.id} value={c.nom}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}{c.nom === classeSuivante ? ' ★' : ''}</option>)}
                   </select>
                 </div>
@@ -654,28 +657,28 @@ export default function DemandeReductionPage() {
         })}
         {nbEnfantsTotal > 0 && (
           <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 14, fontSize: 13 }}>
-            <strong>{nbEnfantsTotal} enfant{nbEnfantsTotal > 1 ? 's' : ''}</strong>
-            {Object.entries(secteurCounts).map(([sec, nb]) => ` · ${nb} en ${sec}`)}
+            <strong>{nbEnfantsTotal > 1 ? t('portail.reduction.count_many', { n: nbEnfantsTotal }) : t('portail.reduction.count_one', { n: nbEnfantsTotal })}</strong>
+            {Object.entries(secteurCounts).map(([sec, nb]) => ' · ' + t('portail.reduction.par_secteur', { nb, secteur: sec }))}
           </div>
         )}
       </Section>
 
       {/* ── 4. LOGEMENT ── */}
-      <Section title="4. Logement *">
+      <Section title={t('portail.reduction.section.logement')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {qActif('logement_type') && <div><label style={lbl}>{qL('logement_type', 'Type')}</label>
+          {qActif('logement_type') && <div><label style={lbl}>{qL('logement_type', t('portail.reduction.logement.type'))}</label>
             <select style={inp} value={logType} onChange={e => { ks(); setLogType(e.target.value) }}>
-              <option value="locataire">Locataire</option><option value="proprietaire">Propriétaire</option><option value="autre">Autre</option>
+              <option value="locataire">{t('portail.reduction.logement.locataire')}</option><option value="proprietaire">{t('portail.reduction.logement.proprietaire')}</option><option value="autre">{t('portail.reduction.logement.autre')}</option>
             </select>
           </div>}
-          {qActif('logement_nb_pieces') && <div><label style={lbl}>{qL('logement_nb_pieces', 'Nb de pièces')}</label><input style={inp} type="number" value={logPieces} onChange={e => { ks(); setLogPieces(e.target.value) }} /></div>}
-          {qActif('logement_loyer_mensuel') && <div><label style={lbl}>{qL('logement_loyer_mensuel', 'Loyer / remb. mensuel (€)')}</label><input style={inp} type="number" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>}
-          {qActif('logement_charges_mensuelles') && <div><label style={lbl}>{qL('logement_charges_mensuelles', 'Charges mensuelles (€)')}</label><input style={inp} type="number" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>}
-          {qActif('logement_date_occupation') && <div><label style={lbl}>{qL('logement_date_occupation', 'Occupé depuis')}</label><input style={inp} type="date" value={logDateOccupation} onChange={e => { ks(); setLogDateOccupation(e.target.value) }} /></div>}
+          {qActif('logement_nb_pieces') && <div><label style={lbl}>{qL('logement_nb_pieces', t('portail.reduction.logement.pieces'))}</label><input style={inp} type="number" value={logPieces} onChange={e => { ks(); setLogPieces(e.target.value) }} /></div>}
+          {qActif('logement_loyer_mensuel') && <div><label style={lbl}>{qL('logement_loyer_mensuel', t('portail.reduction.logement.loyer'))}</label><input style={inp} type="number" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>}
+          {qActif('logement_charges_mensuelles') && <div><label style={lbl}>{qL('logement_charges_mensuelles', t('portail.reduction.logement.charges'))}</label><input style={inp} type="number" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>}
+          {qActif('logement_date_occupation') && <div><label style={lbl}>{qL('logement_date_occupation', t('portail.reduction.logement.depuis'))}</label><input style={inp} type="date" value={logDateOccupation} onChange={e => { ks(); setLogDateOccupation(e.target.value) }} /></div>}
         </div>
         {qActif('logement_personne_handicapee') && <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#475569' }}>
           <input type="checkbox" checked={logHandicape} onChange={e => { ks(); setLogHandicape(e.target.checked) }} style={{ width: 16, height: 16, accentColor: '#2563EB' }} />
-          {qcfg('logement_personne_handicapee')?.label || 'Personne handicapée vivant au foyer'}
+          {qcfg('logement_personne_handicapee')?.label || t('portail.reduction.logement.handicap')}
         </label>}
         {questionsCustomActives('logement').length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 4 }}>
@@ -688,41 +691,41 @@ export default function DemandeReductionPage() {
       </Section>
 
       {/* ── 5. REVENUS ── */}
-      <Section title="5. Revenus du foyer *">
+      <Section title={t('portail.reduction.section.revenus')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {qActif('quotient_familial') && <div><label style={lbl}>{qL('quotient_familial', 'Quotient familial CAF (€)')}</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>}
+          {qActif('quotient_familial') && <div><label style={lbl}>{qL('quotient_familial', t('portail.reduction.quotient'))}</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>}
         </div>
 
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Détail des revenus salariés *</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>{t('portail.reduction.revenus.detail')}</div>
           {revenus.map((r: any, i: number) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 7, marginBottom: 8, alignItems: 'end' }}>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nom/Prénom</label><input style={inp} value={r.nom_prenom} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} value={r.lien_parente} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Employeur</label><input style={inp} value={r.employeur} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Qualif.</label><input style={inp} value={r.qualification || ''} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, qualification: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Salaire net</label><input style={inp} type="number" value={r.salaire_mensuel_net} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>Nb mois</label><input style={inp} type="number" min="1" max="12" value={r.nb_mois} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.nom')}</label><input style={inp} value={r.nom_prenom} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nom_prenom: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.lien')}</label><input style={inp} value={r.lien_parente} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.employeur')}</label><input style={inp} value={r.employeur} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.qualif')}</label><input style={inp} value={r.qualification || ''} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, qualification: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.salaire')}</label><input style={inp} type="number" value={r.salaire_mensuel_net} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.nb_mois')}</label><input style={inp} type="number" min="1" max="12" value={r.nb_mois} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x)) }} /></div>
               <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setRevenus(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}</div>
             </div>
           ))}
           <button onClick={() => { ks(); setRevenus(p => [...p, { nom_prenom: '', lien_parente: '', employeur: '', qualification: '', salaire_mensuel_net: '', nb_mois: 12 }]) }}
             style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0, marginTop: 4 }}>
-            + Ajouter une personne
+            {t('portail.reduction.add_person')}
           </button>
         </div>
 
         {/* Artisans */}
         <div style={{ background: '#F8FAFC', borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 12 }}>Revenus d'artisan, commerçant ou profession libérale</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 12 }}>{t('portail.reduction.artisan.title')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
-            {qActif('revenus_artisans_profession') && <div><label style={lbl}>{qL('revenus_artisans_profession', 'Profession')}</label><input style={inp} value={artisanProfession} onChange={e => { ks(); setArtisanProfession(e.target.value) }} placeholder="Ex: Médecin, Artisan..." /></div>}
-            {qActif('revenus_artisans_regime') && <div><label style={lbl}>{qL('revenus_artisans_regime', 'Régime')}</label>
+            {qActif('revenus_artisans_profession') && <div><label style={lbl}>{qL('revenus_artisans_profession', t('portail.reduction.artisan.profession'))}</label><input style={inp} value={artisanProfession} onChange={e => { ks(); setArtisanProfession(e.target.value) }} placeholder={t('portail.reduction.artisan.profession_ph')} /></div>}
+            {qActif('revenus_artisans_regime') && <div><label style={lbl}>{qL('revenus_artisans_regime', t('portail.reduction.artisan.regime'))}</label>
               <select style={inp} value={artisanRegime} onChange={e => { ks(); setArtisanRegime(e.target.value) }}>
-                <option value="">Choisir</option><option value="reel">Régime réel</option><option value="forfaitaire">Forfaitaire</option>
+                <option value="">{t('portail.reduction.artisan.choose')}</option><option value="reel">{t('portail.reduction.artisan.reel')}</option><option value="forfaitaire">{t('portail.reduction.artisan.forfaitaire')}</option>
               </select>
             </div>}
-            {qActif('revenus_artisans_montant_annuel') && <div><label style={lbl}>{qL('revenus_artisans_montant_annuel', 'Montant annuel (€)')}</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>}
+            {qActif('revenus_artisans_montant_annuel') && <div><label style={lbl}>{qL('revenus_artisans_montant_annuel', t('portail.reduction.artisan.montant'))}</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>}
           </div>
         </div>
         {questionsCustomActives('revenus').length > 0 && (
@@ -736,18 +739,18 @@ export default function DemandeReductionPage() {
       </Section>
 
       {/* ── 6. ALLOCATIONS ── */}
-      <Section title="6. Allocations et autres revenus *">
+      <Section title={t('portail.reduction.section.alloc')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-          {qActif('alloc_familiales_mensuelles') && <div><label style={lbl}>{qL('alloc_familiales_mensuelles', 'Allocations familiales (€/mois)')}</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>}
-          {qActif('alloc_chomage_mensuelle') && <div><label style={lbl}>{qL('alloc_chomage_mensuelle', 'Allocation chômage (€/mois)')}</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>}
-          {qActif('apl_mensuelle') && <div><label style={lbl}>{qL('apl_mensuelle', 'APL / Aide logement (€/mois)')}</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>}
-          {qActif('autres_revenus_mensuels') && <div><label style={lbl}>{qL('autres_revenus_mensuels', 'Autres revenus divers (€/mois)')}</label><input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>}
-          {qActif('aides_mensuelles') && <div><label style={lbl}>{qL('aides_mensuelles', 'Montant mensuel des aides perçues')}</label><input style={inp} type="number" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>}
+          {qActif('alloc_familiales_mensuelles') && <div><label style={lbl}>{qL('alloc_familiales_mensuelles', t('portail.reduction.alloc.familiales'))}</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>}
+          {qActif('alloc_chomage_mensuelle') && <div><label style={lbl}>{qL('alloc_chomage_mensuelle', t('portail.reduction.alloc.chomage'))}</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>}
+          {qActif('apl_mensuelle') && <div><label style={lbl}>{qL('apl_mensuelle', t('portail.reduction.alloc.apl'))}</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>}
+          {qActif('autres_revenus_mensuels') && <div><label style={lbl}>{qL('autres_revenus_mensuels', t('portail.reduction.alloc.autres'))}</label><input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>}
+          {qActif('aides_mensuelles') && <div><label style={lbl}>{qL('aides_mensuelles', t('portail.reduction.alloc.aides'))}</label><input style={inp} type="number" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>}
         </div>
 
         {/* Total auto-calculé */}
         <div style={{ background: totalRev > 0 ? '#EFF6FF' : '#F8FAFC', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>Total revenus mensuels</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>{t('portail.reduction.total_revenus')}</span>
           <span style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>{totalRev.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €</span>
         </div>
         {questionsCustomActives('allocations').length > 0 && (
@@ -762,7 +765,7 @@ export default function DemandeReductionPage() {
 
       {/* ── Section custom 'autres' — uniquement si l'admin a configuré des questions dedans ── */}
       {questionsCustomActives('autres').length > 0 && (
-        <Section title="Autres informations">
+        <Section title={t('portail.reduction.section.autres_infos')}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {questionsCustomActives('autres').map((q: any) => (
               <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
@@ -773,72 +776,72 @@ export default function DemandeReductionPage() {
       )}
 
       {/* ── 7. AUTRES ENFANTS / CHARGES ── */}
-      <Section title="7. Enfants scolarisés dans d'autres établissements">
-        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Enfants scolarisés dans d'autres écoles juives.</p>
+      <Section title={t('portail.reduction.section.autres_enfants')}>
+        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>{t('portail.reduction.autres_enfants.intro')}</p>
         {enfantsAutres.map((e: any, i: number) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 8 }}>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Prénom</label><input style={inp} value={e.prenom} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Âge</label><input style={inp} type="number" value={e.age} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Classe</label><input style={inp} value={e.classe} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, classe: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Établissement</label><input style={inp} value={e.etablissement} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, etablissement: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Tarif/mois (€)</label><input style={inp} type="number" value={e.tarif_mensuel} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, tarif_mensuel: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Mois</label><input style={inp} type="number" min="1" max="12" value={e.nb_mois} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, nb_mois: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.prenom2')}</label><input style={inp} value={e.prenom} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.age')}</label><input style={inp} type="number" value={e.age} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.classe')}</label><input style={inp} value={e.classe} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, classe: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.etablissement')}</label><input style={inp} value={e.etablissement} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, etablissement: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.tarif_mois')}</label><input style={inp} type="number" value={e.tarif_mensuel} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, tarif_mensuel: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.mois')}</label><input style={inp} type="number" min="1" max="12" value={e.nb_mois} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, nb_mois: ev.target.value } : x)) }} /></div>
             <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setEnfantsAutres(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20 }}>×</button>}</div>
           </div>
         ))}
         <button onClick={() => { ks(); setEnfantsAutres(p => [...p, { prenom: '', age: '', classe: '', etablissement: '', tarif_mensuel: '', nb_mois: 10 }]) }}
-          style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>+ Ajouter un enfant</button>
+          style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>{t('portail.reduction.add_child')}</button>
       </Section>
 
-      <Section title="8. Personnes à charge non scolarisées et non salariées">
-        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>Membres du foyer à charge ne percevant pas de revenus et non scolarisés.</p>
+      <Section title={t('portail.reduction.section.charges')}>
+        <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>{t('portail.reduction.charges.intro')}</p>
         {personnesCharge.map((p: any, i: number) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, alignItems: 'end', marginBottom: 8 }}>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Nom</label><input style={inp} value={p.nom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, nom: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Prénom</label><input style={inp} value={p.prenom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Âge</label><input style={inp} type="number" value={p.age} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Lien</label><input style={inp} value={p.lien_parente} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, lien_parente: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>Montant frais annuels (€)</label><input style={inp} type="number" value={p.montant_annuel_frais} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, montant_annuel_frais: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.nom2')}</label><input style={inp} value={p.nom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, nom: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.prenom2')}</label><input style={inp} value={p.prenom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.age')}</label><input style={inp} type="number" value={p.age} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.lien')}</label><input style={inp} value={p.lien_parente} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, lien_parente: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.frais_annuels')}</label><input style={inp} type="number" value={p.montant_annuel_frais} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, montant_annuel_frais: ev.target.value } : x)) }} /></div>
             <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setPersonnesCharge(prev => prev.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20 }}>×</button>}</div>
           </div>
         ))}
         <button onClick={() => { ks(); setPersonnesCharge(p => [...p, { nom: '', prenom: '', age: '', lien_parente: '', montant_annuel_frais: '' }]) }}
-          style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>+ Ajouter une personne</button>
+          style={{ fontSize: 12, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>{t('portail.reduction.add_person')}</button>
       </Section>
 
       {/* ── 9. PROPOSITION ── */}
-      <Section title="9. Votre proposition tarifaire *">
+      <Section title={t('portail.reduction.section.proposition')}>
         <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 16 }}>
           <div style={{ fontSize: 12, color: '#1D4ED8', marginBottom: 10, fontWeight: 600 }}>
-            Dossier pour <strong>{nbEnfantsTotal} enfant{nbEnfantsTotal > 1 ? 's' : ''}</strong>
-            {Object.entries(secteurCounts).map(([sec, nb]) => ` — ${nb} en ${sec}`)}
+            {t('portail.reduction.dossier_pour')} <strong>{nbEnfantsTotal > 1 ? t('portail.reduction.count_many', { n: nbEnfantsTotal }) : t('portail.reduction.count_one', { n: nbEnfantsTotal })}</strong>
+            {Object.entries(secteurCounts).map(([sec, nb]) => ' — ' + t('portail.reduction.par_secteur', { nb, secteur: sec }))}
           </div>
-          <label style={lbl}>Tarif annuel proposé pour l'ensemble du dossier (€) *</label>
+          <label style={lbl}>{t('portail.reduction.tarif_propose')}</label>
           <input style={{ ...inp, fontSize: 18, fontWeight: 700, color: '#1D4ED8', textAlign: 'center', padding: '12px' }}
-            type="number" value={tarifPropose} placeholder="Ex: 3 000"
+            type="number" value={tarifPropose} placeholder={t('portail.reduction.tarif_ph')}
             onChange={e => { ks(); setTarifPropose(e.target.value) }} />
         </div>
         <div>
-          <label style={lbl}>Commentaire (optionnel)</label>
+          <label style={lbl}>{t('portail.reduction.commentaire')}</label>
           <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={commentaire}
             onChange={e => { ks(); setCommentaire(e.target.value) }}
-            placeholder="Précisions sur votre situation..." />
+            placeholder={t('portail.reduction.commentaire_ph')} />
         </div>
       </Section>
 
       {/* ── 10. PIÈCES JUSTIFICATIVES ── */}
       {docsConfig.length > 0 && (
-        <Section title="10. Pièces justificatives">
-          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>PDF, JPG ou PNG — max 10 Mo. Les documents * sont obligatoires.</p>
+        <Section title={t('portail.reduction.section.docs')}>
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>{t('portail.reduction.docs.intro')}</p>
 
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: pasDeJustificatif ? '#FEF9EC' : '#F8FAFC', border: `1px solid ${pasDeJustificatif ? '#F59E0B' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#475569' }}>
             <input type="checkbox" checked={pasDeJustificatif} onChange={e => { ks(); setPasDeJustificatif(e.target.checked) }} style={{ marginTop: 2, flexShrink: 0, accentColor: '#F59E0B' }} />
-            <span>Je déclare sur l'honneur que je ne dispose d'aucun justificatif de revenus</span>
+            <span>{t('portail.reduction.no_justif')}</span>
           </label>
 
           {pasDeJustificatif && (
             <div>
-              <label style={lbl}>Décrivez votre source de revenus et votre salaire mensuel *</label>
+              <label style={lbl}>{t('portail.reduction.no_justif_detail')}</label>
               <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={pasDeJustificatifDetail}
                 onChange={e => { ks(); setPasDeJustificatifDetail(e.target.value) }} />
             </div>
@@ -857,7 +860,7 @@ export default function DemandeReductionPage() {
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadDoc(doc.id, doc.label, f) }} />
                 <button onClick={() => fileRefs.current[doc.id]?.click()} disabled={isUploading}
                   style={{ fontSize: 12, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: isUploading ? 'not-allowed' : 'pointer', background: uploaded ? 'rgba(16,185,129,0.1)' : '#2563EB', color: uploaded ? '#10B981' : '#fff', border: uploaded ? '1px solid rgba(16,185,129,0.3)' : 'none', opacity: isUploading ? 0.7 : 1, whiteSpace: 'nowrap' }}>
-                  {isUploading ? 'Upload...' : uploaded ? '↺ Remplacer' : '📎 Joindre'}
+                  {isUploading ? t('portail.common.uploading') : uploaded ? t('portail.reduction.replace') : t('portail.reduction.attach')}
                 </button>
               </div>
             )
@@ -867,19 +870,18 @@ export default function DemandeReductionPage() {
 
       {/* ── 11. ATTESTATION + SIGNATURE ── */}
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>Attestation sur l'honneur</div>
-        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: '0 0 16px' }}>
-          Je soussigné(e), <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, atteste sur l'honneur que tous les renseignements portés sur cette demande et les pièces justificatives sont conformes, sincères et véritables. J'accepte que l'établissement transmette les informations nécessaires à tout organisme susceptible d'accorder une aide. Je m'engage à informer le service comptabilité de toute modification de ma situation.
-        </p>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>{t('portail.reduction.attestation.title')}</div>
+        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: '0 0 16px' }}
+          dangerouslySetInnerHTML={{ __html: t('portail.reduction.attestation.body', { parent: `${famForm.parent1_prenom} ${famForm.parent1_nom}` }) }} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-          <div><label style={lbl}>Fait à *</label><input style={inp} value={attestationLieu} onChange={e => { ks(); setAttestationLieu(e.target.value) }} placeholder="Ville" /></div>
-          <div><label style={lbl}>Le</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} readOnly /></div>
+          <div><label style={lbl}>{t('portail.reduction.fait_a')}</label><input style={inp} value={attestationLieu} onChange={e => { ks(); setAttestationLieu(e.target.value) }} placeholder={t('portail.reduction.ville_ph')} /></div>
+          <div><label style={lbl}>{t('portail.reduction.le')}</label><input style={inp} type="date" defaultValue={new Date().toISOString().split('T')[0]} readOnly /></div>
         </div>
 
         <div>
-          <label style={lbl}>Signature *</label>
-          <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 8px' }}>Signez dans le cadre ci-dessous (doigt ou souris)</p>
+          <label style={lbl}>{t('portail.reduction.signature')}</label>
+          <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 8px' }}>{t('portail.reduction.signature_hint')}</p>
           <div style={{ border: `2px solid ${signatureData ? '#10B981' : '#E2E8F0'}`, borderRadius: 10, overflow: 'hidden', background: '#fff', touchAction: 'none' }}>
             <canvas ref={canvasRef} width={600} height={150}
               style={{ display: 'block', width: '100%', cursor: 'crosshair' }}
@@ -887,8 +889,8 @@ export default function DemandeReductionPage() {
               onTouchStart={startSign} onTouchMove={drawSign} onTouchEnd={stopSign} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <button onClick={clearSign} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>↺ Effacer</button>
-            {signatureData && <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>✓ Signature enregistrée</span>}
+            <button onClick={clearSign} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{t('portail.common.signature.clear')}</button>
+            {signatureData && <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>{t('portail.common.signature.saved')}</span>}
           </div>
         </div>
       </div>
@@ -896,11 +898,11 @@ export default function DemandeReductionPage() {
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 8 }}>
         <button onClick={() => router.push('/portail/inscriptions')}
           style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '11px 20px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>
-          Annuler
+          {t('portail.common.cancel')}
         </button>
         <button onClick={soumettre} disabled={saving}
           style={{ background: '#2563EB', border: 'none', borderRadius: 10, padding: '11px 28px', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
-          {saving ? 'Envoi...' : '📨 Soumettre le dossier'}
+          {saving ? t('portail.common.sending') : t('portail.reduction.submit')}
         </button>
       </div>
     </div>

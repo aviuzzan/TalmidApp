@@ -2,11 +2,12 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useI18n } from '@/lib/i18n'
+import { fmtDate } from '@/lib/format-date'
 
 type Enfant = { id: string; prenom: string; nom: string }
 
 export default function PortailSantePage() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [loading, setLoading] = useState(true)
   const [enfants, setEnfants] = useState<Enfant[]>([])
   const [selId, setSelId] = useState<string>('')
@@ -109,7 +110,7 @@ export default function PortailSantePage() {
         <div style={label}>{t('portail.sante.vaccins.groupe')}</div><div style={value}>{med?.groupe_sanguin || '—'}</div>
         <div style={label}>{t('portail.sante.vaccins.dtp')}</div><div style={value}>{med?.vaccinations?.dtp_a_jour ? t('portail.sante.vaccins.yes') : t('portail.sante.vaccins.unknown')}</div>
         <div style={label}>{t('portail.sante.vaccins.ror')}</div><div style={value}>{med?.vaccinations?.ror ? t('portail.sante.vaccins.yes') : t('portail.sante.vaccins.unknown')}</div>
-        {med?.vaccinations?.dernier_rappel && (<><div style={label}>{t('portail.sante.vaccins.dernier_rappel')}</div><div style={value}>{new Date(med.vaccinations.dernier_rappel).toLocaleDateString('fr-FR')}</div></>)}
+        {med?.vaccinations?.dernier_rappel && (<><div style={label}>{t('portail.sante.vaccins.dernier_rappel')}</div><div style={value}>{fmtDate(med.vaccinations.dernier_rappel, lang)}</div></>)}
       </div>
 
       <div style={{ ...box, background: '#FFFBEB', border: '1px solid #FDE68A' }}>

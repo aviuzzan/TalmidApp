@@ -6,6 +6,7 @@ import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
+import { useI18n } from '@/lib/i18n'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -19,6 +20,7 @@ export default function ContratPage() {
   const { anneeInscription } = useAnneeInscription()
   const router = useRouter()
   const parent = useParentCtx()
+  const { t } = useI18n()
   const ks = () => {} // no-op (ancien hack scroll cassait la saisie)
 
   const [familleId, setFamilleId] = useState('')
@@ -339,13 +341,13 @@ export default function ContratPage() {
   }
 
   async function soumettre() {
-    if (enfantsContrat.filter(e => e.classe_id).length === 0) { alert('Veuillez sélectionner au moins une classe'); return }
-    if (!modeReglement) { alert('Choisissez un mode de règlement'); return }
+    if (enfantsContrat.filter(e => e.classe_id).length === 0) { alert(t('portail.contrat.err.select_class')); return }
+    if (!modeReglement) { alert(t('portail.contrat.err.select_mode')); return }
     // (caution chèques retirée — plus exigée)
-    if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { alert('Renseignez les informations du mandat SEPA (IBAN, BIC, titulaire)'); return }
-    if (!signatureData) { alert('Veuillez signer le contrat'); return }
+    if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { alert(t('portail.contrat.err.sepa_missing')); return }
+    if (!signatureData) { alert(t('portail.contrat.err.sign')); return }
     if (nouvelEnfantEnAttente) {
-      alert("Un nouvel enfant est en attente de validation par l'etablissement. Le contrat sera disponible une fois la validation effectuee.")
+      alert(t('portail.contrat.err.child_pending'))
       return
     }
 
@@ -362,11 +364,11 @@ export default function ContratPage() {
       enfantsContrat.forEach(e => {
         ;(e.postes || []).forEach((p: any) => {
           const pl = fraiche.get(p.tarif_id)
-          if (pl?.complet) optionsCompletes.push(p.nom || 'Option')
+          if (pl?.complet) optionsCompletes.push(p.nom || t('portail.contrat.option_fallback'))
         })
       })
       if (optionsCompletes.length > 0) {
-        alert(`L'option « ${Array.from(new Set(optionsCompletes)).join(' », « ')} » est désormais complète. Elle a été retirée de votre sélection — vous pourrez demander une place en liste d'attente après la signature.`)
+        alert(t('portail.contrat.err.option_full', { options: Array.from(new Set(optionsCompletes)).join(' », « ') }))
         setEnfantsContrat(prev => prev.map(e => {
           const postesOk = (e.postes || []).filter((p: any) => !fraiche.get(p.tarif_id)?.complet)
           return { ...e, postes: postesOk, sous_total: postesOk.reduce((sum: number, p: any) => sum + (parseFloat(p.montant) || 0), 0) }
@@ -422,7 +424,7 @@ export default function ContratPage() {
       const { data: upd, error: updErr } = await s.from('contrats_scolarisation').update(payload).eq('id', contratId).select()
       if (updErr || !upd || upd.length === 0) {
         setSaving(false)
-        alert('Erreur lors de la soumission du contrat : ' + (updErr?.message || 'aucune ligne modifiée. Contactez l\'administration.'))
+        alert(t('portail.contrat.err.submit', { msg: updErr?.message || t('portail.common.err.no_row') }))
         return
       }
       await s.from('contrat_enfants').delete().eq('contrat_id', contratId)
@@ -430,7 +432,7 @@ export default function ContratPage() {
       const { data: nc, error: insErr } = await s.from('contrats_scolarisation').insert(payload).select().single()
       if (insErr || !nc) {
         setSaving(false)
-        alert('Erreur lors de la création du contrat : ' + (insErr?.message || 'inconnue'))
+        alert(t('portail.contrat.err.create', { msg: insErr?.message || t('portail.common.err.unknown') }))
         return
       }
       contratId = nc.id
@@ -506,15 +508,15 @@ export default function ContratPage() {
     router.push('/portail/inscriptions')
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
 
   if (!parent.estPrincipal) return (
     <div style={{ maxWidth: 640, margin: '40px auto', padding: '0 20px' }}>
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '32px 28px', textAlign: 'center' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Démarche réservée au parent principal</h2>
-        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>Cette démarche est gérée par le parent principal de la famille. Vous pouvez en suivre l&apos;avancement depuis la page « Année {anneeInscription} ».</p>
-        <button onClick={() => router.push('/portail/inscriptions')} style={{ marginTop: 18, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Retour</button>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>{t('portail.peda.restricted.title')}</h2>
+        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>{t('portail.peda.restricted.body', { annee: anneeInscription })}</p>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ marginTop: 18, background: '#2563EB', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{t('portail.peda.back')}</button>
       </div>
     </div>
   )
@@ -523,18 +525,18 @@ export default function ContratPage() {
     const st = formatStatut(contrat.statut)
     return (
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
-        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>← Retour</button>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>{t('portail.peda.back')}</button>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📝</div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>Contrat soumis</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>{t('portail.contrat.submitted.title')}</h2>
         <span style={{ fontSize: 14, fontWeight: 700, color: st.color, background: st.bg, padding: '8px 20px', borderRadius: 20, display: 'inline-block', marginTop: 12 }}>{st.label}</span>
         <div style={{ marginTop: 24, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20, textAlign: 'left' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
-            <span style={{ color: '#64748B' }}>Total annuel</span>
+            <span style={{ color: '#64748B' }}>{t('portail.contrat.total_annuel')}</span>
             <span style={{ fontWeight: 700 }}>{contrat.montant_total?.toLocaleString('fr-FR')} €</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-            <span style={{ color: '#64748B' }}>Règlement</span>
-            <span style={{ fontWeight: 600 }}>{labelModePaiement(contrat.mode_reglement)} — {contrat.nb_echeances} échéance(s)</span>
+            <span style={{ color: '#64748B' }}>{t('portail.contrat.submitted.reglement')}</span>
+            <span style={{ fontWeight: 600 }}>{labelModePaiement(contrat.mode_reglement)} — {t('portail.contrat.echeances_count', { n: contrat.nb_echeances })}</span>
           </div>
         </div>
       </div>
@@ -547,9 +549,9 @@ export default function ContratPage() {
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px 100px', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>← Retour</button>
+      <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, padding: 0, textAlign: 'left', width: 'fit-content' }}>{t('portail.peda.back')}</button>
       <div>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>Contrat de scolarisation {anneeInscription}</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('portail.contrat.title', { annee: anneeInscription })}</h1>
       </div>
 
       {/* ── VERROU NOUVEL ENFANT EN ATTENTE ── */}
@@ -557,10 +559,9 @@ export default function ContratPage() {
         <div style={{ background: '#FFFBEB', border: '2px solid #FDE68A', borderRadius: 12, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 20, flexShrink: 0 }}>⏳</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>Nouvel enfant en attente de validation</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>{t('portail.contrat.pending_child.title')}</div>
             <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.5 }}>
-              Vous avez ajouté un enfant qui doit d&apos;abord être validé par l&apos;établissement.
-              Le contrat de réinscription sera disponible une fois la validation effectuée — le tarif dépend du nombre d&apos;enfants.
+              {t('portail.contrat.pending_child.body')}
             </div>
           </div>
         </div>
@@ -571,41 +572,38 @@ export default function ContratPage() {
         <div style={{ background: '#FEF2F2', border: '2px solid #FECACA', borderRadius: 12, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#DC2626', marginBottom: 4 }}>Demande de réduction en cours</div>
-            <div style={{ fontSize: 13, color: '#7F1D1D', lineHeight: 1.5 }}>
-              Votre demande de réduction n'a pas encore été traitée (statut : <strong>{formatStatut(ddrStatut).label}</strong>).
-              Vous pouvez continuer le contrat, mais le tarif final pourra être ajusté après la décision de la commission.
-            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#DC2626', marginBottom: 4 }}>{t('portail.contrat.ddr_alert.title')}</div>
+            <div style={{ fontSize: 13, color: '#7F1D1D', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t('portail.contrat.ddr_alert.body', { statut: formatStatut(ddrStatut).label }) }} />
           </div>
         </div>
       )}
 
       {/* ── INFOS FAMILLE ── */}
-      <Section title="1. Vos informations">
-        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>Vérifiez et corrigez si nécessaire.</p>
+      <Section title={t('portail.contrat.section.infos')}>
+        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>{t('portail.common.verify_correct')}</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          <div><label style={lbl}>Prénom resp. 1 *</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_prenom: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Nom resp. 1 *</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_nom: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Adresse *</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_adresse: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.contrat.field.prenom1')}</label><input style={inp} value={famForm.parent1_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_prenom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.contrat.field.nom1')}</label><input style={inp} value={famForm.parent1_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_nom: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.contrat.field.adresse')}</label><input style={inp} value={famForm.parent1_adresse || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_adresse: e.target.value })); setFamModified(true) }} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-            <div><label style={lbl}>CP *</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_code_postal: e.target.value })); setFamModified(true) }} /></div>
-            <div><label style={lbl}>Ville *</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_ville: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.contrat.field.cp')}</label><input style={inp} value={famForm.parent1_code_postal || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_code_postal: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.contrat.field.ville')}</label><input style={inp} value={famForm.parent1_ville || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_ville: e.target.value })); setFamModified(true) }} /></div>
           </div>
-          <div><label style={lbl}>Portable *</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_telephone: e.target.value })); setFamModified(true) }} /></div>
-          <div><label style={lbl}>Email *</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_email: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.contrat.field.portable')}</label><input style={inp} value={famForm.parent1_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_telephone: e.target.value })); setFamModified(true) }} /></div>
+          <div><label style={lbl}>{t('portail.contrat.field.email')}</label><input style={inp} type="email" value={famForm.parent1_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent1_email: e.target.value })); setFamModified(true) }} /></div>
           {(famForm.parent2_prenom || famForm.parent2_nom) && <>
-            <div><label style={lbl}>Prénom resp. 2</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_prenom: e.target.value })); setFamModified(true) }} /></div>
-            <div><label style={lbl}>Nom resp. 2</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_nom: e.target.value })); setFamModified(true) }} /></div>
-            <div><label style={lbl}>Portable resp. 2</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_telephone: e.target.value })); setFamModified(true) }} /></div>
-            <div><label style={lbl}>Email resp. 2</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_email: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.contrat.field.prenom2')}</label><input style={inp} value={famForm.parent2_prenom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_prenom: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.contrat.field.nom2')}</label><input style={inp} value={famForm.parent2_nom || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_nom: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.contrat.field.portable2')}</label><input style={inp} value={famForm.parent2_telephone || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_telephone: e.target.value })); setFamModified(true) }} /></div>
+            <div><label style={lbl}>{t('portail.contrat.field.email2')}</label><input style={inp} type="email" value={famForm.parent2_email || ''} onChange={e => { ks(); setFamForm((p: any) => ({ ...p, parent2_email: e.target.value })); setFamModified(true) }} /></div>
           </>}
         </div>
       </Section>
 
       {/* ── ENFANTS ── */}
-      <Section title="2. Enfants à inclure dans le contrat *">
+      <Section title={t('portail.contrat.section.enfants')}>
         <div style={{ fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 1.5 }}>
-          Cochez les enfants à inscrire pour {anneeInscription}. Si l&apos;un d&apos;eux ne reste pas à l&apos;école (déménagement, changement d&apos;établissement…), décochez-le.
+          {t('portail.contrat.enfants.intro', { annee: anneeInscription })}
         </div>
         {enfants.map((enfant: any) => {
           const enf = enfantsContrat.find(e => e.enfant_id === enfant.id) || { classe_id: '', postes: [], sous_total: 0 }
@@ -625,64 +623,64 @@ export default function ContratPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
                     {enAttenteAdm && (
-                      <span style={{ background: '#FFFBEB', color: '#9A3412', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>⏳ Admission en cours d&apos;étude</span>
+                      <span style={{ background: '#FFFBEB', color: '#9A3412', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>{t('portail.contrat.badge.adm_pending')}</span>
                     )}
                     {refuseAdm && (
-                      <span style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>✕ Admission refusée</span>
+                      <span style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>{t('portail.contrat.badge.adm_refused')}</span>
                     )}
                   </div>
                   {enAttenteAdm && (
-                    <div style={{ fontSize: 11, color: '#9A3412', marginTop: 3 }}>Vous pourrez l&apos;ajouter au contrat dès que l&apos;école aura validé son admission.</div>
+                    <div style={{ fontSize: 11, color: '#9A3412', marginTop: 3 }}>{t('portail.contrat.adm_pending_hint')}</div>
                   )}
-                  {!enAttenteAdm && !refuseAdm && enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>Classe actuelle : {enfant.classes.nom}</div>}
+                  {!enAttenteAdm && !refuseAdm && enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>{t('portail.common.current_class', { classe: enfant.classes.nom })}</div>}
                 </div>
                 {enf.sous_total > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{enf.sous_total.toLocaleString('fr-FR')} €</div>}
               </div>
               {isSelected && (
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
-                    <label style={lbl}>Classe souhaitée {anneeInscription} *</label>
+                    <label style={lbl}>{t('portail.contrat.field.classe_souhaitee', { annee: anneeInscription })}</label>
                     <select style={inp} value={enf.classe_id || ''} onChange={e => setEnfantClasse(enfant.id, e.target.value)}>
-                      <option value="">Choisir une classe</option>
+                      <option value="">{t('portail.contrat.choose_class')}</option>
                       {classes.map((c: any) => <option key={c.id} value={c.id}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}</option>)}
                     </select>
                   </div>
                   {enf.classe_id && tarifsDispos.length > 0 && (
                     <div>
-                      <label style={lbl}>Prestations</label>
+                      <label style={lbl}>{t('portail.contrat.prestations')}</label>
                       {(() => {
                         const groupesAvecHint = new Set(
                           tarifsDispos
-                            .filter((t: any) => t.groupe_exclusif)
-                            .map((t: any) => t.groupe_exclusif)
+                            .filter((tf: any) => tf.groupe_exclusif)
+                            .map((tf: any) => tf.groupe_exclusif)
                             .filter((g: string, _i: number, arr: string[]) => arr.filter(x => x === g).length > 1)
                         )
                         const groupesAffiches = new Set<string>()
-                        return tarifsDispos.map((t: any) => {
-                          const sel = enf.postes?.find((p: any) => p.tarif_id === t.id)
-                          const hintAAfficher = t.groupe_exclusif && groupesAvecHint.has(t.groupe_exclusif) && !groupesAffiches.has(t.groupe_exclusif)
-                          if (hintAAfficher) groupesAffiches.add(t.groupe_exclusif)
-                          const pl = placesMap.get(t.id)
+                        return tarifsDispos.map((tf: any) => {
+                          const sel = enf.postes?.find((p: any) => p.tarif_id === tf.id)
+                          const hintAAfficher = tf.groupe_exclusif && groupesAvecHint.has(tf.groupe_exclusif) && !groupesAffiches.has(tf.groupe_exclusif)
+                          if (hintAAfficher) groupesAffiches.add(tf.groupe_exclusif)
+                          const pl = placesMap.get(tf.id)
                           const estComplet = !!pl?.complet && !sel
                           const placesRestantes = pl && pl.places_max != null && !pl.complet ? pl.places_max - pl.nb_inscrits : null
                           return (
-                            <div key={t.id}>
+                            <div key={tf.id}>
                               {hintAAfficher && (
                                 <div style={{ fontSize: 11, color: '#7C3AED', background: '#EDE9FE', borderRadius: 6, padding: '4px 10px', marginBottom: 4, display: 'inline-block' }}>
-                                  ↔ Choisissez une seule option de «&nbsp;{t.groupe_exclusif}&nbsp;»
+                                  {t('portail.contrat.exclusive_hint', { groupe: tf.groupe_exclusif })}
                                 </div>
                               )}
-                              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: t.obligatoire || estComplet ? 'default' : 'pointer', background: estComplet ? '#F8FAFC' : sel ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${sel ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 6, opacity: estComplet ? 0.6 : 1 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: tf.obligatoire || estComplet ? 'default' : 'pointer', background: estComplet ? '#F8FAFC' : sel ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${sel ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 6, opacity: estComplet ? 0.6 : 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <input type="checkbox" checked={!!sel || t.obligatoire} disabled={t.obligatoire || estComplet} onChange={() => !t.obligatoire && togglePoste(enfant.id, t)} />
+                                  <input type="checkbox" checked={!!sel || tf.obligatoire} disabled={tf.obligatoire || estComplet} onChange={() => !tf.obligatoire && togglePoste(enfant.id, tf)} />
                                   <span style={{ fontSize: 13 }}>
-                                    {t.nom_poste}
-                                    {t.obligatoire && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>(inclus)</span>}
-                                    {estComplet && <span style={{ fontSize: 10, fontWeight: 700, color: '#B45309', background: '#FEF3C7', borderRadius: 5, padding: '2px 6px', marginLeft: 6 }}>Complet</span>}
-                                    {placesRestantes != null && placesRestantes <= 5 && <span style={{ fontSize: 10, fontWeight: 600, color: '#9A3412', marginLeft: 6 }}>({placesRestantes} place{placesRestantes > 1 ? 's' : ''} restante{placesRestantes > 1 ? 's' : ''})</span>}
+                                    {tf.nom_poste}
+                                    {tf.obligatoire && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 6 }}>{t('portail.contrat.included')}</span>}
+                                    {estComplet && <span style={{ fontSize: 10, fontWeight: 700, color: '#B45309', background: '#FEF3C7', borderRadius: 5, padding: '2px 6px', marginLeft: 6 }}>{t('portail.contrat.full')}</span>}
+                                    {placesRestantes != null && placesRestantes <= 5 && <span style={{ fontSize: 10, fontWeight: 600, color: '#9A3412', marginLeft: 6 }}>{placesRestantes > 1 ? t('portail.contrat.places_left_many', { n: placesRestantes }) : t('portail.contrat.places_left_one', { n: placesRestantes })}</span>}
                                   </span>
                                 </div>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#059669', flexShrink: 0 }}>{(parseFloat(t.montant) || 0).toLocaleString('fr-FR')} €</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#059669', flexShrink: 0 }}>{(parseFloat(tf.montant) || 0).toLocaleString('fr-FR')} €</span>
                               </label>
                             </div>
                           )
@@ -699,41 +697,41 @@ export default function ContratPage() {
 
       {/* ── ASSURANCE ── (masquée si l'école ne propose pas d'assurance) */}
       {ecoleInfo?.assurance_proposee !== false && (
-        <Section title="3. Assurance scolaire">
+        <Section title={t('portail.contrat.section.assurance')}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
             <input type="radio" checked={assuranceEcole} onChange={() => { ks(); setAssuranceEcole(true) }} />
-            <div>Assurance proposée par l'établissement
+            <div>{t('portail.contrat.assurance.ecole')}
               <span style={{ fontWeight: 700, color: '#059669', marginLeft: 8 }}>{montantAssuranceAnnuel} € × {nbEnfantsAvecClasse} = {totalAssurance} €</span>
             </div>
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: !assuranceEcole ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${!assuranceEcole ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#1E293B' }}>
             <input type="radio" checked={!assuranceEcole} onChange={() => { ks(); setAssuranceEcole(false) }} />
-            Je fournis ma propre attestation d'assurance valide pour {anneeInscription}
+            {t('portail.contrat.assurance.perso', { annee: anneeInscription })}
           </label>
         </Section>
       )}
 
       {/* ── TOTAL ── */}
       <div style={{ background: '#1E293B', borderRadius: 14, padding: 24, color: '#fff' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 16, letterSpacing: '0.06em' }}>RÉCAPITULATIF</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 16, letterSpacing: '0.06em' }}>{t('portail.contrat.recap')}</div>
         {enfantsContrat.filter(e => e.sous_total > 0).map(e => {
           const enfant = enfants.find((en: any) => en.id === e.enfant_id)
           return <div key={e.enfant_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}>
             <span>{enfant?.prenom} — {e.classe_nom}</span><span>{e.sous_total.toLocaleString('fr-FR')} €</span>
           </div>
         })}
-        {reductionFN > 0 && !reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>Réduction famille nombreuse</span><span>- {reductionFN.toLocaleString('fr-FR')} €</span></div>}
-        {reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>Tarif accordé (enseignement + demi-pension)</span><span>{parseFloat(reductionAccordee.tarif_accorde).toLocaleString('fr-FR')} €</span></div>}
-        {reductionAccordee && totalOptionsHorsReduction > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#94A3B8' }}><span>Options (transport, etc.)</span><span>+ {totalOptionsHorsReduction.toLocaleString('fr-FR')} €</span></div>}
-        {assuranceEcole && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}><span>Assurance scolaire</span><span>{totalAssurance} €</span></div>}
+        {reductionFN > 0 && !reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>{t('portail.contrat.recap.reduction_fn')}</span><span>- {reductionFN.toLocaleString('fr-FR')} €</span></div>}
+        {reductionAccordee && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#34D399' }}><span>{t('portail.contrat.recap.tarif_accorde')}</span><span>{parseFloat(reductionAccordee.tarif_accorde).toLocaleString('fr-FR')} €</span></div>}
+        {reductionAccordee && totalOptionsHorsReduction > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: '#94A3B8' }}><span>{t('portail.contrat.recap.options')}</span><span>+ {totalOptionsHorsReduction.toLocaleString('fr-FR')} €</span></div>}
+        {assuranceEcole && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}><span>{t('portail.contrat.recap.assurance')}</span><span>{totalAssurance} €</span></div>}
         <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '12px 0' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 800 }}>
-          <span>Total annuel</span><span style={{ color: '#60A5FA' }}>{totalAnnuel.toLocaleString('fr-FR')} €</span>
+          <span>{t('portail.contrat.total_annuel')}</span><span style={{ color: '#60A5FA' }}>{totalAnnuel.toLocaleString('fr-FR')} €</span>
         </div>
       </div>
 
       {/* ── RÈGLEMENT ── */}
-      <Section title="4. Mode de règlement *">
+      <Section title={t('portail.contrat.section.reglement')}>
         {modes.map((m: any) => (
           <div key={m.id} style={{ border: `1px solid ${modeReglement === m.type ? '#BFDBFE' : '#E2E8F0'}`, background: modeReglement === m.type ? '#EFF6FF' : '#F8FAFC', borderRadius: 10, padding: 16 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
@@ -747,13 +745,13 @@ export default function ContratPage() {
                 {m.config && (m.config.ordre_cheque || m.config.iban || m.config.conditions) && (
                   <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: 14, fontSize: 12, color: '#92400E', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {m.config.ordre_cheque && (
-                      <div><strong>Chèques à l'ordre de :</strong> {m.config.ordre_cheque}</div>
+                      <div><strong>{t('portail.contrat.cheque_order')}</strong> {m.config.ordre_cheque}</div>
                     )}
                     {m.config.iban && (
                       <div>
-                        <strong>IBAN du bénéficiaire :</strong> <span style={{ fontFamily: 'monospace' }}>{m.config.iban}</span>
-                        {m.config.bic && <> · <strong>BIC :</strong> {m.config.bic}</>}
-                        {m.config.titulaire && <> · <strong>Titulaire :</strong> {m.config.titulaire}</>}
+                        <strong>{t('portail.contrat.iban_benef')}</strong> <span style={{ fontFamily: 'monospace' }}>{m.config.iban}</span>
+                        {m.config.bic && <> · <strong>{t('portail.contrat.bic_label')}</strong> {m.config.bic}</>}
+                        {m.config.titulaire && <> · <strong>{t('portail.contrat.titulaire_label')}</strong> {m.config.titulaire}</>}
                       </div>
                     )}
                     {m.config.conditions && (
@@ -764,7 +762,7 @@ export default function ContratPage() {
 
                 {/* Nb échéances */}
                 <div>
-                  <label style={lbl}>Nombre d'échéances *</label>
+                  <label style={lbl}>{t('portail.contrat.nb_echeances')}</label>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {Array.from({ length: maxEch - minEch + 1 }, (_, i) => minEch + i).map(n => (
                       <button key={n} onClick={() => { ks(); setNbEcheances(n) }}
@@ -773,18 +771,18 @@ export default function ContratPage() {
                       </button>
                     ))}
                   </div>
-                  {nbEcheances > 1 && <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>Soit <strong>{montantEcheance.toLocaleString('fr-FR')} €</strong> × {nbEcheances} {m.type === 'cheque' ? 'chèques' : 'prélèvements'}</div>}
+                  {nbEcheances > 1 && <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }} dangerouslySetInnerHTML={{ __html: t('portail.contrat.echeance_detail', { montant: montantEcheance.toLocaleString('fr-FR'), n: nbEcheances, type: m.type === 'cheque' ? t('portail.contrat.type.cheques') : t('portail.contrat.type.prelevements') }) }} />}
                 </div>
 
                 {/* Date encaissement */}
                 {datesEncaissement.length > 0 && (
                   <div>
-                    <label style={lbl}>Date d'encaissement *</label>
+                    <label style={lbl}>{t('portail.contrat.date_encaissement')}</label>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {datesEncaissement.map((d: any) => (
                         <button key={d.id} onClick={() => { ks(); setDateEncaissement(d.jour_du_mois) }}
                           style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: dateEncaissement === d.jour_du_mois ? 600 : 400, background: dateEncaissement === d.jour_du_mois ? '#2563EB' : '#F1F5F9', color: dateEncaissement === d.jour_du_mois ? '#fff' : '#475569' }}>
-                          {d.label || `${d.jour_du_mois} du mois`}
+                          {d.label || t('portail.contrat.day_of_month', { jour: d.jour_du_mois })}
                         </button>
                       ))}
                     </div>
@@ -795,32 +793,32 @@ export default function ContratPage() {
                 {m.type === 'sepa' && (
                   <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 16 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#166534', marginBottom: 12 }}>
-                      {mandatExistant ? '✓ Mandat SEPA existant — vérifiez les informations' : 'Nouveau mandat de prélèvement SEPA'}
+                      {mandatExistant ? t('portail.contrat.sepa.existing') : t('portail.contrat.sepa.new')}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div><label style={lbl}>IBAN *</label><input style={inp} value={sepaIban} onChange={e => { ks(); setSepaIban(e.target.value) }} placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" /></div>
+                      <div><label style={lbl}>{t('portail.contrat.sepa.iban')}</label><input style={inp} value={sepaIban} onChange={e => { ks(); setSepaIban(e.target.value) }} placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" /></div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                        <div><label style={lbl}>BIC *</label><input style={inp} value={sepaBic} onChange={e => { ks(); setSepaBic(e.target.value) }} placeholder="BNPAFRPP" /></div>
-                        <div><label style={lbl}>Titulaire du compte *</label><input style={inp} value={sepaTitulaire} onChange={e => { ks(); setSepaTitulaire(e.target.value) }} /></div>
+                        <div><label style={lbl}>{t('portail.contrat.sepa.bic')}</label><input style={inp} value={sepaBic} onChange={e => { ks(); setSepaBic(e.target.value) }} placeholder="BNPAFRPP" /></div>
+                        <div><label style={lbl}>{t('portail.contrat.sepa.titulaire')}</label><input style={inp} value={sepaTitulaire} onChange={e => { ks(); setSepaTitulaire(e.target.value) }} /></div>
                       </div>
                       <div>
-                        <label style={lbl}>RIB (PDF ou image)</label>
+                        <label style={lbl}>{t('portail.contrat.sepa.rib')}</label>
                         <input ref={ribRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadRib(f) }} />
                         {sepaRibUploaded ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: 12, color: '#10B981', fontWeight: 600 }}>✓ {sepaRibUploaded.nom_fichier}</span>
-                            <button onClick={() => ribRef.current?.click()} style={{ fontSize: 11, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer' }}>Remplacer</button>
+                            <button onClick={() => ribRef.current?.click()} style={{ fontSize: 11, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer' }}>{t('portail.contrat.sepa.replace')}</button>
                           </div>
                         ) : (
                           <button onClick={() => ribRef.current?.click()} disabled={uploadingRib}
                             style={{ fontSize: 12, background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>
-                            {uploadingRib ? 'Upload...' : '📎 Joindre le RIB'}
+                            {uploadingRib ? t('portail.common.uploading') : t('portail.contrat.sepa.attach')}
                           </button>
                         )}
                       </div>
                       <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.5, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '10px 12px' }}>
-                        <strong>Créancier :</strong> {ecoleInfo?.nom_creancier || ecoleInfo?.nom || 'l\'établissement'}{ecoleInfo?.ics_sepa ? ` — ICS : ${ecoleInfo.ics_sepa}` : ''}<br />
-                        En signant ce contrat, vous autorisez {ecoleInfo?.nom_creancier || ecoleInfo?.nom || 'l\'établissement'} à envoyer des instructions à votre banque pour débiter votre compte.
+                        <strong>{t('portail.contrat.sepa.creancier')}</strong> {ecoleInfo?.nom_creancier || ecoleInfo?.nom || t('portail.contrat.sepa.etablissement_fallback')}{ecoleInfo?.ics_sepa ? t('portail.contrat.sepa.ics', { ics: ecoleInfo.ics_sepa }) : ''}<br />
+                        {t('portail.contrat.sepa.authorize', { nom: ecoleInfo?.nom_creancier || ecoleInfo?.nom || t('portail.contrat.sepa.etablissement_fallback') })}
                       </div>
                     </div>
                   </div>
@@ -832,26 +830,26 @@ export default function ContratPage() {
       </Section>
 
       {/* ── AUTORISATION IMAGE + OBSERVATIONS ── */}
-      <Section title="5. Autorisations et observations">
+      <Section title={t('portail.contrat.section.autorisations')}>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', fontSize: 13, color: '#1E293B' }}>
           <input type="checkbox" checked={autorisationImage} onChange={e => { ks(); setAutorisationImage(e.target.checked) }} style={{ marginTop: 2, flexShrink: 0, accentColor: '#2563EB' }} />
-          J'autorise la prise et l'utilisation d'images de mes enfants dans le cadre de la communication de {ecoleInfo?.nom || 'l\'institution scolaire'}.
+          {t('portail.contrat.image_auth', { nom: ecoleInfo?.nom || t('portail.contrat.institution_fallback') })}
         </label>
         <div>
-          <label style={lbl}>Observations</label>
-          <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={observations} onChange={e => { ks(); setObservations(e.target.value) }} placeholder="Remarques éventuelles..." />
+          <label style={lbl}>{t('portail.contrat.observations')}</label>
+          <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} value={observations} onChange={e => { ks(); setObservations(e.target.value) }} placeholder={t('portail.contrat.observations_ph')} />
         </div>
       </Section>
 
       {/* ── ENGAGEMENT + SIGNATURE ── */}
       <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>Engagement et signature</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 14 }}>{t('portail.contrat.engagement.title')}</div>
         <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', padding: '14px 18px', fontSize: 13, color: '#475569', lineHeight: 1.6, marginBottom: 16 }}>
-          Nous soussigné(e)s, <strong>{famForm.parent1_prenom} {famForm.parent1_nom}</strong>, reconnaissons avoir pris connaissance des tarifs pour l'année scolaire {anneeInscription} et approuvons le règlement de l'établissement. {totalAnnuel > 0 ? <>Nous nous engageons à régler la somme de <strong>{totalAnnuel.toLocaleString('fr-FR')} €</strong> selon les modalités choisies.</> : <span style={{ color: '#92400E' }}>⚠️ Le total de scolarité n'est pas encore calculé. Sélectionnez une classe pour chaque enfant.</span>}
+          <span dangerouslySetInnerHTML={{ __html: t('portail.contrat.engagement.intro', { parent: `${famForm.parent1_prenom} ${famForm.parent1_nom}`, annee: anneeInscription }) }} />{' '}{totalAnnuel > 0 ? <span dangerouslySetInnerHTML={{ __html: t('portail.contrat.engagement.somme', { total: totalAnnuel.toLocaleString('fr-FR') }) }} /> : <span style={{ color: '#92400E' }}>{t('portail.contrat.engagement.no_total')}</span>}
         </div>
 
-        <label style={lbl}>Signature *</label>
-        <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 8px' }}>Signez dans le cadre ci-dessous</p>
+        <label style={lbl}>{t('portail.contrat.signature')}</label>
+        <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 8px' }}>{t('portail.contrat.signature_hint')}</p>
         <div style={{ border: `2px solid ${signatureData ? '#10B981' : '#E2E8F0'}`, borderRadius: 10, overflow: 'hidden', background: '#fff', touchAction: 'none' }}>
           <canvas ref={canvasRef} width={600} height={150}
             style={{ display: 'block', width: '100%', cursor: 'crosshair' }}
@@ -859,15 +857,15 @@ export default function ContratPage() {
             onTouchStart={startSign} onTouchMove={drawSign} onTouchEnd={stopSign} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-          <button onClick={clearSign} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer' }}>↺ Effacer</button>
-          {signatureData && <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>✓ Signature enregistrée</span>}
+          <button onClick={clearSign} style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer' }}>{t('portail.common.signature.clear')}</button>
+          {signatureData && <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>{t('portail.common.signature.saved')}</span>}
         </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '11px 20px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>Annuler</button>
+        <button onClick={() => router.push('/portail/inscriptions')} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '11px 20px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>{t('portail.common.cancel')}</button>
         <button onClick={soumettre} disabled={saving || nouvelEnfantEnAttente} style={{ background: '#2563EB', border: 'none', borderRadius: 10, padding: '11px 28px', color: '#fff', fontSize: 14, fontWeight: 600, cursor: (saving || nouvelEnfantEnAttente) ? 'not-allowed' : 'pointer', opacity: (saving || nouvelEnfantEnAttente) ? 0.7 : 1 }}>
-          {saving ? 'Envoi...' : '📝 Soumettre le contrat'}
+          {saving ? t('portail.common.sending') : t('portail.contrat.submit')}
         </button>
       </div>
     </div>

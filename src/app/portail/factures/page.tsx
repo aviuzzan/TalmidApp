@@ -5,10 +5,11 @@ import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
+import { fmtDate } from '@/lib/format-date'
 
 export default function PortailFacturesPage() {
   const { anneeInscription } = useAnneeInscription()
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const parent = useParentCtx()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
@@ -162,7 +163,7 @@ export default function PortailFacturesPage() {
                 {avoirs.map((a: any) => (
                   <tr key={a.id} style={{ borderTop: '1px solid #F1F5F9' }}>
                     <td style={{ padding: '10px 16px', fontSize: 12, fontFamily: 'monospace', fontWeight: 600 }}>{a.numero || a.id.substring(0, 8)}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{new Date(a.date_emission).toLocaleDateString('fr-FR')}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{fmtDate(a.date_emission, lang)}</td>
                     <td style={{ padding: '10px 16px', fontSize: 12, color: '#475569' }}>{a.motif || '—'}</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{Number(a.montant).toLocaleString('fr-FR')} €</td>
                     <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: Number(a.montant_disponible) > 0 ? '#10B981' : '#94A3B8' }}>{Number(a.montant_disponible).toLocaleString('fr-FR')} €</td>
@@ -221,7 +222,7 @@ export default function PortailFacturesPage() {
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{t('portail.factures.invoice_no', { numero: facture.numero })}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{t('portail.factures.issued_on', { date: new Date(facture.date_emission).toLocaleDateString('fr-FR') })}</span>
+              <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{t('portail.factures.issued_on', { date: fmtDate(facture.date_emission, lang) })}</span>
             </div>
             {(() => {
               const map: any = {
@@ -384,7 +385,7 @@ export default function PortailFacturesPage() {
                   {prochaine && (
                     <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>{t('portail.factures.sched.next_label')}</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{new Date(prochaine.date_echeance).toLocaleDateString('fr-FR')}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{fmtDate(prochaine.date_echeance, lang)}</div>
                       <div style={{ fontSize: 11, color: joursAvant < 0 ? '#DC2626' : '#64748B', marginTop: 1 }}>
                         {joursAvant < 0 ? t('portail.factures.sched.late_by', { n: Math.abs(joursAvant) }) : joursAvant === 0 ? t('portail.factures.sched.today') : t('portail.factures.sched.in_days', { n: joursAvant, s: joursAvant > 1 ? 's' : '' })}
                       </div>
@@ -413,7 +414,7 @@ export default function PortailFacturesPage() {
                         return (
                           <tr key={e.id} style={{ borderTop: '1px solid #F1F5F9', background: isProchaine ? '#EFF6FF' : 'transparent' }}>
                             <td style={{ padding: '11px 16px', fontSize: 12, fontFamily: 'monospace', color: '#64748B', fontWeight: isProchaine ? 700 : 500 }}>{e.numero_cheque}</td>
-                            <td style={{ padding: '11px 16px', fontSize: 13, color: '#1E293B', fontWeight: isProchaine ? 700 : 500 }}>{new Date(e.date_echeance).toLocaleDateString('fr-FR')}</td>
+                            <td style={{ padding: '11px 16px', fontSize: 13, color: '#1E293B', fontWeight: isProchaine ? 700 : 500 }}>{fmtDate(e.date_echeance, lang)}</td>
                             <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 700, color: '#1E293B', textAlign: 'right' }}>{Number(e.montant).toLocaleString('fr-FR')} €</td>
                             <td style={{ padding: '11px 16px', fontSize: 12, color: '#475569' }}>
                               <span style={{ marginRight: 4 }}>{modeIcon(e.mode_paiement)}</span>{modeLabel(e.mode_paiement)}
@@ -436,7 +437,7 @@ export default function PortailFacturesPage() {
                       <div key={e.id} style={{ border: `1px solid ${isProchaine ? '#BFDBFE' : '#E2E8F0'}`, background: isProchaine ? '#EFF6FF' : '#fff', borderRadius: 10, padding: '10px 12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
-                            #{e.numero_cheque} · {new Date(e.date_echeance).toLocaleDateString('fr-FR')}
+                            #{e.numero_cheque} · {fmtDate(e.date_echeance, lang)}
                           </div>
                           <span style={{ background: b.bg, color: b.color, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>{b.label}</span>
                         </div>
@@ -485,7 +486,7 @@ export default function PortailFacturesPage() {
                   <tbody>
                     {reglements.map(r => (
                       <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9' }}>
-                        <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
+                        <td style={{ padding: '12px 16px', color: '#475569' }}>{fmtDate(r.date_reglement, lang)}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{labelModePaiement(r.mode_paiement)}</span>
                         </td>

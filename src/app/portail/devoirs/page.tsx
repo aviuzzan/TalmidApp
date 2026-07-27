@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useI18n } from '@/lib/i18n'
+import { dateLocale } from '@/lib/format-date'
 
 type Devoir = {
   id: string
@@ -19,7 +20,7 @@ type Enfant = { id: string; prenom: string; nom: string; classe_id: string | nul
 
 export default function PortailDevoirsPage() {
   const router = useRouter()
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [loading, setLoading] = useState(true)
   const [enfants, setEnfants] = useState<Enfant[]>([])
   const [devoirsParEnfant, setDevoirsParEnfant] = useState<Record<string, Devoir[]>>({})
@@ -75,7 +76,7 @@ export default function PortailDevoirsPage() {
     if (diff === 0) return t('portail.devoirs.due.today')
     if (diff === 1) return t('portail.devoirs.due.tomorrow')
     if (diff < 7) return t('portail.devoirs.due.in_days', { n: diff })
-    return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+    return d.toLocaleDateString(dateLocale(lang), { weekday: 'short', day: 'numeric', month: 'short' })
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>{t('portail.common.loading')}</div>

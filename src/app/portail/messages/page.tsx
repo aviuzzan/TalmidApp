@@ -4,12 +4,13 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { calcRetention, couleurRetention } from '@/lib/retention-messages'
 import { useI18n } from '@/lib/i18n'
+import { dateLocale } from '@/lib/format-date'
 
 type Tab = 'liste' | 'nouveau'
 
 export default function PortailMessagesPage() {
   const router = useRouter()
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [tab, setTab] = useState<Tab>('liste')
   const [profile, setProfile] = useState<any>(null)
   const [threads, setThreads] = useState<any[]>([])
@@ -127,7 +128,7 @@ export default function PortailMessagesPage() {
                   <div style={{ textAlign: 'right' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: statutColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{statutLabel}</span>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                      {new Date(th.last_message_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(th.last_message_at).toLocaleDateString(dateLocale(lang), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
                     {(() => {
                       const ret = calcRetention(th.last_message_at, dureeRetention)

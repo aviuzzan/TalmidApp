@@ -2,11 +2,12 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useI18n } from '@/lib/i18n'
+import { fmtDate } from '@/lib/format-date'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import OptionsContratSection from '@/components/OptionsContratSection'
 
 export default function PortailEnfantsPage() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const [enfants, setEnfants] = useState<any[]>([])
   const [ecoleId, setEcoleId] = useState('')
@@ -83,7 +84,7 @@ export default function PortailEnfantsPage() {
                       {e.prenom} {e.deuxieme_prenom ? `(${e.deuxieme_prenom})` : ''} {e.nom}
                     </h2>
                     <div style={{ fontSize: 12, color: '#64748B' }}>
-                      {e.date_naissance && <span style={{ marginRight: 12 }}>🎂 {new Date(e.date_naissance).toLocaleDateString('fr-FR')}</span>}
+                      {e.date_naissance && <span style={{ marginRight: 12 }}>🎂 {fmtDate(e.date_naissance, lang)}</span>}
                       {e.lieu_naissance && <span>📍 {e.lieu_naissance}</span>}
                     </div>
                   </div>
@@ -102,7 +103,7 @@ export default function PortailEnfantsPage() {
                   [t('portail.enfants.field.class'), e.classe ?? '—'],
                   [t('portail.enfants.field.regime'), REGIME[e.regime] ?? e.regime ?? '—'],
                   [t('portail.enfants.field.year'), e.annee_scolaire ?? '—'],
-                  [t('portail.enfants.field.entry'), e.date_entree ? new Date(e.date_entree).toLocaleDateString('fr-FR') : '—'],
+                  [t('portail.enfants.field.entry'), e.date_entree ? fmtDate(e.date_entree, lang) : '—'],
                   [t('portail.enfants.field.transport'), e.transport ?? t('portail.enfants.transport.none')],
                 ].map(([label, value]) => (
                   <div key={label} style={{ background: '#F8FAFC', borderRadius: 8, padding: '10px 12px' }}>

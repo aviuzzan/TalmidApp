@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useI18n } from '@/lib/i18n'
+import { fmtDate } from '@/lib/format-date'
 
 type Doc = {
   id: string
@@ -14,7 +15,7 @@ type Doc = {
 }
 
 export default function PortailDocumentsPage() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [loading, setLoading] = useState(true)
   const [docs, setDocs] = useState<Doc[]>([])
   const [filter, setFilter] = useState<string>('tous')
@@ -148,7 +149,7 @@ export default function PortailDocumentsPage() {
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B', marginBottom: 3 }}>{d.nom}</div>
                   <div style={{ fontSize: 11, color: '#64748B' }}>
-                    {TYPE_LABEL[d.type] || d.type} · {fmtSize(d.taille)} · {t('portail.documents.added_on', { date: new Date(d.created_at).toLocaleDateString('fr-FR') })}
+                    {TYPE_LABEL[d.type] || d.type} · {fmtSize(d.taille)} · {t('portail.documents.added_on', { date: fmtDate(d.created_at, lang) })}
                   </div>
                 </div>
                 <button onClick={() => download(d)}

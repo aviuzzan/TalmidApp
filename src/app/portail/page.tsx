@@ -6,9 +6,10 @@ import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import PushPrompt from '@/components/PushPrompt'
 import { useI18n } from '@/lib/i18n'
+import { fmtDate } from '@/lib/format-date'
 
 export default function PortailPage() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const parent = useParentCtx()
   const router = useRouter()
@@ -261,7 +262,7 @@ export default function PortailPage() {
         const titre = cfg.bandeau_titre?.trim() || t('portail.home.registrations_open.default_title', { annee: data.anneeInscription })
         const today = new Date().toISOString().split('T')[0]
         const dateLimite = cfg.date_cloture_inscription && cfg.date_cloture_inscription >= today
-          ? new Date(cfg.date_cloture_inscription).toLocaleDateString('fr-FR')
+          ? fmtDate(cfg.date_cloture_inscription, lang)
           : null
         const messageDefaut = dateLimite
           ? t('portail.home.registrations_open.msg_with_deadline', { annee: data.anneeInscription, date: dateLimite })

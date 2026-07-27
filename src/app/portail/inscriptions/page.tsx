@@ -8,6 +8,7 @@ import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import AideEtape from '@/components/portail/AideEtape'
 import { useI18n } from '@/lib/i18n'
+import { fmtDate } from '@/lib/format-date'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -58,7 +59,7 @@ export default function PortailInscriptionsPage() {
 
 // ── ONGLET 1 : DOSSIER (DDR + Contrat + Nouvel enfant) ──
 function DossierTab({ router }: { router: any }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const parent = useParentCtx()
   const [famille, setFamille] = useState<any>(null)
@@ -284,7 +285,7 @@ function DossierTab({ router }: { router: any }) {
             : contratBloqueParDDR
               ? t('portail.inscriptions.hero.sub_blocked_ddr')
               : config?.date_cloture_inscription
-                ? t('portail.inscriptions.hero.sub_deadline', { date: new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR') })
+                ? t('portail.inscriptions.hero.sub_deadline', { date: fmtDate(config.date_cloture_inscription, lang) })
                 : t('portail.inscriptions.hero.sub_default')
           const actionLabel = contrat ? t('portail.inscriptions.hero.btn_view') : t('portail.inscriptions.hero.btn_fill')
           return (
@@ -389,7 +390,7 @@ function DossierTab({ router }: { router: any }) {
             optional
             status={reduction && ['soumis', 'en_etude', 'accepte'].includes(reduction.statut) ? 'done' : reduction?.statut === 'brouillon' ? 'inprogress' : 'todo'}
             ouvert={reductionsOuvertes || !!reduction}
-            dateLimite={config?.date_cloture_reduction ? t('portail.inscriptions.ddr_card.date_before', { date: new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR') }) : null}
+            dateLimite={config?.date_cloture_reduction ? t('portail.inscriptions.ddr_card.date_before', { date: fmtDate(config.date_cloture_reduction, lang) }) : null}
             statutLabel={reduction ? formatStatut(reduction.statut).label : null}
             statutColor={reduction ? formatStatut(reduction.statut).color : null}
             onAction={() => router.push('/portail/inscriptions/reduction')}
@@ -466,13 +467,13 @@ function DossierTab({ router }: { router: any }) {
           {config.date_cloture_reduction && (reductionsOuvertes || !!reduction) && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B', marginBottom: 8 }}>
               <span>{t('portail.inscriptions.dates.ddr_close')}</span>
-              <span style={{ fontWeight: 600, color: '#1E293B' }}>{new Date(config.date_cloture_reduction).toLocaleDateString('fr-FR')}</span>
+              <span style={{ fontWeight: 600, color: '#1E293B' }}>{fmtDate(config.date_cloture_reduction, lang)}</span>
             </div>
           )}
           {config.date_cloture_inscription && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B' }}>
               <span>{t('portail.inscriptions.dates.contract_close')}</span>
-              <span style={{ fontWeight: 600, color: '#1E293B' }}>{new Date(config.date_cloture_inscription).toLocaleDateString('fr-FR')}</span>
+              <span style={{ fontWeight: 600, color: '#1E293B' }}>{fmtDate(config.date_cloture_inscription, lang)}</span>
             </div>
           )}
         </div>
@@ -483,7 +484,7 @@ function DossierTab({ router }: { router: any }) {
 
 // ── ONGLET 2 : FACTURE (année courante) ──
 function FactureTab() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const { anneeInscription } = useAnneeInscription()
   const [facture, setFacture] = useState<any>(null)
   const [lignes, setLignes] = useState<any[]>([])
@@ -550,7 +551,7 @@ function FactureTab() {
         <div>
           <a href={`/factures/${facture.id}/print?auto=true`} target="_blank" rel="noopener noreferrer" style={{ background: '#2563EB', color: '#fff', textDecoration: 'none', borderRadius: 6, padding: '5px 11px', fontSize: 11, fontWeight: 600, marginRight: 10 }}>{t('portail.inscriptions.invoice.pdf_short')}</a>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{t('portail.factures.invoice_no', { numero: facture.numero })}</span>
-          <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{t('portail.factures.issued_on', { date: new Date(facture.date_emission).toLocaleDateString('fr-FR') })}</span>
+          <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 10 }}>{t('portail.factures.issued_on', { date: fmtDate(facture.date_emission, lang) })}</span>
         </div>
         {(() => {
           const m: any = {
@@ -621,7 +622,7 @@ function FactureTab() {
                 const isAvoir = r.mode_paiement === 'avoir'
                 return (
                 <tr key={r.id} style={{ borderTop: '1px solid #F1F5F9', background: isAvoir ? '#FAF5FF' : 'transparent' }}>
-                  <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(r.date_reglement).toLocaleDateString('fr-FR')}</td>
+                  <td style={{ padding: '12px 16px', color: '#475569' }}>{fmtDate(r.date_reglement, lang)}</td>
                   <td style={{ padding: '12px 16px' }}>
                     <span style={{ background: isAvoir ? '#F3E8FF' : '#EFF6FF', color: isAvoir ? '#6B21A8' : '#2563EB', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
                       {isAvoir ? '🎁 Avoir imputé' : labelModePaiement(r.mode_paiement)}
