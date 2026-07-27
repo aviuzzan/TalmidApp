@@ -18,13 +18,17 @@ export async function POST(req: NextRequest) {
 
     // Vérifier que l'appelant est admin
     // FIX secu 27/07 : le select inclut ecole_id pour le check tenant
-    const { data: profile } = await supabase.from('profiles').select('role, ecole_id').eq('id', user.id).single()
-    if (!['admin', 'super_admin'].includes(profile?.role)) {
+    const { data: profile } = await supabase.from('profiles').select('role, ecole_id, acces_finances').eq('id', user.id).single()
+    if (!['admin', 'super_admin', 'agent'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
     // FIX secu 27/07 : check tenant — un admin ne peut générer le SEPA que pour sa propre école
     if (profile?.role !== 'super_admin' && profile?.ecole_id !== ecoleId) {
       return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
+    // llll2 : le verrou finances vaut aussi cote API (pas juste dans l'UI)
+    if (profile?.role !== 'super_admin' && profile?.acces_finances === false) {
+      return NextResponse.json({ error: 'Accès finances non accordé' }, { status: 403 })
     }
 
     // Récupérer les infos de l'école (ICS, créancier, IBAN école)

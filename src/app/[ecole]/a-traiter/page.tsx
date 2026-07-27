@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { getExerciceInscription } from '@/lib/annee-inscription'
+import AidePage from '@/components/ui/AidePage'
 
 /**
  * Inbox "À traiter" (simplification UX) : agrège en UNE page tout ce qui
@@ -125,6 +126,8 @@ export default function ATraiterPage() {
             : `${totalATraiter} élément${totalATraiter > 1 ? 's' : ''} en attente d'action · ${annee}`}
         </p>
       </div>
+
+      <AidePage route="a-traiter" />
 
       {/* Contrats soumis */}
       <SectionCard icon="📝" title="Contrats à valider" count={contratsSoumis.length} emptyLabel="Aucun contrat en attente">

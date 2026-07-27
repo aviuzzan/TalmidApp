@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { useI18n } from '@/lib/i18n'
+import { getSecteurScope, getSecteurNom } from '@/lib/secteur-scope'
 
 export default function EnfantsPage() {
   const { t } = useI18n()
@@ -19,6 +20,8 @@ export default function EnfantsPage() {
   const [classes, setClasses] = useState<any[]>([])
   const [showSortis, setShowSortis] = useState(false)
   const [contratMap, setContratMap] = useState<Record<string, string>>({}) // enfant_id → statut
+  // SECTEUR (llll2) : si le compte est restreint à un secteur, on affiche un badge et on filtre la liste
+  const [secteurScope, setSecteurScope] = useState<{ id: string; nom: string | null } | null>(null)
 
   useEffect(() => {
     if (ecole?.id && exerciceSelectionne?.id) load()
@@ -29,11 +32,29 @@ export default function EnfantsPage() {
     if (!ecole?.id || !exerciceSelectionne?.id) return
     setLoading(true)
     const s = createClient()
+
+    // SECTEUR (llll2) : charger le scope du compte connecté avant la liste
+    const { data: { session } } = await s.auth.getSession()
+    const scope = session ? await getSecteurScope(s, session.user.id) : { secteurId: null }
+    if (scope.secteurId) {
+      const nom = await getSecteurNom(s, scope.secteurId)
+      setSecteurScope({ id: scope.secteurId, nom })
+    } else {
+      setSecteurScope(null)
+    }
+
+    // SECTEUR (llll2) : si scope actif, jointure inner sur classes + filtre secteur
+    // (les élèves sans classe sortent alors de la vue, c'est voulu — ils n'appartiennent à aucun secteur)
+    let scoQuery = s.from('scolarites')
+      .select(scope.secteurId
+        ? 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(nom, parent1_email, parent1_telephone)), classes!inner(nom, secteur_id)'
+        : 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(nom, parent1_email, parent1_telephone)), classes(nom)')
+      .eq('ecole_id', ecole.id)
+      .eq('exercice_id', exerciceSelectionne.id)
+    if (scope.secteurId) scoQuery = scoQuery.eq('classes.secteur_id', scope.secteurId)
+
     const [{ data: sco }, { data: cls }, { data: contrats }] = await Promise.all([
-      s.from('scolarites')
-        .select('id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(nom, parent1_email, parent1_telephone)), classes(nom)')
-        .eq('ecole_id', ecole.id)
-        .eq('exercice_id', exerciceSelectionne.id),
+      scoQuery,
       s.from('classes').select('id, nom').eq('ecole_id', ecole.id).order('nom'),
       s.from('contrats_scolarisation')
         .select('id, statut, annee_scolaire, contrat_enfants(enfant_id)')
@@ -111,7 +132,16 @@ export default function EnfantsPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.enfants.title')}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.enfants.title')}</h1>
+            {/* SECTEUR (llll2) : badge discret indiquant que la vue est restreinte au secteur de l'agent */}
+            {secteurScope && (
+              <span title="Votre compte est restreint à ce secteur : seuls ses élèves sont affichés."
+                style={{ fontSize: 11, fontWeight: 600, color: '#3730A3', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 6, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                Secteur : {secteurScope.nom || '…'}
+              </span>
+            )}
+          </div>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
             {filtered.length} élève(s) ·{' '}
             <span style={{ fontWeight: 600, color: '#2563EB' }}>Année {exerciceSelectionne?.code || '…'}</span>

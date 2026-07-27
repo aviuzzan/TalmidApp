@@ -53,13 +53,17 @@ export async function GET(req: NextRequest) {
     if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     const { data: { user: caller } } = await supa.auth.getUser(token)
     if (!caller) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
-    const { data: profile } = await supa.from('profiles').select('role, ecole_id').eq('id', caller.id).single()
-    if (!['admin', 'super_admin'].includes(profile?.role)) {
+    const { data: profile } = await supa.from('profiles').select('role, ecole_id, acces_finances').eq('id', caller.id).single()
+    if (!['admin', 'super_admin', 'agent'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
     // FIX secu 27/07 : check tenant — un admin ne peut exporter que le FEC de sa propre école
     if (profile?.role !== 'super_admin' && profile?.ecole_id !== ecole_id) {
       return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
+    // llll2 : verrou finances cote API
+    if (profile?.role !== 'super_admin' && profile?.acces_finances === false) {
+      return NextResponse.json({ error: 'Accès finances non accordé' }, { status: 403 })
     }
 
     // Récupération données

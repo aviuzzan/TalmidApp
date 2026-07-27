@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import ProgressBar from '@/components/ui/ProgressBar'
+import AidePage from '@/components/ui/AidePage'
 
 export default function ComptesParentsPage() {
   const ecole = useEcole()
@@ -223,6 +224,7 @@ export default function ComptesParentsPage() {
           {inviteRunning ? 'Invitation en cours…' : '✉️ Inviter toutes les familles sans compte'}
         </button>
       </div>
+      <AidePage route="comptes-parents" />
       {(inviteRunning || (inviteProg.total > 0 && inviteProg.done < inviteProg.total)) && (
         <ProgressBar
           current={inviteProg.done}

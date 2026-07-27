@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useI18n } from '@/lib/i18n'
+import { getSecteurScope, getSecteurNom, getFamilleIdsSecteur } from '@/lib/secteur-scope'
 
 const SITUATIONS = [
   { value: 'marie', label: 'Marié(e)' }, { value: 'celibataire', label: 'Célibataire' },
@@ -35,6 +36,8 @@ export default function FamillesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  // SECTEUR (llll2) : si le compte est restreint à un secteur, badge + liste limitée
+  const [secteurScope, setSecteurScope] = useState<{ id: string; nom: string | null } | null>(null)
   const [sortBy, setSortBy] = useState<'numero' | 'nom' | 'tranche' | 'parent1'>('nom')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   function toggleSort(col: 'numero' | 'nom' | 'tranche' | 'parent1') {
@@ -56,12 +59,39 @@ export default function FamillesPage() {
   const load = useCallback(async () => {
     if (!ecole?.id) return
     const supabase = createClient()
+
+    // SECTEUR (llll2) : charger le scope du compte connecté
+    const { data: { session } } = await supabase.auth.getSession()
+    const scope = session ? await getSecteurScope(supabase, session.user.id) : { secteurId: null }
+    if (scope.secteurId) {
+      const nom = await getSecteurNom(supabase, scope.secteurId)
+      setSecteurScope({ id: scope.secteurId, nom })
+    } else {
+      setSecteurScope(null)
+    }
+
     const [{ data: fam }, { data: mds }, { data: trs }] = await Promise.all([
       supabase.from('familles').select('*').eq('ecole_id', ecole.id).order('date_creation', { ascending: false }),
       supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
       supabase.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecole.id).order('ordre'),
     ])
-    setFamilles(fam ?? []); setModes(mds ?? []); setTranchesList(trs ?? []); setLoading(false)
+
+    // SECTEUR (llll2) : restreindre aux familles ayant ≥1 enfant scolarisé dans le secteur.
+    // Filtrage par Set côté client plutôt qu'un .in('id', ids) : la requête charge déjà
+    // toutes les familles de l'école, et on évite ainsi la limite d'URL des .in() > 100 ids.
+    // Si 0 famille dans le secteur → liste vide (pas de crash).
+    let famList = fam ?? []
+    if (scope.secteurId) {
+      const famIds = await getFamilleIdsSecteur(supabase, ecole.id, scope.secteurId)
+      if (famIds.length === 0) {
+        famList = []
+      } else {
+        const idsSet = new Set(famIds)
+        famList = famList.filter((f: any) => idsSet.has(f.id))
+      }
+    }
+
+    setFamilles(famList); setModes(mds ?? []); setTranchesList(trs ?? []); setLoading(false)
   }, [ecole?.id])
 
   useEffect(() => { load() }, [load])
@@ -162,7 +192,16 @@ export default function FamillesPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.familles.title')}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.familles.title')}</h1>
+            {/* SECTEUR (llll2) : badge discret indiquant que la vue est restreinte au secteur de l'agent */}
+            {secteurScope && (
+              <span title="Votre compte est restreint à ce secteur : seules les familles ayant au moins un enfant scolarisé dans ce secteur sont affichées."
+                style={{ fontSize: 11, fontWeight: 600, color: '#3730A3', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 6, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                Secteur : {secteurScope.nom || '…'}
+              </span>
+            )}
+          </div>
           <p style={{ color: '#64748B', fontSize: 13 }}>{familles.length} famille{familles.length > 1 ? 's' : ''}</p>
         </div>
         <button className="btn-primary" onClick={() => { setForm(empty); setEditId(null); setShowForm(true); setError('') }}>

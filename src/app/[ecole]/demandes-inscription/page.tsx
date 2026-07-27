@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useI18n } from '@/lib/i18n'
+import AidePage from '@/components/ui/AidePage'
 
 /**
  * Demandes d'inscription : l'admin envoie un lien a un parent prospect,
@@ -157,6 +158,8 @@ export default function DemandesInscriptionPage() {
         </div>
         <button onClick={() => { setShowEnvoi(true); setEnvoiMsg(''); setEnvoiErr('') }} className="btn-primary">+ Envoyer un lien d&apos;inscription</button>
       </div>
+
+      <AidePage route="demandes-inscription" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
         <button onClick={() => setFiltre('envoye')} style={{ background: filtre === 'envoye' ? '#EFF6FF' : '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '14px 18px', textAlign: 'left', cursor: 'pointer' }}>

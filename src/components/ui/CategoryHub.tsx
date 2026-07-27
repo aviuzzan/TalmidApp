@@ -35,11 +35,11 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'facturation', nom: 'Bordereau chèques', description: 'Préparer une remise de chèques à la banque', icone: '🧾', href: 'finances/bordereau' },
     { code: 'compta', nom: 'Rapprochement bancaire', description: 'Importer un relevé bancaire et rapprocher les recettes contre les impayés', icone: '🏦', href: 'finances/rapprochement' },
     { code: 'compta', nom: 'Compta analytique', description: 'Ventilation par centre de coût', icone: '📈', href: 'finances/analytique' },
-    { code: 'compta', nom: 'Export SEPA', description: 'Générer un fichier de prélèvement bancaire', icone: '🏦', href: 'inscriptions/sepa' },
+    { code: 'compta', nom: 'Export SEPA', description: 'Générer un fichier de prélèvement bancaire', icone: '🏦', href: 'finances/sepa' },
     { code: 'paye', nom: 'Paie enseignants', description: 'Bulletins de paie + déclaration DSN mensuelle', icone: '💵', href: 'paie' },
   ],
   pedagogie: [
-    { code: 'pedagogie', nom: 'Programmes', description: 'Matières, cursus, objectifs', icone: '📚', href: 'pedagogie' },
+    // FIX nav llll2 : 'Programmes' etait un lien circulaire vers ce hub — retiré
     { code: 'professeurs', nom: 'Professeurs', description: 'Liste, fiches, assignations', icone: '👨‍🏫', href: 'professeurs' },
     { code: 'emplois_du_temps', nom: 'Emplois du temps', description: 'Grille hebdomadaire, conflits', icone: '📅', href: 'emplois-du-temps' },
     { code: 'pedagogie', nom: 'Devoirs', description: 'Cahier de textes : créer et publier les devoirs', icone: '✏️', href: 'devoirs' },
@@ -59,7 +59,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
   ],
   communication: [
     { code: 'messagerie', nom: 'Messagerie', description: 'Conversations avec les familles', icone: '💬', href: 'messages' },
-    { code: 'documents', nom: 'Documents école', description: 'Bibliothèque partagée', icone: '📂', href: 'documents' },
+    { code: 'documents', nom: 'Documents école', description: 'Bibliothèque partagée', icone: '📂', href: 'parametres?tab=documents_ecole' },
     { code: 'messagerie', nom: 'SMS', description: 'Envoi de SMS unitaires ou en masse', icone: '📱', href: 'sms' },
     { code: 'messagerie', nom: 'Notifications push', description: 'Alertes instantanées sur les appareils', icone: '🔔', href: 'notifications-push' },
     { code: 'parametres', nom: 'Notifications', description: 'Envoi de mails groupés', icone: '📧', href: 'notifications' },
@@ -107,7 +107,8 @@ export default function CategoryHub({ code }: { code: string }) {
   if (!cat) return <EcoleAppLayout><div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Catégorie inconnue</div></EcoleAppLayout>
 
   // Bypass total pour super_admin/admin/admin principal
-  const bypass = role === 'super_admin' || role === 'admin' || isAdminPrincipal
+  // llll2 : 'admin' ne bypasse plus les permissions (sauf aucune perm configurée = compat)
+  const bypass = role === 'super_admin' || isAdminPrincipal || (role === 'admin' && Object.keys(perms).length === 0)
 
   function moduleAccessible(m: ModuleInfo): { ok: boolean; niveau: Niveau } {
     if (m.code === 'parametres' && m.href.includes('comptes-acces')) {

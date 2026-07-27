@@ -27,11 +27,12 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Bordereau chèques', href: 'finances/bordereau', module: 'facturation' },
     { nom: 'Rapprochement bancaire', href: 'finances/rapprochement', module: 'compta' },
     { nom: 'Compta analytique', href: 'finances/analytique', module: 'compta' },
-    { nom: 'Export SEPA', href: 'inscriptions/sepa', module: 'compta' },
+    // FIX nav llll2 : la page SEPA vivait sous /inscriptions -> la sidebar basculait sur Administration
+    { nom: 'Export SEPA', href: 'finances/sepa', module: 'compta' },
     { nom: 'Paie enseignants', href: 'paie', module: 'paye' },
   ],
   pedagogie: [
-    { nom: 'Programmes', href: 'pedagogie', module: 'pedagogie' },
+    // FIX nav llll2 : 'Programmes' pointait vers le hub Pédagogie lui-même (lien circulaire) — retiré
     { nom: 'Professeurs', href: 'professeurs', module: 'professeurs' },
     { nom: 'Emplois du temps', href: 'emplois-du-temps', module: 'emplois_du_temps' },
     { nom: 'Devoirs', href: 'devoirs', module: 'pedagogie' },
@@ -51,7 +52,9 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
   ],
   communication: [
     { nom: 'Messagerie', href: 'messages', module: 'messagerie' },
-    { nom: 'Documents école', href: 'documents', module: 'documents' },
+    // FIX nav llll2 : 'Documents école' pointait vers une page inexistante (404) -> renvoie vers
+    // la gestion des documents publics (Paramètres > Documents N+1)
+    { nom: 'Documents école', href: 'parametres?tab=documents_ecole', module: 'documents' },
     { nom: 'SMS', href: 'sms', module: 'messagerie' },
     { nom: 'Notifications push', href: 'notifications-push', module: 'messagerie' },
     { nom: 'Notifications', href: 'notifications', module: 'parametres' },
@@ -124,7 +127,11 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
     // Le tableau de bord direction affiche des KPI financiers → meme verrou.
     const estDirection = m.href === 'direction'
     if ((estModuleFinancier || estDirection) && !accesFinances && role !== 'super_admin') return false
-    if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
+    // llll2 : le role 'admin' ne bypasse PLUS les permissions par module —
+    // seuls super_admin et l'admin principal ont tout. Un compte 'admin' sans
+    // AUCUNE permission configurée garde tout (compat comptes historiques).
+    if (role === 'super_admin' || isAdminPrincipal) return true
+    if (role === 'admin' && Object.keys(perms).length === 0) return true
     if (!permsLoaded) return true
     return (perms[m.module] || 'aucun') !== 'aucun'
   }

@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAccesFinances } from '@/lib/acces-finances'
 
 type ResultType = 'famille' | 'eleve' | 'facture' | 'professeur'
 
@@ -24,6 +25,7 @@ const TYPE_META: Record<ResultType, { icon: string; label: string; bg: string; f
 export default function GlobalSearch() {
   const router = useRouter()
   const ecole = useEcole()
+  const { acces: accesFinances } = useAccesFinances()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Result[]>([])
@@ -101,14 +103,17 @@ export default function GlobalSearch() {
         href: `/${ecole.slug}/enfants/${e.id}`,
       })
     }
-    for (const f of facts || []) {
-      res.push({
-        id: f.id,
-        type: 'facture',
-        title: f.numero,
-        subtitle: `${(f as any).familles?.nom || '—'} · Total ${Number(f.total_facture || 0).toFixed(0)}€ · Solde ${Number(f.solde_restant || 0).toFixed(0)}€`,
-        href: `/${ecole.slug}/finances`,
-      })
+    // llll2 : pas de resultats factures (montants/soldes) pour un compte sans acces finances
+    if (accesFinances) {
+      for (const f of facts || []) {
+        res.push({
+          id: f.id,
+          type: 'facture',
+          title: f.numero,
+          subtitle: `${(f as any).familles?.nom || '—'} · Total ${Number(f.total_facture || 0).toFixed(0)}€ · Solde ${Number(f.solde_restant || 0).toFixed(0)}€`,
+          href: `/${ecole.slug}/finances`,
+        })
+      }
     }
     for (const p of profs || []) {
       res.push({

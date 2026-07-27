@@ -4,6 +4,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { loadPermissions, hasAtLeast, Niveau } from '@/lib/permissions'
+import { getSecteurScope, familleDansSecteur } from '@/lib/secteur-scope'
 import { useAccesFinances } from '@/lib/acces-finances'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
 import { useAnneeScolaireActive } from '@/lib/exercice-context'
@@ -32,6 +33,8 @@ export default function FamilleDetailPage() {
   const confirm = useConfirm()
 
   const [famille, setFamille] = useState<any>(null)
+  // SECTEUR (llll2) : true si la fiche est hors du secteur de l'agent → écran "Accès limité"
+  const [horsSecteur, setHorsSecteur] = useState(false)
   const [enfants, setEnfants] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [transports, setTransports] = useState<any[]>([])
@@ -96,6 +99,19 @@ export default function FamilleDetailPage() {
 
   const load = useCallback(async () => {
     if (!ecole?.id) return
+
+    // SECTEUR (llll2) : si le compte est restreint à un secteur et que cette famille
+    // n'a aucun enfant scolarisé dans ce secteur → écran "Accès limité", pas de chargement.
+    const { data: { session: sessionScope } } = await supabase.auth.getSession()
+    if (sessionScope) {
+      const scope = await getSecteurScope(supabase, sessionScope.user.id)
+      if (scope.secteurId) {
+        const ok = await familleDansSecteur(supabase, id, scope.secteurId)
+        if (!ok) { setHorsSecteur(true); return }
+      }
+    }
+    setHorsSecteur(false)
+
     const [{ data: fam }, { data: enf }, { data: cls }, { data: trp }, { data: modes }, { data: tar }] = await Promise.all([
       supabase.from('familles').select('*').eq('id', id).single(),
       supabase.from('enfants').select('*').eq('famille_id', id).order('nom'),
@@ -443,6 +459,20 @@ export default function FamilleDetailPage() {
     load()
   }
 
+  // SECTEUR (llll2) : fiche hors du secteur de l'agent → pas de crash, message clair
+  if (horsSecteur) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 28, marginBottom: 10 }}>🔒</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#1E293B', marginBottom: 6 }}>Accès limité à votre secteur</div>
+        <div style={{ fontSize: 13, color: '#64748B', marginBottom: 16 }}>Cette famille n&apos;a aucun enfant scolarisé dans votre secteur.</div>
+        <button onClick={() => router.push(`/${ecole.slug}/familles`)}
+          style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 16px', fontSize: 13, color: '#475569', cursor: 'pointer' }}>
+          ← Retour aux familles
+        </button>
+      </div>
+    </div>
+  )
   if (!famille) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><div style={{ color: '#64748B' }}>Chargement...</div></div>
 
   const estSeparee = famille.situation_maritale === 'divorce' || famille.situation_maritale === 'separe'

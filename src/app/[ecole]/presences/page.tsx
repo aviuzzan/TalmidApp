@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import AidePage from '@/components/ui/AidePage'
 
 type Statut = 'present' | 'absent' | 'retard' | 'sortie_anticipee'
 type DemiJournee = 'matin' | 'apres_midi' | 'journee'
@@ -124,6 +125,8 @@ export default function PresencesPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Présences & absences</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Pointage quotidien par classe — matin / après-midi / journée</p>
       </div>
+
+      <AidePage route="presences" />
 
       {/* Contrôles */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end' }}>

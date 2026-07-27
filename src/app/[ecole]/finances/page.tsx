@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
 import { logAction } from '@/lib/audit-log'
+import AidePage from '@/components/ui/AidePage'
 
 type Tab = 'factures' | 'paiements'
 // Fallback si la table modes_reglement_ecole est vide ou indisponible.
@@ -232,6 +233,8 @@ export default function FinancesPage() {
           Gérer les tarifs →
         </button>
       </div>
+
+      <AidePage route="finances" />
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>

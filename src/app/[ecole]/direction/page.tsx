@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { calcDuADateBatch } from '@/lib/du-a-date'
+import AidePage from '@/components/ui/AidePage'
 
 type KPI = {
   familles: number
@@ -175,6 +176,8 @@ export default function TableauBordDirectionPage() {
           </button>
         </div>
       </div>
+
+      <AidePage route="direction" />
 
       {loading ? (
         <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Calcul des indicateurs…</div>

@@ -32,7 +32,8 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
         .eq('id', session.user.id)
         .single()
 
-      const estAdmin = profile && (profile.role === 'admin' || profile.role === 'super_admin')
+      // llll2 : le role 'agent' (compte limite a certains modules) accede aussi au back-office
+      const estAdmin = profile && (profile.role === 'admin' || profile.role === 'super_admin' || profile.role === 'agent')
 
       // GARDE MULTI-ECOLES (gggg2) : le contexte actif doit correspondre a l'ecole
       // de l'URL. Avant : aucun controle -> un admin d'Eschel pouvait ouvrir

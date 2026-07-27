@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import AidePage from '@/components/ui/AidePage'
 
 type Matiere = { id: string; nom: string; code: string | null; couleur: string }
 type Classe = { id: string; nom: string }
@@ -136,6 +137,8 @@ export default function NotesPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>📝 Notes & évaluations</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Création des évaluations + saisie des notes par classe.</p>
       </div>
+
+      <AidePage route="notes" />
 
       <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4 }}>
         {(['evaluations','matieres'] as const).map(t => (

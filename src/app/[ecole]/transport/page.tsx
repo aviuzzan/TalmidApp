@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
+import AidePage from '@/components/ui/AidePage'
 
 type Forfait = { id: string; nom: string; zone: string | null; trajet: string | null; prix: number; actif: boolean; ordre: number }
 
@@ -99,6 +100,8 @@ export default function TransportPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>🚌 Transport</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Forfaits transport scolaire, inscriptions, facturation.</p>
       </div>
+
+      <AidePage route="transport" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>

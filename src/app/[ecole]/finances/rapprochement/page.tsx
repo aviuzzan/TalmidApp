@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import AidePage from '@/components/ui/AidePage'
 
 type Mvt = {
   id: string; date_op: string; libelle: string; montant: number; reference: string | null;
@@ -165,6 +166,8 @@ export default function RapprochementPage() {
           Importez votre relevé bancaire et rapprochez automatiquement les recettes contre les factures impayées.
         </p>
       </div>
+
+      <AidePage route="finances-rapprochement" />
 
       {/* Bloc import CSV */}
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 18 }}>

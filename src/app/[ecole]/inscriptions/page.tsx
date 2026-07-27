@@ -10,6 +10,7 @@ import { creerFactureDepuisContrat } from '@/lib/facture-contrat'
 import { logAction } from '@/lib/audit-log'
 import { useI18n } from '@/lib/i18n'
 import { useToast } from '@/components/ui/Toast'
+import AidePage from '@/components/ui/AidePage'
 
 type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'a_relancer' | 'cheques'
 
@@ -141,6 +142,8 @@ export default function InscriptionsAdminPage() {
           </button>
         </div>
       </div>
+
+      <AidePage route="inscriptions" />
 
       {/* Onglets */}
       <div className="ecole-tabs" style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4 }}>

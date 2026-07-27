@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive } from '@/lib/exercice-context'
+import AidePage from '@/components/ui/AidePage'
 
 type Classe = { id: string; nom: string; ordre: number }
 type Enfant = { id: string; prenom: string; nom: string; classe_id: string | null }
@@ -145,6 +146,8 @@ export default function BulletinsPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>📋 Bulletins scolaires</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Génération auto à partir des notes saisies — exercice {annee}</p>
       </div>
+
+      <AidePage route="bulletins" />
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: '#F8FAFC', padding: 12, borderRadius: 10, border: '1px solid #E2E8F0' }}>
         <select value={trimestre} onChange={e => setTrimestre(Number(e.target.value))} style={inp}>

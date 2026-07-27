@@ -6,8 +6,19 @@ import { useEcole } from '@/lib/ecole-context'
 import { downloadCSV, formatDateCSV, formatMontantCSV } from '@/lib/csv-export'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
+import { COLONNES_FAMILLES, COLONNES_ELEVES, type ColonneExport } from '@/lib/export-colonnes'
 
 type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
+type ExportAvecColonnes = 'familles' | 'eleves'
+
+const COLS_CONFIG: Record<ExportAvecColonnes, ColonneExport[]> = {
+  familles: COLONNES_FAMILLES,
+  eleves: COLONNES_ELEVES,
+}
+
+function colonnesParDefaut(config: ColonneExport[]): string[] {
+  return config.filter(c => c.defaut).map(c => c.key)
+}
 
 export default function ExportsPage() {
   const router = useRouter()
@@ -18,6 +29,11 @@ export default function ExportsPage() {
   const [msg, setMsg] = useState('')
   const [tranches, setTranches] = useState<{ id: string, code: string, libelle: string }[]>([])
   const [filtreTrancheFamilles, setFiltreTrancheFamilles] = useState<string>('')
+  const [colsSelection, setColsSelection] = useState<Record<ExportAvecColonnes, string[]>>({
+    familles: colonnesParDefaut(COLONNES_FAMILLES),
+    eleves: colonnesParDefaut(COLONNES_ELEVES),
+  })
+  const [colsModal, setColsModal] = useState<ExportAvecColonnes | null>(null)
 
   useEffect(() => {
     if (!ecole?.id) return
@@ -25,14 +41,38 @@ export default function ExportsPage() {
       .select('id, code, libelle')
       .eq('ecole_id', ecole.id)
       .order('ordre').then(({ data }) => setTranches(data || []))
+    // Sélection de colonnes mémorisée par école (localStorage)
+    const lire = (type: ExportAvecColonnes): string[] => {
+      try {
+        const raw = localStorage.getItem(`talmid_export_cols_${type}_${ecole.id}`)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            const valides = parsed.filter((k: any) => COLS_CONFIG[type].some(c => c.key === k))
+            if (valides.length > 0) return valides
+          }
+        }
+      } catch { /* localStorage indisponible ou JSON corrompu → défaut */ }
+      return colonnesParDefaut(COLS_CONFIG[type])
+    }
+    setColsSelection({ familles: lire('familles'), eleves: lire('eleves') })
   }, [ecole?.id])
 
+  function setCols(type: ExportAvecColonnes, keys: string[]) {
+    setColsSelection(p => ({ ...p, [type]: keys }))
+    try {
+      localStorage.setItem(`talmid_export_cols_${type}_${ecole.id}`, JSON.stringify(keys))
+    } catch { /* localStorage indisponible */ }
+  }
+
   async function exportFamilles() {
+    const colonnes = COLONNES_FAMILLES.filter(c => colsSelection.familles.includes(c.key))
+    if (colonnes.length === 0) { setMsg('❌ Aucune colonne sélectionnée pour l\'export familles'); return }
     setLoading('familles'); setMsg('')
-    logAction(createClient(), ecole.id, 'export_csv', { type: 'familles', tranche_id: filtreTrancheFamilles || null })
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'familles', tranche_id: filtreTrancheFamilles || null, colonnes: colonnes.map(c => c.key) })
     const s = createClient()
     let query = s.from('familles')
-      .select('numero, nom, situation_maritale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent2_prenom, parent2_nom, parent2_email, parent2_telephone')
+      .select('numero, nom, situation_maritale, statut_dossier, mode_paiement, part_pere, part_mere, garde, autorite_parentale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent1_emploi, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, parent2_emploi, parent2_adresse, parent2_code_postal, parent2_ville')
       .eq('ecole_id', ecole.id)
     if (filtreTrancheFamilles) query = query.eq('tranche_id', filtreTrancheFamilles)
     const { data, error } = await query.order('nom')
@@ -41,45 +81,84 @@ export default function ExportsPage() {
     const trancheSelectionnee = filtreTrancheFamilles ? tranches.find(t => t.id === filtreTrancheFamilles) : null
     const suffixeFichier = trancheSelectionnee ? `-${trancheSelectionnee.code}` : ''
     const suffixeMsg = trancheSelectionnee ? ` (tranche ${trancheSelectionnee.code})` : ''
+    const rows = data.map((f: any) => {
+      const valeurs: Record<string, any> = {
+        numero: f.numero,
+        nom: f.nom,
+        situation_maritale: f.situation_maritale,
+        tranche_code: f.tranches_facturation?.code || '',
+        tranche_libelle: f.tranches_facturation?.libelle || '',
+        adresse: [f.parent1_adresse, f.parent1_code_postal, f.parent1_ville].filter(Boolean).join(' '),
+        parent1_prenom: f.parent1_prenom,
+        parent1_nom: f.parent1_nom,
+        parent1_email: f.parent1_email,
+        parent1_telephone: f.parent1_telephone,
+        parent2_prenom: f.parent2_prenom,
+        parent2_nom: f.parent2_nom,
+        parent2_email: f.parent2_email,
+        parent2_telephone: f.parent2_telephone,
+        mode_paiement: f.mode_paiement || '',
+        statut_dossier: f.statut_dossier || '',
+        parent1_emploi: f.parent1_emploi || '',
+        parent2_emploi: f.parent2_emploi || '',
+        part_pere: f.part_pere ?? '',
+        part_mere: f.part_mere ?? '',
+        garde: f.garde || '',
+        autorite_parentale: f.autorite_parentale || '',
+        parent2_adresse: f.parent2_adresse || '',
+        parent2_code_postal: f.parent2_code_postal || '',
+        parent2_ville: f.parent2_ville || '',
+      }
+      return colonnes.map(c => valeurs[c.key])
+    })
     downloadCSV(
       `familles-${ecole.slug}${suffixeFichier}-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Numéro', 'Nom famille', 'Situation', 'Code tranche', 'Libellé tranche', 'Adresse', 'Resp1 prénom', 'Resp1 nom', 'Resp1 email', 'Resp1 tél', 'Resp2 prénom', 'Resp2 nom', 'Resp2 email', 'Resp2 tél'],
-      data.map((f: any) => [
-        f.numero, f.nom, f.situation_maritale,
-        f.tranches_facturation?.code || '',
-        f.tranches_facturation?.libelle || '',
-        [f.parent1_adresse, f.parent1_code_postal, f.parent1_ville].filter(Boolean).join(' '),
-        f.parent1_prenom, f.parent1_nom, f.parent1_email, f.parent1_telephone,
-        f.parent2_prenom, f.parent2_nom, f.parent2_email, f.parent2_telephone,
-      ])
+      colonnes.map(c => c.label),
+      rows,
     )
     setMsg(`✓ ${data.length} familles exportées${suffixeMsg}`)
     setLoading('')
   }
 
   async function exportEleves() {
+    const colonnes = COLONNES_ELEVES.filter(c => colsSelection.eleves.includes(c.key))
+    if (colonnes.length === 0) { setMsg('❌ Aucune colonne sélectionnée pour l\'export élèves'); return }
     setLoading('eleves'); setMsg('')
-    logAction(createClient(), ecole.id, 'export_csv', { type: 'eleves' })
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'eleves', colonnes: colonnes.map(c => c.key) })
     const s = createClient()
     const { data, error } = await s.from('enfants')
-      .select('prenom, nom, date_naissance, classe_id, transport, instruction_religieuse, etude_garderie, statut_inscription, annee_scolaire, familles(numero, nom), classes(nom)')
+      .select('prenom, deuxieme_prenom, nom, genre, date_naissance, lieu_naissance, ine, regime, date_sortie, classe_id, transport, instruction_religieuse, etude_garderie, statut_inscription, annee_scolaire, familles(numero, nom, parent1_email, parent1_telephone), classes(nom)')
       .eq('annee_scolaire', annee)
       .order('nom')
     if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
     if (!data || data.length === 0) { setMsg(`Aucun élève trouvé pour ${annee}`); setLoading(''); return }
-    const rows = data.map((e: any) => [
-      e.prenom, e.nom, formatDateCSV(e.date_naissance),
-      e.familles?.numero || '', e.familles?.nom || '',
-      e.classes?.nom || '',
-      e.statut_inscription || '',
-      e.transport ? 'Oui' : 'Non',
-      e.instruction_religieuse ? 'Oui' : 'Non',
-      e.etude_garderie ? 'Oui' : 'Non',
-      e.annee_scolaire || '',
-    ])
+    const rows = data.map((e: any) => {
+      const valeurs: Record<string, any> = {
+        prenom: e.prenom,
+        nom: e.nom,
+        date_naissance: formatDateCSV(e.date_naissance),
+        famille_numero: e.familles?.numero || '',
+        famille_nom: e.familles?.nom || '',
+        classe: e.classes?.nom || '',
+        statut: e.statut_inscription || '',
+        transport: e.transport ? 'Oui' : 'Non',
+        instruction_religieuse: e.instruction_religieuse ? 'Oui' : 'Non',
+        etude_garderie: e.etude_garderie ? 'Oui' : 'Non',
+        annee: e.annee_scolaire || '',
+        deuxieme_prenom: e.deuxieme_prenom || '',
+        genre: e.genre || '',
+        lieu_naissance: e.lieu_naissance || '',
+        ine: e.ine || '',
+        regime: e.regime || '',
+        parent1_email: e.familles?.parent1_email || '',
+        parent1_telephone: e.familles?.parent1_telephone || '',
+        date_sortie: formatDateCSV(e.date_sortie),
+      }
+      return colonnes.map(c => valeurs[c.key])
+    })
     downloadCSV(
       `eleves-${annee}-${ecole.slug}.csv`,
-      ['Prénom', 'Nom', 'Date naissance', 'N° famille', 'Nom famille', 'Classe', 'Statut', 'Transport', 'Instruction religieuse', 'Étude/Garderie', 'Année'],
+      colonnes.map(c => c.label),
       rows,
     )
     setMsg(`✓ ${rows.length} élèves exportés (${annee})`)
@@ -219,6 +298,7 @@ export default function ExportsPage() {
 
   const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }
   const btn: React.CSSProperties = { background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }
+  const btnSec: React.CSSProperties = { background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }
 
   const exports: { id: ExportType; titre: string; desc: string; icon: string; fn: () => Promise<void>; depend_annee: boolean }[] = [
     { id: 'familles', titre: 'Familles', desc: 'Toutes les familles avec responsables et contacts.', icon: '👨‍👩‍👧', fn: exportFamilles, depend_annee: false },
@@ -277,10 +357,17 @@ export default function ExportsPage() {
                 ))}
               </select>
             )}
-            <button onClick={e.fn} disabled={loading === e.id}
-              style={{ ...btn, opacity: loading === e.id ? 0.6 : 1, cursor: loading === e.id ? 'wait' : 'pointer', alignSelf: 'flex-start' }}>
-              {loading === e.id ? 'Génération…' : '⬇ Télécharger CSV'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={e.fn} disabled={loading === e.id}
+                style={{ ...btn, opacity: loading === e.id ? 0.6 : 1, cursor: loading === e.id ? 'wait' : 'pointer' }}>
+                {loading === e.id ? 'Génération…' : '⬇ Télécharger CSV'}
+              </button>
+              {(e.id === 'familles' || e.id === 'eleves') && (
+                <button onClick={() => setColsModal(e.id as ExportAvecColonnes)} style={btnSec}>
+                  ⚙ Colonnes ({colsSelection[e.id as ExportAvecColonnes].length})
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -288,6 +375,59 @@ export default function ExportsPage() {
       <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 14, fontSize: 12, color: '#1E40AF' }}>
         ℹ️ Les fichiers CSV s&apos;ouvrent directement dans Excel, LibreOffice ou Google Sheets. UTF-8 BOM inclus pour les accents.
       </div>
+
+      {/* Modal choix des colonnes (Familles / Élèves) */}
+      {colsModal && (() => {
+        const type = colsModal
+        const config = COLS_CONFIG[type]
+        const sel = colsSelection[type]
+        const toggle = (key: string) => {
+          const next = sel.includes(key) ? sel.filter(k => k !== key) : [...sel, key]
+          // On conserve l'ordre canonique des colonnes
+          setCols(type, config.filter(c => next.includes(c.key)).map(c => c.key))
+        }
+        const exporter = type === 'familles' ? exportFamilles : exportEleves
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
+              <div style={{ padding: '24px 28px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', margin: 0 }}>
+                  ⚙ Colonnes de l&apos;export {type === 'familles' ? 'Familles' : 'Élèves'}
+                </h2>
+                <button onClick={() => setColsModal(null)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#64748B' }}>✕</button>
+              </div>
+
+              <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setCols(type, config.map(c => c.key))} style={{ ...btnSec, padding: '6px 12px', fontSize: 12 }}>Tout</button>
+                  <button onClick={() => setCols(type, [])} style={{ ...btnSec, padding: '6px 12px', fontSize: 12 }}>Rien</button>
+                  <button onClick={() => setCols(type, colonnesParDefaut(config))} style={{ ...btnSec, padding: '6px 12px', fontSize: 12 }}>Par défaut</button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                  {config.map(c => (
+                    <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', padding: '4px 0' }}>
+                      <input type="checkbox" checked={sel.includes(c.key)} onChange={() => toggle(c.key)} style={{ width: 15, height: 15, cursor: 'pointer' }} />
+                      {c.label}
+                      {!c.defaut && <span style={{ fontSize: 10, color: '#94A3B8' }}>(extra)</span>}
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E2E8F0', paddingTop: 16 }}>
+                  <span style={{ fontSize: 12, color: '#64748B' }}>{sel.length} colonne{sel.length > 1 ? 's' : ''} sélectionnée{sel.length > 1 ? 's' : ''}</span>
+                  <button
+                    onClick={() => { setColsModal(null); exporter() }}
+                    disabled={sel.length === 0}
+                    style={{ ...btn, opacity: sel.length === 0 ? 0.5 : 1, cursor: sel.length === 0 ? 'not-allowed' : 'pointer' }}>
+                    ⬇ Exporter avec ces colonnes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

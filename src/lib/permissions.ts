@@ -213,7 +213,10 @@ export function hasCategoryAccess(
   // Verrou financier transversal : si la categorie est financiere et acces_finances = false,
   // on bloque (la card sera grisee). Super_admin garde toujours l'acces.
   if (cat.code === 'finances' && !accesFinances && role !== 'super_admin') return false
-  if (role === 'super_admin' || role === 'admin' || isAdminPrincipal) return true
+  // llll2 : le role 'admin' ne bypasse plus les permissions par module.
+  // Compat : un admin sans AUCUNE permission configurée garde tout (comptes historiques).
+  if (role === 'super_admin' || isAdminPrincipal) return true
+  if (role === 'admin' && Object.keys(perms).length === 0) return true
   return cat.modules.some(m => {
     const n = perms[m] || 'aucun'
     return n !== 'aucun'

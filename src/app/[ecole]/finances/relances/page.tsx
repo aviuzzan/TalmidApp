@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
+import AidePage from '@/components/ui/AidePage'
 
 type Facture = {
   id: string
@@ -128,6 +129,8 @@ export default function RelancesPage() {
           Le solde annuel est affiché à part — une famille peut avoir un solde sans être en retard.
         </p>
       </div>
+
+      <AidePage route="finances-relances" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 14 }}>
