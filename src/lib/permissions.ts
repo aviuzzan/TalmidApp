@@ -47,11 +47,22 @@ export async function loadPermissions(
   profileId: string,
   ecoleId: string
 ): Promise<UserPermissions> {
-  const { data } = await supabase
+  // llll2 (fix revue Fable) : un echec de chargement laissait perms={} -> la regle de
+  // compat "admin sans perms = tout" ouvrait l'acces par erreur. On reessaye une fois
+  // sur erreur transitoire avant de retomber sur le comportement par defaut.
+  let { data, error } = await supabase
     .from('permissions_modules')
     .select('module_code, niveau')
     .eq('profile_id', profileId)
     .eq('ecole_id', ecoleId)
+  if (error) {
+    const retry = await supabase
+      .from('permissions_modules')
+      .select('module_code, niveau')
+      .eq('profile_id', profileId)
+      .eq('ecole_id', ecoleId)
+    data = retry.data
+  }
   const perms: Record<string, Niveau> = {}
   for (const p of data || []) perms[p.module_code] = p.niveau as Niveau
   const isAdminPrincipal = perms['parametres'] === 'admin'

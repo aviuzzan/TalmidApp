@@ -23,8 +23,11 @@ export default function EcoleAccueilPage() {
       const { data: { session } } = await s.auth.getSession()
       if (!session) { setChecking(false); return }
       const { data: profile } = await s.from('profiles').select('role').eq('id', session.user.id).single()
-      if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+      // llll2 (fix revue Fable) : 'agent' est un compte back-office (comme admin), pas un parent
+      if (['admin', 'super_admin', 'agent'].includes(profile?.role)) {
         router.push(`/${ecole.slug}/dashboard`)
+      } else if (profile?.role === 'teacher' || profile?.role === 'prof') {
+        router.push('/portail/prof')
       } else {
         router.push('/portail')
       }

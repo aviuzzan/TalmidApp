@@ -7,6 +7,7 @@ import { downloadCSV, formatDateCSV, formatMontantCSV } from '@/lib/csv-export'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
 import { COLONNES_FAMILLES, COLONNES_ELEVES, type ColonneExport } from '@/lib/export-colonnes'
+import { useAccesFinances } from '@/lib/acces-finances'
 
 type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
 type ExportAvecColonnes = 'familles' | 'eleves'
@@ -23,6 +24,7 @@ function colonnesParDefaut(config: ColonneExport[]): string[] {
 export default function ExportsPage() {
   const router = useRouter()
   const ecole = useEcole()
+  const { acces: accesFinances } = useAccesFinances()
   const annee = useAnneeScolaireActive()
   const { exercices, exerciceSelectionne, selectExercice } = useExercice()
   const [loading, setLoading] = useState<ExportType | ''>('')
@@ -300,14 +302,16 @@ export default function ExportsPage() {
   const btn: React.CSSProperties = { background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }
   const btnSec: React.CSSProperties = { background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }
 
-  const exports: { id: ExportType; titre: string; desc: string; icon: string; fn: () => Promise<void>; depend_annee: boolean }[] = [
+  // llll2 (fix revue Fable) : les 4 exports FINANCIERS ne sont proposes qu'avec acces_finances.
+  const exportsBase: { id: ExportType; titre: string; desc: string; icon: string; fn: () => Promise<void>; depend_annee: boolean; finance?: boolean }[] = [
     { id: 'familles', titre: 'Familles', desc: 'Toutes les familles avec responsables et contacts.', icon: '👨‍👩‍👧', fn: exportFamilles, depend_annee: false },
     { id: 'eleves', titre: 'Élèves', desc: 'Tous les élèves inscrits pour l\'exercice sélectionné.', icon: '🎓', fn: exportEleves, depend_annee: true },
-    { id: 'factures', titre: 'Factures', desc: 'Liste des factures avec montants, soldes, statuts.', icon: '💰', fn: exportFactures, depend_annee: true },
-    { id: 'reglements', titre: 'Règlements', desc: 'Tous les paiements encaissés (chèques, virements, CB…).', icon: '💸', fn: exportReglements, depend_annee: true },
-    { id: 'cheques', titre: 'Chèques (caution et autres)', desc: 'Suivi de tous les chèques (prévus, encaissés, restitués).', icon: '💳', fn: exportCheques, depend_annee: false },
-    { id: 'fec', titre: 'FEC — Fichier Échanges Comptables', desc: 'Export réglementaire France (BOFIP) pour votre comptable / contrôle fiscal. Format TXT normé.', icon: '📑', fn: exportFEC, depend_annee: true },
+    { id: 'factures', titre: 'Factures', desc: 'Liste des factures avec montants, soldes, statuts.', icon: '💰', fn: exportFactures, depend_annee: true, finance: true },
+    { id: 'reglements', titre: 'Règlements', desc: 'Tous les paiements encaissés (chèques, virements, CB…).', icon: '💸', fn: exportReglements, depend_annee: true, finance: true },
+    { id: 'cheques', titre: 'Chèques (caution et autres)', desc: 'Suivi de tous les chèques (prévus, encaissés, restitués).', icon: '💳', fn: exportCheques, depend_annee: false, finance: true },
+    { id: 'fec', titre: 'FEC — Fichier Échanges Comptables', desc: 'Export réglementaire France (BOFIP) pour votre comptable / contrôle fiscal. Format TXT normé.', icon: '📑', fn: exportFEC, depend_annee: true, finance: true },
   ]
+  const exports = exportsBase.filter(e => !e.finance || accesFinances)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

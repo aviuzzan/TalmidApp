@@ -22,13 +22,17 @@ export async function POST(req: NextRequest) {
     )
     const { data: { user } } = await sb.auth.getUser(token)
     if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
-    const { data: caller } = await sb.from('profiles').select('role, ecole_id').eq('id', user.id).single()
-    if (!['admin', 'super_admin'].includes(caller?.role)) {
+    const { data: caller } = await sb.from('profiles').select('role, ecole_id, acces_finances').eq('id', user.id).single()
+    if (!['admin', 'super_admin', 'agent'].includes(caller?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
     // FIX secu 27/07 : check tenant — un admin ne peut exporter la DSN que de sa propre école
     if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
       return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
+    // llll2 : la DSN (salaires/NIR) est financiere -> verrou acces_finances cote API
+    if (caller?.role !== 'super_admin' && caller?.acces_finances === false) {
+      return NextResponse.json({ error: 'Accès finances non accordé' }, { status: 403 })
     }
 
     const { data: ecole } = await sb.from('ecoles').select('nom, adresse, code_postal, ville, siren').eq('id', ecoleId).single()

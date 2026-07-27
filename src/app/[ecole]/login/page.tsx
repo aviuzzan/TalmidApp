@@ -65,7 +65,8 @@ export default function EcoleLoginPage() {
     const role = profile?.role
 
     if (mode === 'admin') {
-      if (role === 'admin' || role === 'super_admin') router.push(`/${ecole.slug}/dashboard`)
+      // llll2 : 'agent' est aussi un compte back-office
+      if (role === 'admin' || role === 'super_admin' || role === 'agent') router.push(`/${ecole.slug}/dashboard`)
       else { setError(t('login.no_admin_rights')); setLoading(false) }
     } else if (mode === 'professeur') {
       if (role === 'teacher') router.push('/portail/prof')

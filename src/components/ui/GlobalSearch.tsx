@@ -25,7 +25,7 @@ const TYPE_META: Record<ResultType, { icon: string; label: string; bg: string; f
 export default function GlobalSearch() {
   const router = useRouter()
   const ecole = useEcole()
-  const { acces: accesFinances } = useAccesFinances()
+  const { acces: accesFinances, loading: accesLoading } = useAccesFinances()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Result[]>([])
@@ -62,7 +62,10 @@ export default function GlobalSearch() {
     setLoading(true)
     const term = `%${clean}%`
 
-    const [{ data: fams }, { data: enfs }, { data: facts }, { data: profs }] = await Promise.all([
+    // llll2 (fix revue Fable) : la requete factures n'est meme PAS exécutée si le compte
+    // n'a pas acces_finances (avant : elle partait quand meme -> montants dans l'onglet Reseau).
+    const chercheFactures = accesFinances && !accesLoading
+    const [{ data: fams }, { data: enfs }, factsRes, { data: profs }] = await Promise.all([
       supabase.from('familles')
         .select('id, nom, numero, parent1_email, parent1_nom, parent1_prenom')
         .eq('ecole_id', ecole.id)
@@ -73,16 +76,20 @@ export default function GlobalSearch() {
         .eq('ecole_id', ecole.id)
         .or(`prenom.ilike.${term},nom.ilike.${term}`)
         .limit(8),
-      supabase.from('factures_solde')
-        .select('id, numero, statut, total_facture, solde_restant, familles(nom)')
-        .ilike('numero', term)
-        .limit(5),
+      chercheFactures
+        ? supabase.from('factures_solde')
+            .select('id, numero, statut, total_facture, solde_restant, familles!inner(nom, ecole_id)')
+            .eq('familles.ecole_id', ecole.id)
+            .ilike('numero', term)
+            .limit(5)
+        : Promise.resolve({ data: [] as any[] }),
       supabase.from('professeurs')
         .select('id, prenom, nom, matiere')
         .eq('ecole_id', ecole.id)
         .or(`prenom.ilike.${term},nom.ilike.${term}`)
         .limit(5),
     ])
+    const facts = (factsRes as any).data
 
     const res: Result[] = []
     for (const f of fams || []) {
@@ -103,17 +110,14 @@ export default function GlobalSearch() {
         href: `/${ecole.slug}/enfants/${e.id}`,
       })
     }
-    // llll2 : pas de resultats factures (montants/soldes) pour un compte sans acces finances
-    if (accesFinances) {
-      for (const f of facts || []) {
-        res.push({
-          id: f.id,
-          type: 'facture',
-          title: f.numero,
-          subtitle: `${(f as any).familles?.nom || '—'} · Total ${Number(f.total_facture || 0).toFixed(0)}€ · Solde ${Number(f.solde_restant || 0).toFixed(0)}€`,
-          href: `/${ecole.slug}/finances`,
-        })
-      }
+    for (const f of facts || []) {
+      res.push({
+        id: f.id,
+        type: 'facture',
+        title: f.numero,
+        subtitle: `${(f as any).familles?.nom || '—'} · Total ${Number(f.total_facture || 0).toFixed(0)}€ · Solde ${Number(f.solde_restant || 0).toFixed(0)}€`,
+        href: `/${ecole.slug}/finances`,
+      })
     }
     for (const p of profs || []) {
       res.push({
@@ -127,7 +131,7 @@ export default function GlobalSearch() {
     setResults(res)
     setHighlight(0)
     setLoading(false)
-  }, [ecole?.id, ecole?.slug, supabase])
+  }, [ecole?.id, ecole?.slug, supabase, accesFinances, accesLoading])
 
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)

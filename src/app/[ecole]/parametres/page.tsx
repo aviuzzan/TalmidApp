@@ -72,10 +72,10 @@ export default function ParametresPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
+  // llll2 (fix revue Fable) : accepter TOUT onglet valide passe en ?tab= (avant :
+  // ?tab=documents_ecole tombait sur 'classes'). 'inscriptions' = alias historique -> tarifs.
   const initTab: Tab = tabParam === 'inscriptions' ? 'tarifs'
-    : tabParam === 'tarifs' ? 'tarifs'
-    : tabParam === 'sepa' ? 'sepa'
-    : tabParam === 'notifications' ? 'notifications'
+    : (tabParam && TABS.some(t => t.id === tabParam)) ? (tabParam as Tab)
     : 'classes'
   const [tab, setTab] = useState<Tab>(initTab)
   const [cat, setCat] = useState<Cat>(catOfTab(initTab))

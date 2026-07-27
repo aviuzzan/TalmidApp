@@ -27,6 +27,14 @@ export default function FacturePrintPage() {
       const { data: { session } } = await s.auth.getSession()
       if (!session) { setError('Non connecté'); setLoading(false); return }
 
+      // llll2 (fix revue Fable) : page d'impression a la RACINE (hors [ecole]) — elle
+      // n'a pas de FinanceGuard. Verrou finances applique ici : super_admin OK, sinon
+      // acces_finances requis (un parent connecte voit ses propres factures via la RLS).
+      const { data: prof } = await s.from('profiles').select('role, acces_finances').eq('id', session.user.id).maybeSingle()
+      if (prof && prof.role !== 'super_admin' && prof.role !== 'parent' && prof.acces_finances === false) {
+        setError('Accès finances non accordé'); setLoading(false); return
+      }
+
       const { data: f } = await s.from('factures_solde').select('*').eq('id', id).maybeSingle()
       if (!f) { setError('Facture introuvable'); setLoading(false); return }
       setFacture(f)

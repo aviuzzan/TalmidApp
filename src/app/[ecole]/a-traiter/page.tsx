@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { useToast } from '@/components/ui/Toast'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import AidePage from '@/components/ui/AidePage'
+import { useAccesFinances } from '@/lib/acces-finances'
 
 /**
  * Inbox "À traiter" (simplification UX) : agrège en UNE page tout ce qui
@@ -17,6 +18,7 @@ export default function ATraiterPage() {
   const router = useRouter()
   const ecole = useEcole()
   const toast = useToast()
+  const { acces: accesFinances } = useAccesFinances()
   const [annee, setAnnee] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
@@ -96,7 +98,8 @@ export default function ATraiterPage() {
     load()
   }
 
-  const totalATraiter = contratsSoumis.length + ddrs.length + demandesOption.length + chequesAttente.length + demandesInscription.length
+  // llll2 : les cheques ne comptent dans le total que si l'utilisateur y a acces
+  const totalATraiter = contratsSoumis.length + ddrs.length + demandesOption.length + (accesFinances ? chequesAttente.length : 0) + demandesInscription.length
 
   const SectionCard = ({ icon, title, count, children, emptyLabel }: any) => (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, overflow: 'hidden' }}>
@@ -185,7 +188,8 @@ export default function ATraiterPage() {
         ))}
       </SectionCard>
 
-      {/* Chèques à réceptionner */}
+      {/* Chèques à réceptionner — llll2 : montants masques sans acces_finances */}
+      {accesFinances && (
       <SectionCard icon="🏦" title="Chèques en attente de réception" count={chequesAttente.length} emptyLabel="Aucun chèque en attente">
         {chequesAttente.map((c: any) => (
           <div key={c.id} style={rowStyle}>
@@ -200,6 +204,7 @@ export default function ATraiterPage() {
           </div>
         ))}
       </SectionCard>
+      )}
 
       {/* Demandes d'inscription */}
       <SectionCard icon="👨‍👩‍👧" title="Demandes d'inscription" count={demandesInscription.length} emptyLabel="Aucune demande d'inscription">

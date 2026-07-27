@@ -50,7 +50,7 @@ export default function ComptesAccesPage() {
     const { data: profs } = await s.from('profiles_with_email')
       .select('id, prenom, nom, email, role, secteur_id, acces_finances')
       .eq('ecole_id', ecole.id)
-      .in('role', ['admin', 'super_admin'])
+      .in('role', ['admin', 'super_admin', 'agent'])
       .order('nom')
     const adminsList = (profs ?? []) as Admin[]
     setAdmins(adminsList)

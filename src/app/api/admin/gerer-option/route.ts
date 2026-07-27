@@ -32,9 +32,13 @@ export async function POST(req: NextRequest) {
     const { data: userData } = await sb.auth.getUser(token)
     if (!userData?.user?.id) return NextResponse.json({ ok: false, error: 'Session invalide' }, { status: 401 })
 
-    const { data: profile } = await sb.from('profiles').select('role, ecole_id').eq('id', userData.user.id).single()
-    if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    const { data: profile } = await sb.from('profiles').select('role, ecole_id, acces_finances').eq('id', userData.user.id).single()
+    if (!profile || !['admin', 'super_admin', 'agent'].includes(profile.role)) {
       return NextResponse.json({ ok: false, error: 'Acces refuse' }, { status: 403 })
+    }
+    // llll2 : ajouter/gerer une option modifie la facture -> verrou finances cote API
+    if (profile.role !== 'super_admin' && profile.acces_finances === false) {
+      return NextResponse.json({ ok: false, error: 'Acces finances non accorde' }, { status: 403 })
     }
 
     if (action === 'ajouter_direct') {
