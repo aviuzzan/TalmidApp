@@ -79,6 +79,7 @@ export default function ContratPapierAdminPage() {
   // Aperçu / impression + modale succès
   const [apercu, setApercu] = useState(false)
   const [success, setSuccess] = useState<any>(null)
+  const [afficherAvecContrat, setAfficherAvecContrat] = useState(false)
 
   useEffect(() => { init() }, [ecole?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -93,7 +94,14 @@ export default function ContratPapierAdminPage() {
       s.from('ecoles').select('nom, adresse, ville, telephone, email_contact, logo_url, assurance_proposee, assurance_montant_annuel').eq('id', ecole.id).single(),
     ])
     setAnnee(insc.code)
-    setFamilles(fams ?? [])
+    // Marquer les familles qui ont DEJA un contrat valide pour l'annee d'inscription :
+    // par defaut la liste ne montre que les familles SANS contrat (le vrai cas d'usage
+    // du papier), avec une case pour afficher aussi les autres (correction/remplacement).
+    const { data: contratsValides } = await s
+      .from('contrats_scolarisation').select('famille_id')
+      .eq('ecole_id', ecole.id).eq('annee_scolaire', insc.code).eq('statut', 'valide')
+    const avecContrat = new Set(((contratsValides || []) as any[]).map(c => c.famille_id))
+    setFamilles((fams ?? []).map((f: any) => ({ ...f, a_contrat: avecContrat.has(f.id) })))
     setEcoleInfo(ecData)
     if (ecData && ecData.assurance_proposee === false) setAssuranceEcole(false)
     setLoading(false)
@@ -323,10 +331,12 @@ export default function ContratPapierAdminPage() {
 
   const fmt = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
   const famillesFiltrees = familles.filter((f: any) => {
+    if (!afficherAvecContrat && f.a_contrat && f.id !== familleId) return false
     const q = rechercheFamille.trim().toLowerCase()
     if (!q) return true
     return `${f.nom || ''} ${f.parent1_prenom || ''} ${f.parent1_nom || ''} ${f.numero || ''}`.toLowerCase().includes(q)
   })
+  const nbSansContrat = familles.filter((f: any) => !f.a_contrat).length
 
   // ─────────────────────────────────────────────────────────────
   // DOCUMENT A4 IMPRIMABLE (contrat semi-vierge)
@@ -467,15 +477,19 @@ export default function ContratPapierAdminPage() {
             <input style={inp} value={rechercheFamille} onChange={e => setRechercheFamille(e.target.value)} placeholder="Nom, prénom, n° famille..." />
           </div>
           <div>
-            <label style={lbl}>Famille *</label>
+            <label style={lbl}>Famille * <span style={{ textTransform: 'none', fontWeight: 400, color: '#94A3B8' }}>({nbSansContrat} sans contrat {annee})</span></label>
             <select style={inp} value={familleId} onChange={e => chargerFamille(e.target.value)}>
               <option value="">— Choisir une famille —</option>
               {famillesFiltrees.map((f: any) => (
-                <option key={f.id} value={f.id}>{f.nom}{f.parent1_prenom ? ` (${f.parent1_prenom} ${f.parent1_nom || ''})` : ''}{f.numero ? ` — n°${f.numero}` : ''}</option>
+                <option key={f.id} value={f.id}>{f.nom}{f.parent1_prenom ? ` (${f.parent1_prenom} ${f.parent1_nom || ''})` : ''}{f.numero ? ` — n°${f.numero}` : ''}{f.a_contrat ? ' — ⚠ contrat déjà validé' : ''}</option>
               ))}
             </select>
           </div>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748B', cursor: 'pointer' }}>
+          <input type="checkbox" checked={afficherAvecContrat} onChange={e => setAfficherAvecContrat(e.target.checked)} />
+          Afficher aussi les familles qui ont déjà un contrat validé (correction / remplacement)
+        </label>
         {loadingFamille && <div style={{ fontSize: 13, color: '#64748B' }}>Chargement de la famille...</div>}
         {contratExistant?.statut === 'valide' && (
           <div style={{ background: '#FFFBEB', border: '2px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E' }}>
