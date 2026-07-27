@@ -124,9 +124,13 @@ export default function ExportsPage() {
     logAction(createClient(), ecole.id, 'export_csv', { type: 'reglements' })
     const s = createClient()
     // FIX audit 24/07/2026 (#372) : colonne mode_paiement, pas mode (inexistante — la requete echouait)
+    // FIX audit 27/07/2026 : exclure les avoirs imputes (mode 'avoir') — ce ne sont pas
+    // des encaissements de tresorerie. Le FEC les exclut deja : les deux exports se
+    // rapprochent desormais. (L'export Factures a sa colonne "Avoirs imputes" dediee.)
     const { data, error } = await s.from('reglements')
       .select('date_reglement, montant, mode_paiement, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
       .eq('factures.annee_scolaire', annee)
+      .neq('mode_paiement', 'avoir')
       .order('date_reglement', { ascending: false })
     if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
     if (!data || data.length === 0) { setMsg(`Aucun règlement trouvé pour ${annee}`); setLoading(''); return }

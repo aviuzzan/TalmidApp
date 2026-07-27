@@ -115,9 +115,12 @@ async function handle(req: NextRequest) {
         : Infinity
 
       let niveauNum = 0
+      // FIX audit 27/07 : defauts alignes sur l'ecran Parametres > Relances (15/30/60).
+      // Avant : 7/15/30 ici -> une ecole sans config etait relancee 2x plus vite que
+      // ce que l'ecran de parametrage affichait.
       if (dernierNiveau === 0) niveauNum = 1
-      else if (dernierNiveau === 1 && joursDepuisDerniere >= Math.max(1, (cfg.delai_relance || 15) - (cfg.delai_rappel || 7))) niveauNum = 2
-      else if (dernierNiveau === 2 && joursDepuisDerniere >= Math.max(1, (cfg.delai_demeure || 30) - (cfg.delai_relance || 15))) niveauNum = 3
+      else if (dernierNiveau === 1 && joursDepuisDerniere >= Math.max(1, (cfg.delai_relance || 30) - (cfg.delai_rappel || 15))) niveauNum = 2
+      else if (dernierNiveau === 2 && joursDepuisDerniere >= Math.max(1, (cfg.delai_demeure || 60) - (cfg.delai_relance || 30))) niveauNum = 3
       if (niveauNum === 0) { ecoleSkipped++; continue }
       const niveau = NIVEAU_LABEL[niveauNum]
       const joursRetard = joursDepuisDerniere === Infinity ? 0 : joursDepuisDerniere

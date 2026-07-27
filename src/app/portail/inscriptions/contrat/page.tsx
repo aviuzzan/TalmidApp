@@ -474,12 +474,18 @@ export default function ContratPage() {
         //  - cheque : attente_reception (l'admin doit confirmer la reception physique)
         //  - tous les autres modes : prevu (visible directement dans l'echeancier)
         const statutInitial = modeReglement === 'cheque' ? 'attente_reception' : 'prevu'
+        // FIX audit 27/07 : la derniere echeance absorbe l'ecart d'arrondi pour que
+        // la somme des echeances = total annuel EXACT (avant : n x montant arrondi
+        // pouvait devier de quelques centimes -> echeancier != facture).
         const cheques = []
         for (let i = 0; i < nbEcheances; i++) {
           let m = moisDebut + i; let y = anneeDebut
           while (m > 11) { m -= 12; y++ }
           const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(jourEcheance).padStart(2, '0')}`
-          cheques.push({ contrat_id: contratId, famille_id: familleId, ecole_id: ecoleId, numero_cheque: i + 1, montant: montantEcheance, date_echeance: dateStr, statut: statutInitial, mode_paiement: modeReglement })
+          const montant = i === nbEcheances - 1
+            ? Math.round((totalAnnuel - montantEcheance * (nbEcheances - 1)) * 100) / 100
+            : montantEcheance
+          cheques.push({ contrat_id: contratId, famille_id: familleId, ecole_id: ecoleId, numero_cheque: i + 1, montant, date_echeance: dateStr, statut: statutInitial, mode_paiement: modeReglement })
         }
         await s.from('cheques_prevus').insert(cheques)
       }

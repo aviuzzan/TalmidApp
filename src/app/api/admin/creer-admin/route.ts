@@ -55,7 +55,9 @@ export async function POST(req: NextRequest) {
     const redirectTo = `${baseUrl}/auth/set-password?invited=1`
 
     // Cherche un user existant
-    const { data: existingList } = await supabaseAdmin.auth.admin.listUsers()
+    // FIX audit 27/07 : listUsers() pagine a 50 par defaut -> au-dela de 50 comptes,
+    // un email existant n'etait pas trouve (risque de doublon). perPage 1000.
+    const { data: existingList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     const existing = existingList?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
     let userId: string

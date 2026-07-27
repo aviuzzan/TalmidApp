@@ -376,7 +376,9 @@ export default function FinancesPage() {
           if (filtreDateFin && r.date_reglement > filtreDateFin) return false
           return true
         })
-        const totalPeriode = reglementsFiltres.reduce((s, r) => s + Number(r.montant || 0), 0)
+        // FIX audit 27/07 : le total "encaisse" exclut les avoirs imputes (pas de la
+        // tresorerie) — aligne sur le dashboard financier. Les avoirs restent listes.
+        const totalPeriode = reglementsFiltres.filter(r => r.mode_paiement !== 'avoir').reduce((s, r) => s + Number(r.montant || 0), 0)
         return (
           <>
             {/* Filtres */}

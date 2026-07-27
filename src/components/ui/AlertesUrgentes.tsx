@@ -45,8 +45,10 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
         { data: factAvecSolde },
         { count: chequesCount },
       ] = await Promise.all([
+        // FIX audit 27/07 : le portail ecrit 'soumis' (masculin) -> l'alerte ne se
+        // declenchait jamais avec ['soumise','en_attente']. Couvre les deux + en_etude.
         s.from('demandes_reduction').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecoleId).in('statut', ['soumise', 'en_attente']),
+          .eq('ecole_id', ecoleId).in('statut', ['soumis', 'soumise', 'en_attente', 'en_etude']),
         s.from('contrats_scolarisation').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecoleId).eq('statut', 'soumis'),
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })

@@ -54,8 +54,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Vérifier si un compte existe déjà avec cet email
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existing = existingUsers?.users?.find(u => u.email === email)
+    // FIX audit 27/07 : pagination listUsers (defaut 50 -> ratait les comptes existants)
+    // + comparaison case-insensitive (auth.users stocke l'email en lowercase)
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const existing = existingUsers?.users?.find(u => u.email?.toLowerCase() === String(email || '').toLowerCase())
 
     let userId: string
     let estNouveau = false

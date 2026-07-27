@@ -359,9 +359,9 @@ export default function FamilleDetailPage() {
       paye_par: reglementForm.paye_par || null,
     })
     if (err) { setError(err.message); setSaving(false); return }
-    const newTotal = reglements.reduce((s, r) => s + Number(r.montant), 0) + parseFloat(reglementForm.montant)
-    const statut = newTotal >= Number(facture.total_facture) ? 'paye' : newTotal > 0 ? 'partiel' : 'en_attente'
-    await supabase.from('factures').update({ statut }).eq('id', facture.id)
+    // FIX audit 27/07 : NE PLUS recalculer le statut a la main (incluait les avoirs,
+    // pouvait ecraser le calcul du trigger). Le trigger BDD trg_reglements_statut
+    // (recalc_statut_facture) est la source de verite unique.
     await logAction(supabase, ecole.id, 'reglement_cree', {
       facture_id: facture.id,
       famille_id: id,
@@ -838,7 +838,7 @@ export default function FamilleDetailPage() {
             <form onSubmit={saveReglement} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>{lbl('Montant (€)', true)}<input style={inp} type="number" min="0" step="0.01" value={reglementForm.montant} onChange={e => setReglementForm(p => ({ ...p, montant: e.target.value }))} required /></div>
               <div>{lbl('Date', true)}<input style={inp} type="date" value={reglementForm.date_reglement} onChange={e => setReglementForm(p => ({ ...p, date_reglement: e.target.value }))} required /></div>
-              <div>{lbl('Mode de paiement', true)}<select style={inp} value={reglementForm.mode_paiement} onChange={e => setReglementForm(p => ({ ...p, mode_paiement: e.target.value }))} required><option value="">-- Sélectionner --</option>{modesPaiement.map((m: any) => <option key={m.id} value={m.libelle}>{m.libelle}</option>)}</select></div>
+              <div>{lbl('Mode de paiement', true)}<select style={inp} value={reglementForm.mode_paiement} onChange={e => setReglementForm(p => ({ ...p, mode_paiement: e.target.value }))} required><option value="">-- Sélectionner --</option>{/* FIX audit 27/07 : stocker le CODE lowercase (especes/cheque/cb...), jamais le libellé capitalisé — sinon FEC, filtres et stats ratent ce règlement */}{modesPaiement.map((m: any) => <option key={m.id} value={(m.code || m.libelle || '').toLowerCase()}>{m.libelle}</option>)}</select></div>
               {estSeparee && <div>{lbl('Payé par', true)}<select style={inp} value={reglementForm.paye_par} onChange={e => setReglementForm(p => ({ ...p, paye_par: e.target.value }))} required><option value="">-- Sélectionner --</option><option value="parent1">Parent 1 — {famille.parent1_prenom} {famille.parent1_nom}</option><option value="parent2">Parent 2 — {famille.parent2_prenom} {famille.parent2_nom}</option></select></div>}
               <div>{lbl('Référence')}<input style={inp} value={reglementForm.reference} onChange={e => setReglementForm(p => ({ ...p, reference: e.target.value }))} placeholder="N° chèque, référence virement..." /></div>
               <div>{lbl('Notes')}<input style={inp} value={reglementForm.notes} onChange={e => setReglementForm(p => ({ ...p, notes: e.target.value }))} /></div>

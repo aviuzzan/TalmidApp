@@ -81,14 +81,22 @@ export function labelStatutDDR(code: string | null | undefined): string {
   if (!code) return '—'
   const c = String(code).toLowerCase()
   switch (c) {
+    // Valeurs REELLES en BDD (audit 27/07) : accepte / refuse / soumis / en_etude
+    case 'accepte':
     case 'accordee':
     case 'accordée':
       return 'Accordée'
+    case 'refuse':
     case 'refusee':
     case 'refusée':
       return 'Refusée'
+    case 'soumis':
     case 'soumise':
       return 'Soumise'
+    case 'en_etude':
+      return 'En étude'
+    case 'en_attente':
+      return 'En attente'
     case 'brouillon':
       return 'Brouillon'
     case 'a_revoir':

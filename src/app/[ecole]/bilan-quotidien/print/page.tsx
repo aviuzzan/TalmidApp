@@ -358,9 +358,9 @@ export default function BilanPrintPage() {
                 color={bilan.facturesRetard30Count > 0 ? '#991B1B' : '#065F46'} />
               <Kpi label={`Échéances 7j (${bilan.echeancesSemaineCount})`}
                 value={fmtEur(bilan.echeancesSemaineMontant)} color="#1E40AF" />
-              <Kpi label={`Échéances en retard (${bilan.echeancesRetardCount})`}
+              <Kpi label={`Échéances échues à pointer (${bilan.echeancesRetardCount})`}
                 value={fmtEur(bilan.echeancesRetardMontant)}
-                color={bilan.echeancesRetardCount > 0 ? '#991B1B' : '#065F46'} />
+                color={bilan.echeancesRetardCount > 0 ? '#B45309' : '#065F46'} />
               <Kpi label="Total échéances à venir" value={fmtEur(bilan.echeancesSemaineMontant + bilan.echeancesRetardMontant)} color="#1E40AF" />
             </KpiGrid>
           </Section>

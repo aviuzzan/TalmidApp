@@ -399,9 +399,12 @@ export default function BilanQuotidienPage() {
           <Kpi label="Échéances cette semaine"
             value={`${bilan.echeancesSemaineCount} · ${fmtEur(bilan.echeancesSemaineMontant)}`}
             color="#1E40AF" onClick={() => go('finances/bordereau')} />
-          <Kpi label="Échéances en retard"
+          {/* FIX audit 27/07 : renomme — ce KPI compte les echeances statut 'prevu' dont la
+              date est passee (action operationnelle : encaisser/pointer), PAS un retard de
+              paiement. Le vrai retard est le KPI "Retard reel" ci-dessus (du a date). */}
+          <Kpi label="Échéances échues à pointer"
             value={`${bilan.echeancesRetardCount} · ${fmtEur(bilan.echeancesRetardMontant)}`}
-            color={bilan.echeancesRetardCount > 0 ? '#991B1B' : '#065F46'}
+            color={bilan.echeancesRetardCount > 0 ? '#B45309' : '#065F46'}
             onClick={() => go('finances/bordereau')} />
         </KpiGrid>
       </Section>

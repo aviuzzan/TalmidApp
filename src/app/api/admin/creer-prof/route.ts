@@ -70,7 +70,8 @@ export async function POST(req: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
     const redirectTo = baseUrl + '/auth/set-password?invited=1'
 
-    const { data: existingList } = await supabaseAdmin.auth.admin.listUsers()
+    // FIX audit 27/07 : pagination listUsers (defaut 50 -> ratait les comptes existants)
+    const { data: existingList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     const existing = existingList?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
     let userId: string

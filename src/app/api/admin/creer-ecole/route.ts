@@ -87,7 +87,8 @@ export async function POST(req: NextRequest) {
     let adminUserId: string | null = null
     if (inviteErr) {
       // Si l'user existe déjà, on le trouve
-      const { data: existingList } = await sb.auth.admin.listUsers()
+      // FIX audit 27/07 : pagination listUsers (defaut 50 -> ratait les comptes existants)
+      const { data: existingList } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 })
       const existing = existingList?.users?.find((u: any) => u.email?.toLowerCase() === adminEmail.toLowerCase())
       if (existing) adminUserId = existing.id
     } else if (invited?.user) {

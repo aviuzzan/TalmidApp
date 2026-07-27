@@ -129,7 +129,9 @@ export default function IntegrationsPage() {
   const hint: React.CSSProperties = { fontSize: 11, color: '#94A3B8', marginTop: 4 }
 
   const meta = metas[provider]
-  const webhookUrl = (p: ProviderKey) => `https://talmidapp.fr/api/${p === 'gocardless' ? 'gocardless' : 'stripe'}/webhook?ecole=${ecole?.slug || ''}`
+  // FIX audit 27/07 : base URL depuis l'env (plus de hardcode talmidapp.fr)
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
+  const webhookUrl = (p: ProviderKey) => `${APP_URL}/api/${p === 'gocardless' ? 'gocardless' : 'stripe'}/webhook?ecole=${ecole?.slug || ''}`
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -305,7 +307,7 @@ export default function IntegrationsPage() {
                 placeholder={meta?.hints.webhook_secret ? `Configuré (****${meta.hints.webhook_secret})` : 'webhook secret'} style={inp} />
               <div style={hint}>
                 YouSign Dashboard → Webhooks → Ajouter :
-                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#F1F5F9', borderRadius: 4, fontSize: 11 }}>https://talmidapp.fr/api/yousign/webhook?ecole={ecole?.slug || ''}</code>
+                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#F1F5F9', borderRadius: 4, fontSize: 11 }}>{APP_URL}/api/yousign/webhook?ecole={ecole?.slug || ''}</code>
                 Events à cocher : <code>signature_request.activated</code>, <code>signature_request.done</code>, <code>signature_request.declined</code>, <code>signature_request.expired</code>
               </div>
             </div>
@@ -387,7 +389,7 @@ export default function IntegrationsPage() {
                 placeholder={meta?.hints.webhook_id ? `Configuré (****${meta.hints.webhook_id})` : 'webhook id'} style={inp} />
               <div style={hint}>
                 PayPal Dashboard → Webhooks → Ajouter :
-                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#F1F5F9', borderRadius: 4, fontSize: 11 }}>https://talmidapp.fr/api/paypal/webhook?ecole={ecole?.slug || ''}</code>
+                <code style={{ display: 'block', marginTop: 4, padding: 6, background: '#F1F5F9', borderRadius: 4, fontSize: 11 }}>{APP_URL}/api/paypal/webhook?ecole={ecole?.slug || ''}</code>
                 Events : <code>CHECKOUT.ORDER.APPROVED</code>, <code>PAYMENT.CAPTURE.COMPLETED</code>
               </div>
             </div>

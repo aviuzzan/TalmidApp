@@ -246,7 +246,8 @@ export async function POST(req: NextRequest) {
     let userId: string | null = null
 
     if (loginEmail) {
-      const { data: existingList } = await supabaseAdmin.auth.admin.listUsers()
+      // FIX audit 27/07 : pagination listUsers (defaut 50 -> ratait les comptes existants)
+      const { data: existingList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
       const existing = existingList?.users?.find(u => u.email?.toLowerCase() === loginEmail.toLowerCase())
       if (existing) {
         userId = existing.id

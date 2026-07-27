@@ -60,7 +60,8 @@ export default function TableauBordDirectionPage() {
         s.from('factures_solde').select('id, total_facture, total_regle, solde_restant, statut, familles!inner(ecole_id)').eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
         s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true }).eq('familles.ecole_id', ecole.id).eq('statut_inscription', 'sorti'),
         s.from('exercices').select('id, code').eq('ecole_id', ecole.id).order('code', { ascending: false }),
-        s.from('demandes_reduction').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('exercice_id', exerciceId).eq('statut', 'accordee'),
+        // FIX audit 27/07 : la BDD ecrit 'accepte' (jamais 'accordee') -> le KPI valait toujours 0
+        s.from('demandes_reduction').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('exercice_id', exerciceId).eq('statut', 'accepte'),
       ])
 
       // NOTE : depuis la refonte de la vue, `total_regle` EXCLUT les avoirs imputés

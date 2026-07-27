@@ -114,17 +114,20 @@ export default function CompteFamillePage() {
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
   if (!famille) return <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Famille introuvable</div>
 
-  const soldeTotal = factures.reduce((acc, f) => acc + Number(f.solde_restant || 0), 0)
-  const totalFacture = factures.reduce((acc, f) => acc + Number(f.total_facture || 0), 0)
-  const totalRegle = factures.reduce((acc, f) => acc + Number(f.total_regle || 0), 0)
-  const facturesOuvertes = factures.filter(f => Number(f.solde_restant) > 0 && f.statut !== 'annule' && f.statut !== 'brouillon')
+  // FIX audit 27/07 : exclure les factures annulees/brouillon des totaux et du grand
+  // livre 411 — sinon le releve imprime divergeait de la fiche famille (qui les exclut).
+  const facturesActives = factures.filter(f => !['annule', 'annulee', 'brouillon'].includes(String(f.statut || '').toLowerCase()))
+  const soldeTotal = facturesActives.reduce((acc, f) => acc + Number(f.solde_restant || 0), 0)
+  const totalFacture = facturesActives.reduce((acc, f) => acc + Number(f.total_facture || 0), 0)
+  const totalRegle = facturesActives.reduce((acc, f) => acc + Number(f.total_regle || 0), 0)
+  const facturesOuvertes = facturesActives.filter(f => Number(f.solde_restant) > 0)
 
   // Code de compte auxiliaire client (plan comptable : 411 = Clients)
   const auxBase = (famille.numero || famille.nom || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10)
   const auxCode = '411' + (auxBase || 'CLIENT')
 
   const mouvements: { date: string; type: 'facture' | 'reglement'; libelle: string; debit: number; credit: number; id: string }[] = []
-  for (const f of factures) {
+  for (const f of facturesActives) {
     mouvements.push({
       date: f.date_emission, type: 'facture',
       libelle: 'Facture ' + f.numero,
