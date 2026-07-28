@@ -153,7 +153,7 @@ export async function construireLignesFacture(
       .eq('annee_scolaire', annee)
       .eq('statut', 'accepte')
       .maybeSingle(),
-    s.from('tarifs_secteur').select('id, inclus_dans_reduction').eq('ecole_id', ecoleId),
+    s.from('tarifs_secteur').select('id, inclus_dans_reduction, montant').eq('ecole_id', ecoleId),
     s.from('frais_inscription_config').select('*').eq('ecole_id', ecoleId).eq('annee_scolaire', annee).maybeSingle(),
     enfantIds.length
       ? s.from('inscriptions_pedagogiques').select('enfant_id').eq('annee_scolaire', annee).in('enfant_id', enfantIds)
@@ -161,9 +161,21 @@ export async function construireLignesFacture(
   ])
   const nouveauxIds = new Set((pedagos || []).map((p: any) => p.enfant_id))
   const tarifMap: Record<string, boolean> = {}
+  const tarifMontantMap: Record<string, number> = {}
   ;(tarifsList || []).forEach((t: any) => {
     tarifMap[t.id] = t.inclus_dans_reduction !== false
+    if (t.montant != null) tarifMontantMap[t.id] = parseFloat(t.montant) || 0
   })
+
+  // FIX sécu audit 28/07 : le montant d'un poste est REPRIS depuis tarifs_secteur
+  // (jointure sur p.tarif_id) au lieu de faire confiance au montant JSON stocké
+  // dans contrat_enfants.postes (fourni à l'origine par le navigateur du parent).
+  // Fallback sur p.montant UNIQUEMENT pour les données historiques dont le
+  // tarif_id n'est plus retrouvable en base.
+  const montantPoste = (p: any): number =>
+    p?.tarif_id != null && tarifMontantMap[p.tarif_id] != null
+      ? tarifMontantMap[p.tarif_id]
+      : (parseFloat(p?.montant) || 0)
 
   const nf = { id: factureId }
   const lignes: any[] = []
@@ -193,7 +205,7 @@ export async function construireLignesFacture(
         const estScolarite = /scolarit/i.test(p.nom || '')
         return inclus && !estScolarite
       })
-      const totalInclusHorsScol = postesInclusHorsScol.reduce((s: number, p: any) => s + (parseFloat(p.montant) || 0), 0)
+      const totalInclusHorsScol = postesInclusHorsScol.reduce((s: number, p: any) => s + montantPoste(p), 0)
 
       // Scolarité enfant = part accordée - autres postes inclus (DP, etc.)
       // Si la part est inférieure aux autres postes inclus → réduction additionnelle sur DP
@@ -215,7 +227,7 @@ export async function construireLignesFacture(
       let excedentARepartir = Math.max(0, totalInclusHorsScol - partParEnfant)
       // Trier postes inclus pour appliquer la cascade (DP d'abord par défaut)
       for (const p of postesInclusHorsScol) {
-        const montantPlein = parseFloat(p.montant) || 0
+        const montantPlein = montantPoste(p)
         if (montantPlein <= 0) continue
         const reduc = Math.min(excedentARepartir, montantPlein)
         excedentARepartir -= reduc
@@ -234,7 +246,7 @@ export async function construireLignesFacture(
       // Postes NON inclus dans la réduction (Navette, Car de ramassage) → plein tarif
       const postesNonInclus = postesContrat.filter((p: any) => tarifMap[p.tarif_id] === false)
       for (const p of postesNonInclus) {
-        const m = parseFloat(p.montant) || 0
+        const m = montantPoste(p)
         if (m <= 0) continue
         lignes.push({
           facture_id: nf.id,
@@ -255,7 +267,7 @@ export async function construireLignesFacture(
       const classe = e.classe_prevue ? ` (${e.classe_prevue})` : ''
       if (postes.length > 0) {
         for (const p of postes) {
-          const montant = parseFloat(p.montant) || 0
+          const montant = montantPoste(p)
           if (montant <= 0) continue
           const nom = p.nom || 'Poste'
           // Déductibilité : true par défaut (scolarité), mais selon tarifMap si renseigné.

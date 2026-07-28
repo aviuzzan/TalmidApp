@@ -11,6 +11,7 @@ export default function PortailEnfantsPage() {
   const { anneeInscription } = useAnneeInscription()
   const [enfants, setEnfants] = useState<any[]>([])
   const [ecoleId, setEcoleId] = useState('')
+  const [modulesActifs, setModulesActifs] = useState<string[] | null>(null) // null = tous actifs
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -23,6 +24,17 @@ export default function PortailEnfantsPage() {
         .from('profiles').select('famille_id, ecole_id').eq('id', session.user.id).single()
       if (!profile?.famille_id) { setLoading(false); return }
       setEcoleId(profile.ecole_id || '')
+
+      // Modules portail actifs de l'ecole (meme lecture que le layout portail) :
+      // permet de masquer les tuiles bulletins/devoirs/sante si le module est desactive.
+      if (profile.ecole_id) {
+        const { data: ecoleConf } = await supabase
+          .from('ecoles').select('portail_modules_actifs')
+          .eq('id', profile.ecole_id).single()
+        if (Array.isArray((ecoleConf as any)?.portail_modules_actifs)) {
+          setModulesActifs((ecoleConf as any).portail_modules_actifs)
+        }
+      }
 
       const { data } = await supabase
         .from('enfants').select('*')
@@ -52,10 +64,15 @@ export default function PortailEnfantsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
         {[
-          { icon: '📊', label: t('portail.enfants.quick.bulletins'), href: '/portail/bulletins' },
-          { icon: '📚', label: t('portail.enfants.quick.devoirs'), href: '/portail/devoirs' },
-          { icon: '🏥', label: t('portail.enfants.quick.sante'), href: '/portail/sante' },
-        ].map(s => (
+          { icon: '📊', label: t('portail.enfants.quick.bulletins'), href: '/portail/bulletins', modules: ['pedagogie'] },
+          { icon: '📚', label: t('portail.enfants.quick.devoirs'), href: '/portail/devoirs', modules: ['pedagogie'] },
+          { icon: '🏥', label: t('portail.enfants.quick.sante'), href: '/portail/sante', modules: ['pedagogie', 'administratif'] },
+        ].filter(s => {
+          // Meme regle que le layout portail : null = tous les modules actifs,
+          // sinon la tuile est visible si au moins un module requis est actif.
+          if (!modulesActifs) return true
+          return s.modules.some(m => modulesActifs.includes(m))
+        }).map(s => (
           <a key={s.href} href={s.href}
             style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12, transition: 'border-color 0.15s' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2563EB' }}

@@ -7,6 +7,7 @@ import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
+import { validerIban, formaterIban, nettoyerIban, validerBic } from '@/lib/iban'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -21,7 +22,9 @@ export default function ContratPage() {
   const router = useRouter()
   const parent = useParentCtx()
   const { t } = useI18n()
-  const ks = () => {} // no-op (ancien hack scroll cassait la saisie)
+  // Marqueur « formulaire modifié » (ex no-op scroll) : alimente le garde beforeunload.
+  const dirtyRef = useRef(false)
+  const ks = () => { dirtyRef.current = true }
 
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
@@ -75,6 +78,18 @@ export default function ContratPage() {
   const [signatureData, setSignatureData] = useState('')
 
   useEffect(() => { load() }, [])
+
+  // Garde : avertir avant de fermer/rafraîchir l'onglet si le formulaire a été
+  // modifié et non soumis (pas d'autosave — simple garde-fou, audit 28/07).
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   async function load() {
     const s = createClient()
@@ -212,6 +227,7 @@ export default function ContratPage() {
   }
 
   function setEnfantClasse(enfantId: string, classeId: string) {
+    ks()
     const cls = classes.find((c: any) => c.id === classeId)
     setEnfantsContrat(prev => prev.map(e => {
       if (e.enfant_id !== enfantId) return e
@@ -319,6 +335,7 @@ export default function ContratPage() {
   }
 
   function stopSign() {
+    if (isDrawing.current) ks()
     isDrawing.current = false
     if (canvasRef.current) setSignatureData(canvasRef.current.toDataURL('image/png'))
   }
@@ -345,6 +362,15 @@ export default function ContratPage() {
     if (!modeReglement) { alert(t('portail.contrat.err.select_mode')); return }
     // (caution chèques retirée — plus exigée)
     if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { alert(t('portail.contrat.err.sepa_missing')); return }
+    // FIX audit 28/07 : validation IBAN (format + clé MOD 97) et BIC avant soumission
+    if (modeReglement === 'sepa' && !validerIban(sepaIban)) {
+      alert(t('portail.contrat.err.iban_invalide', "L'IBAN saisi est invalide. Vérifiez votre saisie (ex. FR76 3000 6000 0112 3456 7890 189)."))
+      return
+    }
+    if (modeReglement === 'sepa' && !validerBic(sepaBic)) {
+      alert(t('portail.contrat.err.bic_invalide', 'Le BIC saisi est invalide : 8 ou 11 caractères attendus (ex. BNPAFRPP).'))
+      return
+    }
     if (!signatureData) { alert(t('portail.contrat.err.sign')); return }
     if (nouvelEnfantEnAttente) {
       alert(t('portail.contrat.err.child_pending'))
@@ -407,90 +433,56 @@ export default function ContratPage() {
       sigUrl = json.url || ''
     }
 
-    const payload: any = {
-      famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription,
-      demande_reduction_id: reductionAccordee ? (await s.from('demandes_reduction').select('id').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).single()).data?.id : null,
-      assurance_ecole: assuranceEcole, assurance_montant_total: totalAssurance,
-      mode_reglement: modeReglement, nb_echeances: nbEcheances,
-      montant_total: totalAnnuel, autorisation_image: autorisationImage,
-      caution_acceptee: cautionAcceptee, observations: observations || null,
-      engagement_lu: true, statut: 'soumis', soumis_le: new Date().toISOString(),
-      signature_url: sigUrl, signature_date: new Date().toISOString(),
-      droit_image: autorisationImage,
+    // ── Soumission transactionnelle côté serveur (FIX sécu audit 28/07) ──
+    // Les montants ne partent plus du navigateur : la RPC SECURITY DEFINER
+    // soumettre_contrat_famille (db/migrations/2026-07-28-rpc-soumettre-contrat.sql)
+    // recalcule tout (tarifs, tranche, groupes exclusifs, réduction famille
+    // nombreuse, tarif accordé DDR, assurance) puis écrit atomiquement
+    // contrat + contrat_enfants + échéancier (jour clampé au dernier jour du
+    // mois) + mandat SEPA. On n'envoie QUE des identifiants et des choix.
+    const enfantsPayload = enfantsContrat
+      .filter(e => e.classe_id)
+      .map(e => ({
+        enfant_id: e.enfant_id,
+        classe_id: e.classe_id,
+        tarif_ids: (e.postes || []).map((p: any) => p.tarif_id).filter(Boolean),
+      }))
+
+    const { data: rpcData, error: rpcErr } = await s.rpc('soumettre_contrat_famille', {
+      p_contrat_id: contrat?.id || null,
+      p_famille_id: familleId,
+      p_annee: anneeInscription,
+      p_enfants: enfantsPayload,
+      p_mode_paiement: modeReglement,
+      p_options: {
+        assurance_ecole: assuranceEcole,
+        autorisation_image: autorisationImage,
+        caution_acceptee: cautionAcceptee,
+        observations: observations || null,
+        signature_url: sigUrl,
+        nb_echeances: nbEcheances,
+        jour_echeance: dateEncaissement,
+        sepa: modeReglement === 'sepa' ? {
+          iban: nettoyerIban(sepaIban),
+          bic: sepaBic.trim().toUpperCase(),
+          titulaire: sepaTitulaire.trim(),
+          rib_url: sepaRibUploaded?.url || null,
+        } : null,
+      },
+    })
+
+    if (rpcErr || !rpcData) {
+      setSaving(false)
+      alert(t('portail.contrat.err.submit', { msg: rpcErr?.message || t('portail.common.err.unknown') }))
+      return
     }
 
-    let contratId = contrat?.id
-    if (contratId) {
-      const { data: upd, error: updErr } = await s.from('contrats_scolarisation').update(payload).eq('id', contratId).select()
-      if (updErr || !upd || upd.length === 0) {
-        setSaving(false)
-        alert(t('portail.contrat.err.submit', { msg: updErr?.message || t('portail.common.err.no_row') }))
-        return
-      }
-      await s.from('contrat_enfants').delete().eq('contrat_id', contratId)
-    } else {
-      const { data: nc, error: insErr } = await s.from('contrats_scolarisation').insert(payload).select().single()
-      if (insErr || !nc) {
-        setSaving(false)
-        alert(t('portail.contrat.err.create', { msg: insErr?.message || t('portail.common.err.unknown') }))
-        return
-      }
-      contratId = nc.id
-    }
-
-    if (contratId) {
-      for (const e of enfantsContrat.filter(ec => ec.classe_id)) {
-        const cls = classes.find((c: any) => c.id === e.classe_id)
-        await s.from('contrat_enfants').insert({ contrat_id: contratId, enfant_id: e.enfant_id, secteur_id: cls?.secteur_id || null, classe_prevue: e.classe_nom, postes: e.postes, sous_total: e.sous_total })
-      }
-
-      // Sauvegarder scolarité N actuelle pour N+1
-      await s.from('familles').update({ scolarite_n1: totalAnnuel, scolarite_n1_annee: anneeInscription }).eq('id', familleId)
-
-      // Mandat SEPA
-      if (modeReglement === 'sepa') {
-        // Prefixe RUM : 2 premieres lettres significatives du nom de l'ecole, sinon 'EC' (Etablissement)
-        const ecoleNomBrut = (ecoleInfo?.nom || '').toUpperCase()
-        const lettresEcole = ecoleNomBrut.replace(/[^A-Z]/g, '').slice(0, 2)
-        const prefixe = lettresEcole.length >= 2 ? lettresEcole : 'EC'
-        const rum = `${prefixe}-${famille?.numero || familleId.slice(0, 8)}-${new Date().getFullYear()}`
-        const mandatPayload = { famille_id: familleId, ecole_id: ecoleId, contrat_id: contratId, iban: sepaIban.replace(/\s/g, '').toUpperCase(), bic: sepaBic.toUpperCase(), titulaire_compte: sepaTitulaire, rib_url: sepaRibUploaded?.url || null, rum, date_signature: new Date().toISOString().split('T')[0], actif: true }
-        if (mandatExistant) {
-          await s.from('mandats_sepa').update(mandatPayload).eq('id', mandatExistant.id)
-        } else {
-          await s.from('mandats_sepa').insert(mandatPayload)
-        }
-      }
-
-      // Générer échéances pour TOUS les modes — l'échéancier démarre en septembre.
-      // Avant : seulement cheque + sepa. Maintenant : aussi virement / especes / prelevement,
-      // pour que la facture annuelle ne soit pas marquee "impayee" tant qu'aucune echeance n'est echue.
-      if (nbEcheances > 0) {
-        await s.from('cheques_prevus').delete().eq('contrat_id', contratId)
-        // Année scolaire "2026-2027" => septembre 2026 (mois index 8)
-        const anneeDebut = parseInt(anneeInscription.split('-')[0]) || new Date().getFullYear()
-        const moisDebut = 8
-        // Jour du mois : utilise celui choisi par la famille, sinon 5 par defaut.
-        const jourEcheance = dateEncaissement || 5
-        // Statut initial :
-        //  - cheque : attente_reception (l'admin doit confirmer la reception physique)
-        //  - tous les autres modes : prevu (visible directement dans l'echeancier)
-        const statutInitial = modeReglement === 'cheque' ? 'attente_reception' : 'prevu'
-        // FIX audit 27/07 : la derniere echeance absorbe l'ecart d'arrondi pour que
-        // la somme des echeances = total annuel EXACT (avant : n x montant arrondi
-        // pouvait devier de quelques centimes -> echeancier != facture).
-        const cheques = []
-        for (let i = 0; i < nbEcheances; i++) {
-          let m = moisDebut + i; let y = anneeDebut
-          while (m > 11) { m -= 12; y++ }
-          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(jourEcheance).padStart(2, '0')}`
-          const montant = i === nbEcheances - 1
-            ? Math.round((totalAnnuel - montantEcheance * (nbEcheances - 1)) * 100) / 100
-            : montantEcheance
-          cheques.push({ contrat_id: contratId, famille_id: familleId, ecole_id: ecoleId, numero_cheque: i + 1, montant, date_echeance: dateStr, statut: statutInitial, mode_paiement: modeReglement })
-        }
-        await s.from('cheques_prevus').insert(cheques)
-      }
+    // Le serveur fait foi : si son total recalculé diffère de l'affichage local
+    // (tarif modifié entre-temps, manipulation...), on affiche le total serveur.
+    const totalServeur = Number((rpcData as any)?.montant_total)
+    if (Number.isFinite(totalServeur) && Math.abs(totalServeur - totalAnnuel) > 0.01) {
+      alert(t('portail.contrat.total_recalcule', { total: totalServeur.toLocaleString('fr-FR') },
+        "Le montant total a été recalculé par l'établissement : {total} €. C'est ce montant qui figure sur votre contrat."))
     }
 
     // Notification email aux admins (best-effort)
@@ -504,6 +496,7 @@ export default function ContratPage() {
       })
     } catch {}
 
+    dirtyRef.current = false // soumis : plus d'avertissement à la fermeture
     setSaving(false)
     router.push('/portail/inscriptions')
   }
@@ -796,9 +789,35 @@ export default function ContratPage() {
                       {mandatExistant ? t('portail.contrat.sepa.existing') : t('portail.contrat.sepa.new')}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div><label style={lbl}>{t('portail.contrat.sepa.iban')}</label><input style={inp} value={sepaIban} onChange={e => { ks(); setSepaIban(e.target.value) }} placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" /></div>
+                      <div>
+                        <label style={lbl}>{t('portail.contrat.sepa.iban')}</label>
+                        <input
+                          style={{ ...inp, fontFamily: 'monospace', borderColor: sepaIban && !validerIban(sepaIban) ? '#FCA5A5' : '#E2E8F0' }}
+                          value={sepaIban}
+                          onChange={e => { ks(); setSepaIban(formaterIban(e.target.value)) }}
+                          inputMode="text" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={42}
+                          placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" />
+                        {sepaIban && !validerIban(sepaIban) && (
+                          <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>
+                            {t('portail.contrat.err.iban_invalide_hint', 'IBAN invalide — vérifiez les caractères saisis (2 lettres pays + 2 chiffres de clé + numéro de compte).')}
+                          </div>
+                        )}
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                        <div><label style={lbl}>{t('portail.contrat.sepa.bic')}</label><input style={inp} value={sepaBic} onChange={e => { ks(); setSepaBic(e.target.value) }} placeholder="BNPAFRPP" /></div>
+                        <div>
+                          <label style={lbl}>{t('portail.contrat.sepa.bic')}</label>
+                          <input
+                            style={{ ...inp, borderColor: sepaBic && !validerBic(sepaBic) ? '#FCA5A5' : '#E2E8F0' }}
+                            value={sepaBic}
+                            onChange={e => { ks(); setSepaBic(e.target.value.toUpperCase()) }}
+                            inputMode="text" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={11}
+                            placeholder="BNPAFRPP" />
+                          {sepaBic && !validerBic(sepaBic) && (
+                            <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>
+                              {t('portail.contrat.err.bic_invalide_hint', 'BIC invalide (8 ou 11 caractères).')}
+                            </div>
+                          )}
+                        </div>
                         <div><label style={lbl}>{t('portail.contrat.sepa.titulaire')}</label><input style={inp} value={sepaTitulaire} onChange={e => { ks(); setSepaTitulaire(e.target.value) }} /></div>
                       </div>
                       <div>

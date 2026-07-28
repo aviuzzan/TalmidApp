@@ -94,12 +94,24 @@ export default function MonComptePage() {
       password: nouveau,
       data: { password_set: true, password_set_at: new Date().toISOString() },
     })
-    setSaving(false)
     if (updErr) {
+      setSaving(false)
       setError(updErr.message || t('portail.mon_compte.pwd.update_error'))
       return
     }
-    setOk(t('portail.mon_compte.pwd.ok'))
+
+    // 3. Revoquer les sessions ouvertes sur les autres appareils (best effort :
+    // le changement de mot de passe reste valide meme si la revocation echoue)
+    let autresDeconnectes = false
+    try {
+      const { error: soErr } = await s.auth.signOut({ scope: 'others' })
+      autresDeconnectes = !soErr
+    } catch {
+      // ignore : la session courante reste valide
+    }
+
+    setSaving(false)
+    setOk(t('portail.mon_compte.pwd.ok') + (autresDeconnectes ? ' Vos autres appareils ont été déconnectés.' : ''))
     setActuel(''); setNouveau(''); setConfirme('')
   }
 

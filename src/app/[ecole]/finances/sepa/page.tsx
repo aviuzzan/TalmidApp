@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
+import { dateEcheance } from '@/lib/echeance'
 
 export default function SepaExportPage() {
   const router = useRouter()
@@ -42,7 +43,8 @@ export default function SepaExportPage() {
     if (!selectedDate) return
     setLoadingCheques(true)
     const s = createClient()
-    const dateStr = `${annee}-${String(mois).padStart(2, '0')}-${String(selectedDate.jour_du_mois).padStart(2, '0')}`
+    // Jour clampe au dernier jour reel du mois (ex : 31 -> 28 en fevrier)
+    const dateStr = dateEcheance(annee, mois, selectedDate.jour_du_mois)
 
     const { data: ch } = await s
       .from('cheques_prevus')
@@ -77,7 +79,8 @@ export default function SepaExportPage() {
   async function exporterXML() {
     setExporting(true)
     const { data: { session } } = await createClient().auth.getSession()
-    const dateStr = `${annee}-${String(mois).padStart(2, '0')}-${String(selectedDate.jour_du_mois).padStart(2, '0')}`
+    // Meme clamp que chargerCheques pour cibler exactement les memes echeances
+    const dateStr = dateEcheance(annee, mois, selectedDate.jour_du_mois)
 
     const res = await fetch('/api/sepa', {
       method: 'POST',
@@ -106,7 +109,7 @@ export default function SepaExportPage() {
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
 
-  const dateStr = selectedDate ? `${annee}-${String(mois).padStart(2, '0')}-${String(selectedDate.jour_du_mois).padStart(2, '0')}` : ''
+  const dateStr = selectedDate ? dateEcheance(annee, mois, selectedDate.jour_du_mois) : ''
   const chequesPrets = cheques.filter(c => mandats.has(c.famille_id) && c.statut === 'prevu')
   const chequesExportes = cheques.filter(c => c.statut === 'exporte')
   const chequesSansMandat = cheques.filter(c => !mandats.has(c.famille_id))

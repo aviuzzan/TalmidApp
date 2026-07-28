@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import PushPrompt from '@/components/PushPrompt'
@@ -15,9 +16,12 @@ export default function PortailPage() {
   const router = useRouter()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(false)
 
-  useEffect(() => {
-    async function load() {
+  // `silencieux` : refetch en arriere-plan (retour d'onglet) sans clignotement du spinner
+  const load = useCallback(async (silencieux = false) => {
+    if (!silencieux) { setLoading(true); setErreur(false) }
+    try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
@@ -28,7 +32,7 @@ export default function PortailPage() {
         .eq('id', session.user.id)
         .single()
 
-      if (!profile?.famille_id) { setLoading(false); return }
+      if (!profile?.famille_id) return
 
       const familleId = profile.famille_id
       const ecoleId = (profile as any).familles?.ecole_id
@@ -122,7 +126,7 @@ export default function PortailPage() {
       if (trancheEligibleDDR && cfg?.reductions_ouvertes && cfg.date_ouverture_reduction <= now && cfg.date_cloture_reduction >= now) {
         const ddrFaite = !!ddr && (ddr as any).statut !== 'brouillon'
         taches.push({
-          label: ddrFaite ? t('portail.checklist.ddr_submitted', { statut: (ddr as any).statut }) : t('portail.checklist.ddr_to_submit'),
+          label: ddrFaite ? t('portail.checklist.ddr_submitted', { statut: formatStatut((ddr as any).statut).label }) : t('portail.checklist.ddr_to_submit'),
           fait: ddrFaite,
           href: '/portail/inscriptions/reduction',
           urgent: !ddrFaite,
@@ -149,12 +153,37 @@ export default function PortailPage() {
         anneeInscription,
         taches,
       })
-      setLoading(false)
+    } catch (e) {
+      console.error('[portail] Erreur de chargement accueil :', e)
+      if (!silencieux) setErreur(true)
+    } finally {
+      if (!silencieux) setLoading(false)
     }
-    load()
-  }, [])
+  }, [anneeInscription, t])
+
+  useEffect(() => { load() }, [load])
+
+  // Refetch quand l'onglet redevient visible : la checklist reste a jour
+  // apres un aller-retour (signature contrat, depot de document...)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [load])
 
   if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>{t('portail.common.loading')}</div>
+
+  if (erreur && !data) return (
+    <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Une erreur est survenue</h2>
+      <p style={{ color: '#64748B', fontSize: 13, marginBottom: 18 }}>Le chargement de votre espace a &eacute;chou&eacute;. V&eacute;rifiez votre connexion puis r&eacute;essayez.</p>
+      <button onClick={() => load()}
+        style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 44 }}>
+        Réessayer
+      </button>
+    </div>
+  )
 
   if (!data?.famille) return (
     <div style={{ textAlign: 'center', padding: '60px 24px' }}>

@@ -1,11 +1,19 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
+
+// Libelles propres des statuts d'avoir (codes BDD -> affichage FR)
+const LABEL_STATUT_AVOIR: Record<string, string> = {
+  actif: 'Actif',
+  utilise: 'Utilisé',
+  partiellement_utilise: 'Partiellement utilisé',
+  annule: 'Annulé',
+}
 
 export default function PortailFacturesPage() {
   const { anneeInscription } = useAnneeInscription()
@@ -18,20 +26,22 @@ export default function PortailFacturesPage() {
   const [imputations, setImputations] = useState<any[]>([])
   const [echeances, setEcheances] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(false)
   const [stripeActif, setStripeActif] = useState(false)
   const [gocardlessActif, setGocardlessActif] = useState(false)
   const [paypalActif, setPaypalActif] = useState(false)
   const [paying, setPaying] = useState(false)
 
-  useEffect(() => {
-    async function load() {
+  const load = useCallback(async () => {
+    setLoading(true); setErreur(false)
+    try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
       const { data: profile } = await supabase
         .from('profiles').select('famille_id, ecole_id').eq('id', session.user.id).single()
-      if (!profile?.famille_id) { setLoading(false); return }
+      if (!profile?.famille_id) return
 
       // Avoirs : tous exercices confondus (un avoir peut etre emis sur N et utilise sur N+1)
       const { data: avs } = await supabase
@@ -65,11 +75,18 @@ export default function PortailFacturesPage() {
         setStripeActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'stripe' && i.actif)))
         setGocardlessActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'gocardless' && i.actif)))
         setPaypalActif(Boolean(integrationsActives?.find((i: any) => i.provider === 'paypal' && i.actif)))
+      } else {
+        setFacture(null)
       }
+    } catch (e) {
+      console.error('[portail] Erreur chargement factures :', e)
+      setErreur(true)
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [])
+  }, [anneeInscription, parent.estSeparee, parent.parentSlot])
+
+  useEffect(() => { load() }, [load])
 
   async function payerEnLigne(provider: 'stripe' | 'gocardless' | 'paypal') {
     if (!facture) return
@@ -101,6 +118,18 @@ export default function PortailFacturesPage() {
   }
 
   if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: 40 }}>{t('portail.common.loading')}</div>
+
+  if (erreur) return (
+    <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Une erreur est survenue</h2>
+      <p style={{ color: '#64748B', fontSize: 13, marginBottom: 18 }}>Le chargement de vos factures a &eacute;chou&eacute;. V&eacute;rifiez votre connexion puis r&eacute;essayez.</p>
+      <button onClick={() => load()}
+        style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 44 }}>
+        Réessayer
+      </button>
+    </div>
+  )
 
   // Si la facture est annulee, rien n'est du ni a regler
   const isAnnulee = facture?.statut === 'annule'
@@ -171,7 +200,7 @@ export default function PortailFacturesPage() {
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 10,
                         background: a.statut === 'actif' ? '#ECFDF5' : a.statut === 'utilise' ? '#F1F5F9' : a.statut === 'partiellement_utilise' ? '#FEF3C7' : '#FEF2F2',
                         color: a.statut === 'actif' ? '#065F46' : a.statut === 'utilise' ? '#475569' : a.statut === 'partiellement_utilise' ? '#92400E' : '#991B1B',
-                        textTransform: 'uppercase' }}>{a.statut.replace(/_/g, ' ')}</span>
+                        textTransform: 'uppercase' }}>{LABEL_STATUT_AVOIR[a.statut] || String(a.statut).replace(/_/g, ' ')}</span>
                     </td>
                   </tr>
                 ))}

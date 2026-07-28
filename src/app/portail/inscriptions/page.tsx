@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { formatStatut } from '@/lib/inscriptions'
@@ -70,42 +70,57 @@ function DossierTab({ router }: { router: any }) {
   const [contratsEnfants, setContratsEnfants] = useState<any[]>([])
   const [admissions, setAdmissions] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(false)
 
-  useEffect(() => { load() }, [])
+  const load = useCallback(async () => {
+    setLoading(true); setErreur(false)
+    try {
+      const s = createClient()
+      const { data: { session } } = await s.auth.getSession()
+      if (!session) return
+      const { data: profile } = await s.from('profiles').select('famille_id, ecole_id').eq('id', session.user.id).single()
+      if (!profile?.famille_id) return
 
-  async function load() {
-    const s = createClient()
-    const { data: { session } } = await s.auth.getSession()
-    if (!session) return
-    const { data: profile } = await s.from('profiles').select('famille_id, ecole_id').eq('id', session.user.id).single()
-    if (!profile?.famille_id) { setLoading(false); return }
+      const [{ data: fam }, { data: enf }, { data: cfg }, { data: red }, { data: cont }] = await Promise.all([
+        s.from('familles').select('*').eq('id', profile.famille_id).single(),
+        s.from('enfants').select('*').eq('famille_id', profile.famille_id).order('prenom'),
+        s.from('inscriptions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+        s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+        s.from('contrats_scolarisation').select('*, contrat_enfants(enfant_id)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+      ])
+      setFamille(fam); setEnfants(enf ?? []); setConfig(cfg)
+      setReduction(red); setContrat(cont)
+      setContratsEnfants(cont?.contrat_enfants?.map((c: any) => c.enfant_id) ?? [])
 
-    const [{ data: fam }, { data: enf }, { data: cfg }, { data: red }, { data: cont }] = await Promise.all([
-      s.from('familles').select('*').eq('id', profile.famille_id).single(),
-      s.from('enfants').select('*').eq('famille_id', profile.famille_id).order('prenom'),
-      s.from('inscriptions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
-      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
-      s.from('contrats_scolarisation').select('*, contrat_enfants(enfant_id)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
-    ])
-    setFamille(fam); setEnfants(enf ?? []); setConfig(cfg)
-    setReduction(red); setContrat(cont)
-    setContratsEnfants(cont?.contrat_enfants?.map((c: any) => c.enfant_id) ?? [])
-
-    // Charger l'etat d'admission par enfant (statut de la fiche inscriptions_pedagogiques)
-    const ids = (enf || []).map((e: any) => e.id)
-    if (ids.length > 0) {
-      const { data: fp } = await s.from('inscriptions_pedagogiques')
-        .select('enfant_id, statut')
-        .in('enfant_id', ids)
-        .eq('annee_scolaire', anneeInscription)
-      const map: Record<string, string> = {}
-      ;(fp || []).forEach((f: any) => { map[f.enfant_id] = f.statut })
-      setAdmissions(map)
+      // Charger l'etat d'admission par enfant (statut de la fiche inscriptions_pedagogiques)
+      const ids = (enf || []).map((e: any) => e.id)
+      if (ids.length > 0) {
+        const { data: fp } = await s.from('inscriptions_pedagogiques')
+          .select('enfant_id, statut')
+          .in('enfant_id', ids)
+          .eq('annee_scolaire', anneeInscription)
+        const map: Record<string, string> = {}
+        ;(fp || []).forEach((f: any) => { map[f.enfant_id] = f.statut })
+        setAdmissions(map)
+      }
+    } catch (e) {
+      console.error('[portail] Erreur chargement dossier :', e)
+      setErreur(true)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [anneeInscription])
+
+  useEffect(() => { load() }, [load])
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
+  if (erreur) return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '40px 24px', textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
+      <div style={{ color: '#64748B', fontSize: 13, marginBottom: 16 }}>Une erreur est survenue lors du chargement du dossier.</div>
+      <button onClick={() => load()} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>Réessayer</button>
+    </div>
+  )
   if (!famille) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 14 }}>{t('portail.inscriptions.no_family_linked')}</div>
 
   const today = new Date().toISOString().split('T')[0]
@@ -157,18 +172,29 @@ function DossierTab({ router }: { router: any }) {
 
       {/* WORKFLOW STEPPER : Admission → Validation école → Inscription → Validation → Facture */}
       {(() => {
-        const nbAdmis = enfants.filter(e => admissions[e.id] === 'accepte' || admissions[e.id] === 'valide').length
-        const nbEnAttente = enfants.filter(e => admissions[e.id] === 'soumis' || admissions[e.id] === 'en_etude').length
+        // Enfants concernes par la rentree : on exclut les sortis/radies et les
+        // admissions refusees, sinon un enfant parti ou refuse bloque l'etape 1 a jamais.
+        const enfantsConcernes = enfants.filter(e =>
+          !['sorti', 'radie'].includes(e.statut_inscription) && admissions[e.id] !== 'refuse'
+        )
+        // Meme regle que contrat/page.tsx : un enfant historique 'inscrit' sans fiche
+        // pedagogique est considere admis (sa reinscription passe par le contrat).
+        const estAdmis = (e: any) => {
+          const adm = admissions[e.id]
+          return adm === 'accepte' || adm === 'valide' || (!adm && e.statut_inscription === 'inscrit')
+        }
+        const nbAdmis = enfantsConcernes.filter(estAdmis).length
+        const nbEnAttente = enfantsConcernes.filter(e => admissions[e.id] === 'soumis' || admissions[e.id] === 'en_etude').length
         const auMoinsUnAdmis = nbAdmis > 0
         const contratStatutActuel = contrat?.statut
         const contratSoumisOuValide = ['soumis', 'valide', 'accepte'].includes(contratStatutActuel)
         const contratValide = ['valide', 'accepte'].includes(contratStatutActuel)
         // Etat des etapes
-        const etape1 = nbAdmis === enfants.length && enfants.length > 0 ? 'done' : nbEnAttente > 0 ? 'inprogress' : 'todo'
+        const etape1 = nbAdmis === enfantsConcernes.length && enfantsConcernes.length > 0 ? 'done' : nbEnAttente > 0 ? 'inprogress' : 'todo'
         const etape2 = auMoinsUnAdmis && !contrat ? 'todo' : contrat && !contratSoumisOuValide ? 'inprogress' : contratSoumisOuValide ? 'done' : 'locked'
         const etape3 = contratValide ? 'done' : contratSoumisOuValide ? 'inprogress' : 'locked'
         const etapes = [
-          { label: t('portail.inscriptions.stepper.admission'), sub: enfants.length > 0 ? t('portail.inscriptions.stepper.admission_count', { n: nbAdmis, total: enfants.length, s: nbAdmis > 1 ? 's' : '' }) : t('portail.inscriptions.stepper.admission_todo'), etat: etape1 },
+          { label: t('portail.inscriptions.stepper.admission'), sub: enfantsConcernes.length > 0 ? t('portail.inscriptions.stepper.admission_count', { n: nbAdmis, total: enfantsConcernes.length, s: nbAdmis > 1 ? 's' : '' }) : t('portail.inscriptions.stepper.admission_todo'), etat: etape1 },
           { label: t('portail.inscriptions.stepper.registration', { annee: anneeInscription }), sub: contratSoumisOuValide ? t('portail.inscriptions.stepper.registration_sent') : t('portail.inscriptions.stepper.registration_todo'), etat: etape2 },
           { label: t('portail.inscriptions.stepper.invoice'), sub: contratValide ? t('portail.inscriptions.stepper.invoice_issued') : t('portail.inscriptions.stepper.invoice_pending'), etat: etape3 },
         ]
@@ -490,14 +516,16 @@ function FactureTab() {
   const [lignes, setLignes] = useState<any[]>([])
   const [reglements, setReglements] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(false)
 
-  useEffect(() => {
-    async function load() {
+  const load = useCallback(async () => {
+    setLoading(true); setErreur(false)
+    try {
       const s = createClient()
       const { data: { session } } = await s.auth.getSession()
       if (!session) return
       const { data: profile } = await s.from('profiles').select('famille_id').eq('id', session.user.id).single()
-      if (!profile?.famille_id) { setLoading(false); return }
+      if (!profile?.famille_id) return
 
       const { data: fact } = await s
         .from('factures_solde').select('*')
@@ -513,13 +541,27 @@ function FactureTab() {
         ])
         setLignes(lig ?? [])
         setReglements(regl ?? [])
+      } else {
+        setFacture(null)
       }
+    } catch (e) {
+      console.error('[portail] Erreur chargement facture :', e)
+      setErreur(true)
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [])
+  }, [anneeInscription])
+
+  useEffect(() => { load() }, [load])
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
+  if (erreur) return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '40px 24px', textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
+      <div style={{ color: '#64748B', fontSize: 13, marginBottom: 16 }}>Une erreur est survenue lors du chargement de la facture.</div>
+      <button onClick={() => load()} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>Réessayer</button>
+    </div>
+  )
   if (!facture) return (
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
       {t('portail.inscriptions.invoice.empty', { annee: anneeInscription })}<br /><br />
@@ -647,14 +689,16 @@ function DocumentsTab() {
   const { anneeInscription } = useAnneeInscription()
   const [docs, setDocs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(false)
 
-  useEffect(() => {
-    async function load() {
+  const load = useCallback(async () => {
+    setLoading(true); setErreur(false)
+    try {
       const s = createClient()
       const { data: { session } } = await s.auth.getSession()
       if (!session) return
       const { data: profile } = await s.from('profiles').select('ecole_id').eq('id', session.user.id).single()
-      if (!profile?.ecole_id) { setLoading(false); return }
+      if (!profile?.ecole_id) return
       const { data } = await s.from('documents_ecole_publics')
         .select('*')
         .eq('ecole_id', profile.ecole_id)
@@ -662,12 +706,24 @@ function DocumentsTab() {
         .eq('actif', true)
         .order('ordre').order('created_at', { ascending: false })
       setDocs(data ?? [])
+    } catch (e) {
+      console.error('[portail] Erreur chargement documents :', e)
+      setErreur(true)
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [])
+  }, [anneeInscription])
+
+  useEffect(() => { load() }, [load])
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>{t('portail.common.loading_dots')}</div>
+  if (erreur) return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '40px 24px', textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
+      <div style={{ color: '#64748B', fontSize: 13, marginBottom: 16 }}>Une erreur est survenue lors du chargement des documents.</div>
+      <button onClick={() => load()} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>Réessayer</button>
+    </div>
+  )
 
   const TYPES: Record<string, { label: string; icon: string; color: string; bg: string }> = {
     circulaire: { label: t('portail.inscriptions.docs.type.circulaire'), icon: '📢', color: '#2563EB', bg: '#EFF6FF' },

@@ -88,15 +88,29 @@ export default function DemandeReductionPage() {
   const router = useRouter()
   const parent = useParentCtx()
   const { t } = useI18n()
-  // ks() est un no-op gardé pour compat avec les onChange existants — le hack scroll précédent
-  // (useLayoutEffect + window.scrollTo) cassait la saisie en remontant la page à chaque caractère.
-  const ks = () => {}
 
   const [session, setSession] = useState<any>(null)
   const [familleId, setFamilleId] = useState('')
   const [ecoleId, setEcoleId] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // ── Autosave brouillon ──
+  // dirtyCounter s'incrémente à chaque modification (via ks()) ; savedCounter mémorise
+  // le compteur au dernier enregistrement réussi. dirty > saved ⇒ modifications non sauvegardées.
+  const [dirtyCounter, setDirtyCounter] = useState(0)
+  const dirtyCounterRef = useRef(0)
+  const savedCounterRef = useRef(0)
+  const [lastSavedAt, setLastSavedAt] = useState('')
+  const savingRef = useRef(false) // vrai pendant soumettre() : suspend l'autosave
+  const famModifiedRef = useRef(false)
+  const demandeIdRef = useRef('')
+  const creatingDemandeRef = useRef<Promise<string | null> | null>(null)
+
+  // ks() ("keystroke") : historiquement un no-op gardé pour compat avec les onChange existants
+  // (le hack scroll précédent cassait la saisie). Depuis l'autosave (28/07), il marque le
+  // formulaire comme modifié : déclenche le brouillon débounce (2s) + le garde beforeunload.
+  const ks = () => { dirtyCounterRef.current += 1; setDirtyCounter(dirtyCounterRef.current) }
 
   const [famille, setFamille] = useState<any>(null)
   const [enfants, setEnfants] = useState<any[]>([])
@@ -197,7 +211,7 @@ export default function DemandeReductionPage() {
       s.from('enfants').select('*, classes(id, nom, secteur_id, secteurs(nom))').eq('famille_id', profile.famille_id),
       s.from('classes').select('id, nom, secteur_id, secteurs(nom)').eq('ecole_id', profile.ecole_id).order('nom'),
       s.from('secteurs').select('id, nom').eq('ecole_id', profile.ecole_id).eq('actif', true).order('ordre'),
-      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).single(),
+      s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
       s.from('reduction_documents_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).eq('actif', true).order('ordre'),
       s.from('reduction_questions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).order('section').order('ordre'),
     ])
@@ -226,6 +240,7 @@ export default function DemandeReductionPage() {
 
     if (dem) {
       setDemande(dem)
+      demandeIdRef.current = dem.id
       setSituation(dem.situation_familiale || 'marie')
       setLogType(dem.logement_type || 'locataire')
       setLogPieces(dem.logement_nb_pieces?.toString() || '')
@@ -264,17 +279,137 @@ export default function DemandeReductionPage() {
   }
 
   // ── Total revenus mensuel auto-calculé ──
+  // FIX audit 28/07 : chaque salaire est pondéré par son nb_mois → (salaire × nb_mois) / 12.
+  // Avant, un salaire perçu 6 mois/an comptait comme un salaire perçu 12 mois/an.
+  // Les montants négatifs sont ramenés à 0 (la base a des CHECK >= 0). Arrondi à 2 décimales.
   const totalRevenusMensuel = () => {
-    const salaires = revenus.reduce((sum, r) => sum + (parseFloat(r.salaire_mensuel_net) || 0), 0)
-    const artisan = artisanMontantAnnuel ? (parseFloat(artisanMontantAnnuel) || 0) / 12 : 0
-    return salaires
-      + (parseFloat(allocFamiliales) || 0)
-      + (parseFloat(allocChomage) || 0)
-      + (parseFloat(apl) || 0)
-      + (parseFloat(autresRevenus) || 0)
-      + (parseFloat(aidesMensuelles) || 0)
+    const salaires = revenus.reduce((sum, r) => {
+      const salaire = Math.max(0, parseFloat(r.salaire_mensuel_net) || 0)
+      const nbMois = Math.min(12, Math.max(1, Number(r.nb_mois) || 12))
+      return sum + (salaire * nbMois) / 12
+    }, 0)
+    const artisan = artisanMontantAnnuel ? Math.max(0, parseFloat(artisanMontantAnnuel) || 0) / 12 : 0
+    const total = salaires
+      + Math.max(0, parseFloat(allocFamiliales) || 0)
+      + Math.max(0, parseFloat(allocChomage) || 0)
+      + Math.max(0, parseFloat(apl) || 0)
+      + Math.max(0, parseFloat(autresRevenus) || 0)
+      + Math.max(0, parseFloat(aidesMensuelles) || 0)
       + artisan
+    return Math.round(total * 100) / 100
   }
+
+  // ── Autosave brouillon ──
+  // Champs "simples" de demandes_reduction — source unique partagée par l'autosave ET la soumission.
+  // Choix documenté : les lignes de revenus (table demandes_reduction_revenus) ne sont écrites qu'à
+  // la soumission — un delete+insert à chaque autosave serait risqué (perte de données si échec à
+  // mi-chemin). Idem pour les infos famille (table familles), écrites uniquement à la soumission.
+  function buildDraftFields() {
+    // Montants financiers : négatifs ramenés à 0 (CHECK >= 0 en base).
+    const num = (v: string): number | null => {
+      if (!v) return null
+      const n = parseFloat(v)
+      return isNaN(n) ? null : Math.max(0, n)
+    }
+    // Montants stockés en texte dans les tableaux JSON : clamp à 0 en préservant le type string.
+    const clampStr = (v: any) => { const n = parseFloat(v); return isNaN(n) ? v : String(Math.max(0, n)) }
+    return {
+      situation_familiale: situation,
+      logement_type: logType,
+      logement_nb_pieces: logPieces ? parseInt(logPieces) : null,
+      logement_loyer_mensuel: num(logLoyer),
+      logement_charges_mensuelles: num(logCharges),
+      logement_date_occupation: logDateOccupation || null,
+      logement_personne_handicapee: logHandicape,
+      quotient_familial: num(quotientFamilial),
+      alloc_familiales_mensuelles: num(allocFamiliales),
+      alloc_chomage_mensuelle: num(allocChomage),
+      apl_mensuelle: num(apl),
+      autres_revenus_mensuels: num(autresRevenus),
+      aides_mensuelles: num(aidesMensuelles),
+      revenus_artisans_profession: artisanProfession || null,
+      revenus_artisans_regime: artisanRegime || null,
+      revenus_artisans_montant_annuel: num(artisanMontantAnnuel),
+      revenus_total_mensuel: totalRevenusMensuel(),
+      tarif_propose: num(tarifPropose),
+      nb_enfants_concernes: enfantsDossier.length,
+      enfants_dossier: enfantsDossier,
+      enfants_autres_etablissements: enfantsAutres
+        .filter((e: any) => e.prenom || e.etablissement)
+        .map((e: any) => ({ ...e, tarif_mensuel: clampStr(e.tarif_mensuel) })),
+      personnes_charge: personnesCharge
+        .filter((p: any) => p.nom || p.prenom)
+        .map((p: any) => ({ ...p, montant_annuel_frais: clampStr(p.montant_annuel_frais) })),
+      pas_de_justificatif: pasDeJustificatif,
+      pas_de_justificatif_detail: pasDeJustificatifDetail || null,
+      commentaire: commentaire || null,
+      attestation_lieu: attestationLieu || null,
+      reponses_custom: reponsesCustom,
+    }
+  }
+
+  // Crée (une seule fois, même en cas d'appels concurrents autosave/upload) la demande en 'brouillon'.
+  async function ensureDemandeBrouillon(): Promise<string | null> {
+    if (demandeIdRef.current) return demandeIdRef.current
+    if (demande?.id) { demandeIdRef.current = demande.id; return demande.id }
+    if (creatingDemandeRef.current) return creatingDemandeRef.current
+    creatingDemandeRef.current = (async () => {
+      const s = createClient()
+      const { data: nd, error } = await s.from('demandes_reduction').insert({
+        famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription, statut: 'brouillon',
+      }).select().single()
+      creatingDemandeRef.current = null
+      if (error || !nd) return null
+      demandeIdRef.current = nd.id
+      setDemande(nd)
+      return nd.id as string
+    })()
+    return creatingDemandeRef.current
+  }
+
+  async function autosaveDraft(snapshot: number) {
+    if (savingRef.current) return // soumission en cours : ne pas interférer
+    if (demande && demande.statut !== 'brouillon') return // ne JAMAIS toucher une demande non-brouillon
+    if (!familleId || !ecoleId) return
+    const id = await ensureDemandeBrouillon()
+    if (!id || savingRef.current) return
+    const s = createClient()
+    // Garde-fou : .eq('statut', 'brouillon') — l'update ne matche que si la demande est encore en
+    // brouillon côté base (compatible avec la policy RLS UPDATE parent : statut IN (brouillon, soumis)).
+    const { error } = await s.from('demandes_reduction')
+      .update(buildDraftFields())
+      .eq('id', id)
+      .eq('statut', 'brouillon')
+    if (!error) {
+      savedCounterRef.current = Math.max(savedCounterRef.current, snapshot)
+      setLastSavedAt(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
+    }
+  }
+
+  // Débounce ~2s : chaque modification (ks) réarme le timer ; à l'expiration on upsert le brouillon.
+  useEffect(() => {
+    if (dirtyCounter === 0 || dirtyCounter <= savedCounterRef.current) return
+    if (loading || saving) return
+    if (demande && demande.statut !== 'brouillon') return
+    if (!familleId) return
+    const snapshot = dirtyCounter
+    const timer = setTimeout(() => { autosaveDraft(snapshot) }, 2000)
+    return () => clearTimeout(timer)
+  }, [dirtyCounter]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Garde beforeunload : modifications pas encore autosauvegardées, ou infos famille (persistées
+  // uniquement à la soumission).
+  useEffect(() => { famModifiedRef.current = famModified }, [famModified])
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyCounterRef.current > savedCounterRef.current || famModifiedRef.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   // ── Enfants dossier ──
   const classesSorted = classes.map((c: any) => c.nom).sort()
@@ -352,14 +487,9 @@ export default function DemandeReductionPage() {
   // ── Upload documents ──
   async function uploadDoc(configId: string, label: string, file: File) {
     setUploading(p => ({ ...p, [configId]: true }))
-    let demandeIdActuel = demande?.id
-    if (!demandeIdActuel) {
-      const s = createClient()
-      const { data: nd } = await s.from('demandes_reduction').insert({
-        famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription, statut: 'brouillon',
-      }).select().single()
-      demandeIdActuel = nd?.id; if (nd) setDemande(nd)
-    }
+    // Création du brouillon centralisée dans ensureDemandeBrouillon (partagée avec l'autosave,
+    // protégée contre les créations concurrentes).
+    const demandeIdActuel = await ensureDemandeBrouillon()
     const fd = new FormData()
     fd.append('file', file); fd.append('demandeId', demandeIdActuel || '')
     fd.append('familleId', familleId); fd.append('configId', configId); fd.append('label', label)
@@ -417,6 +547,7 @@ export default function DemandeReductionPage() {
       return
     }
 
+    savingRef.current = true // suspend l'autosave pendant la soumission
     setSaving(true)
     const s = createClient()
 
@@ -431,47 +562,26 @@ export default function DemandeReductionPage() {
       }).eq('id', familleId)
     }
 
-    const totalRev = Math.round(totalRevenusMensuel() * 100) / 100
-
+    // Les champs du formulaire (dont revenus_total_mensuel recalculé avec pondération nb_mois et
+    // les montants clampés >= 0) viennent de buildDraftFields — même source que l'autosave.
     const payload: any = {
+      ...buildDraftFields(),
       famille_id: familleId, ecole_id: ecoleId, annee_scolaire: anneeInscription,
       statut: 'soumis', soumis_le: new Date().toISOString(),
-      situation_familiale: situation,
-      logement_type: logType,
-      logement_nb_pieces: logPieces ? parseInt(logPieces) : null,
-      logement_loyer_mensuel: logLoyer ? parseFloat(logLoyer) : null,
-      logement_charges_mensuelles: logCharges ? parseFloat(logCharges) : null,
-      logement_date_occupation: logDateOccupation || null,
-      logement_personne_handicapee: logHandicape,
-      quotient_familial: quotientFamilial ? parseFloat(quotientFamilial) : null,
-      alloc_familiales_mensuelles: allocFamiliales ? parseFloat(allocFamiliales) : null,
-      alloc_chomage_mensuelle: allocChomage ? parseFloat(allocChomage) : null,
-      apl_mensuelle: apl ? parseFloat(apl) : null,
-      autres_revenus_mensuels: autresRevenus ? parseFloat(autresRevenus) : null,
-      aides_mensuelles: aidesMensuelles ? parseFloat(aidesMensuelles) : null,
-      revenus_artisans_profession: artisanProfession || null,
-      revenus_artisans_regime: artisanRegime || null,
-      revenus_artisans_montant_annuel: artisanMontantAnnuel ? parseFloat(artisanMontantAnnuel) : null,
-      revenus_total_mensuel: totalRev,
-      tarif_propose: parseFloat(tarifPropose),
-      nb_enfants_concernes: nbEnfantsTotal,
-      enfants_dossier: enfantsDossier,
-      enfants_autres_etablissements: enfantsAutres.filter((e: any) => e.prenom || e.etablissement),
-      personnes_charge: personnesCharge.filter((p: any) => p.nom || p.prenom),
-      pas_de_justificatif: pasDeJustificatif,
-      pas_de_justificatif_detail: pasDeJustificatifDetail || null,
-      commentaire: commentaire || null,
+      tarif_propose: Math.max(0, parseFloat(tarifPropose) || 0),
       attestation_honneur: true,
       attestation_lieu: attestationLieu,
       attestation_date: new Date().toISOString().split('T')[0],
       signature_date: new Date().toISOString(),
-      reponses_custom: reponsesCustom,
     }
 
-    let demandeId = demande?.id
+    // demandeIdRef couvre le cas où le brouillon vient d'être créé par l'autosave/upload
+    // et où l'état React `demande` n'est pas encore à jour.
+    let demandeId = demande?.id || demandeIdRef.current || undefined
     if (demandeId) {
       const { data: upd, error: updErr } = await s.from('demandes_reduction').update(payload).eq('id', demandeId).select()
       if (updErr || !upd || upd.length === 0) {
+        savingRef.current = false
         setSaving(false)
         alert(t('portail.reduction.err.submit', { msg: updErr?.message || t('portail.common.err.no_row') }))
         return
@@ -480,18 +590,24 @@ export default function DemandeReductionPage() {
     } else {
       const { data: nd, error: insErr } = await s.from('demandes_reduction').insert(payload).select().single()
       if (insErr || !nd) {
+        savingRef.current = false
         setSaving(false)
         alert(t('portail.reduction.err.create', { msg: insErr?.message || t('portail.common.err.unknown') }))
         return
       }
       demandeId = nd.id
+      demandeIdRef.current = nd.id
     }
 
     if (demandeId) {
       const revsFiltres = revenus.filter((r: any) => r.nom_prenom?.trim())
       if (revsFiltres.length > 0) {
         await s.from('demandes_reduction_revenus').insert(
-          revsFiltres.map((r: any) => ({ ...r, demande_id: demandeId, salaire_mensuel_net: parseFloat(r.salaire_mensuel_net) || 0 }))
+          revsFiltres.map((r: any) => ({
+            ...r, demande_id: demandeId,
+            salaire_mensuel_net: Math.max(0, parseFloat(r.salaire_mensuel_net) || 0),
+            nb_mois: Math.min(12, Math.max(1, Number(r.nb_mois) || 12)),
+          }))
         )
       }
       const sigUrl = await uploadSignature(signatureData, demandeId)
@@ -509,6 +625,9 @@ export default function DemandeReductionPage() {
       })
     } catch {}
 
+    // Tout est persisté : neutralise le garde beforeunload avant la navigation.
+    savedCounterRef.current = dirtyCounterRef.current
+    famModifiedRef.current = false
     setSaving(false)
     router.push('/portail/inscriptions')
   }
@@ -672,8 +791,8 @@ export default function DemandeReductionPage() {
             </select>
           </div>}
           {qActif('logement_nb_pieces') && <div><label style={lbl}>{qL('logement_nb_pieces', t('portail.reduction.logement.pieces'))}</label><input style={inp} type="number" value={logPieces} onChange={e => { ks(); setLogPieces(e.target.value) }} /></div>}
-          {qActif('logement_loyer_mensuel') && <div><label style={lbl}>{qL('logement_loyer_mensuel', t('portail.reduction.logement.loyer'))}</label><input style={inp} type="number" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>}
-          {qActif('logement_charges_mensuelles') && <div><label style={lbl}>{qL('logement_charges_mensuelles', t('portail.reduction.logement.charges'))}</label><input style={inp} type="number" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>}
+          {qActif('logement_loyer_mensuel') && <div><label style={lbl}>{qL('logement_loyer_mensuel', t('portail.reduction.logement.loyer'))}</label><input style={inp} type="number" min="0" value={logLoyer} onChange={e => { ks(); setLogLoyer(e.target.value) }} /></div>}
+          {qActif('logement_charges_mensuelles') && <div><label style={lbl}>{qL('logement_charges_mensuelles', t('portail.reduction.logement.charges'))}</label><input style={inp} type="number" min="0" value={logCharges} onChange={e => { ks(); setLogCharges(e.target.value) }} /></div>}
           {qActif('logement_date_occupation') && <div><label style={lbl}>{qL('logement_date_occupation', t('portail.reduction.logement.depuis'))}</label><input style={inp} type="date" value={logDateOccupation} onChange={e => { ks(); setLogDateOccupation(e.target.value) }} /></div>}
         </div>
         {qActif('logement_personne_handicapee') && <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#475569' }}>
@@ -684,7 +803,7 @@ export default function DemandeReductionPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 4 }}>
             {questionsCustomActives('logement').map((q: any) => (
               <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
-                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+                onChange={v => { ks(); setReponsesCustom(p => ({ ...p, [q.cle]: v })) }} />
             ))}
           </div>
         )}
@@ -693,7 +812,7 @@ export default function DemandeReductionPage() {
       {/* ── 5. REVENUS ── */}
       <Section title={t('portail.reduction.section.revenus')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {qActif('quotient_familial') && <div><label style={lbl}>{qL('quotient_familial', t('portail.reduction.quotient'))}</label><input style={inp} type="number" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>}
+          {qActif('quotient_familial') && <div><label style={lbl}>{qL('quotient_familial', t('portail.reduction.quotient'))}</label><input style={inp} type="number" min="0" value={quotientFamilial} onChange={e => { ks(); setQuotientFamilial(e.target.value) }} /></div>}
         </div>
 
         <div>
@@ -704,7 +823,7 @@ export default function DemandeReductionPage() {
               <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.lien')}</label><input style={inp} value={r.lien_parente} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, lien_parente: e.target.value } : x)) }} /></div>
               <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.employeur')}</label><input style={inp} value={r.employeur} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, employeur: e.target.value } : x)) }} /></div>
               <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.qualif')}</label><input style={inp} value={r.qualification || ''} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, qualification: e.target.value } : x)) }} /></div>
-              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.salaire')}</label><input style={inp} type="number" value={r.salaire_mensuel_net} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x)) }} /></div>
+              <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.salaire')}</label><input style={inp} type="number" min="0" value={r.salaire_mensuel_net} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, salaire_mensuel_net: e.target.value } : x)) }} /></div>
               <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.nb_mois')}</label><input style={inp} type="number" min="1" max="12" value={r.nb_mois} onChange={e => { ks(); setRevenus(p => p.map((x, j) => j === i ? { ...x, nb_mois: parseInt(e.target.value) || 12 } : x)) }} /></div>
               <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setRevenus(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20, lineHeight: 1 }}>×</button>}</div>
             </div>
@@ -725,14 +844,14 @@ export default function DemandeReductionPage() {
                 <option value="">{t('portail.reduction.artisan.choose')}</option><option value="reel">{t('portail.reduction.artisan.reel')}</option><option value="forfaitaire">{t('portail.reduction.artisan.forfaitaire')}</option>
               </select>
             </div>}
-            {qActif('revenus_artisans_montant_annuel') && <div><label style={lbl}>{qL('revenus_artisans_montant_annuel', t('portail.reduction.artisan.montant'))}</label><input style={inp} type="number" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>}
+            {qActif('revenus_artisans_montant_annuel') && <div><label style={lbl}>{qL('revenus_artisans_montant_annuel', t('portail.reduction.artisan.montant'))}</label><input style={inp} type="number" min="0" value={artisanMontantAnnuel} onChange={e => { ks(); setArtisanMontantAnnuel(e.target.value) }} /></div>}
           </div>
         </div>
         {questionsCustomActives('revenus').length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {questionsCustomActives('revenus').map((q: any) => (
               <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
-                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+                onChange={v => { ks(); setReponsesCustom(p => ({ ...p, [q.cle]: v })) }} />
             ))}
           </div>
         )}
@@ -741,11 +860,11 @@ export default function DemandeReductionPage() {
       {/* ── 6. ALLOCATIONS ── */}
       <Section title={t('portail.reduction.section.alloc')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-          {qActif('alloc_familiales_mensuelles') && <div><label style={lbl}>{qL('alloc_familiales_mensuelles', t('portail.reduction.alloc.familiales'))}</label><input style={inp} type="number" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>}
-          {qActif('alloc_chomage_mensuelle') && <div><label style={lbl}>{qL('alloc_chomage_mensuelle', t('portail.reduction.alloc.chomage'))}</label><input style={inp} type="number" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>}
-          {qActif('apl_mensuelle') && <div><label style={lbl}>{qL('apl_mensuelle', t('portail.reduction.alloc.apl'))}</label><input style={inp} type="number" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>}
-          {qActif('autres_revenus_mensuels') && <div><label style={lbl}>{qL('autres_revenus_mensuels', t('portail.reduction.alloc.autres'))}</label><input style={inp} type="number" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>}
-          {qActif('aides_mensuelles') && <div><label style={lbl}>{qL('aides_mensuelles', t('portail.reduction.alloc.aides'))}</label><input style={inp} type="number" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>}
+          {qActif('alloc_familiales_mensuelles') && <div><label style={lbl}>{qL('alloc_familiales_mensuelles', t('portail.reduction.alloc.familiales'))}</label><input style={inp} type="number" min="0" value={allocFamiliales} onChange={e => { ks(); setAllocFamiliales(e.target.value) }} /></div>}
+          {qActif('alloc_chomage_mensuelle') && <div><label style={lbl}>{qL('alloc_chomage_mensuelle', t('portail.reduction.alloc.chomage'))}</label><input style={inp} type="number" min="0" value={allocChomage} onChange={e => { ks(); setAllocChomage(e.target.value) }} /></div>}
+          {qActif('apl_mensuelle') && <div><label style={lbl}>{qL('apl_mensuelle', t('portail.reduction.alloc.apl'))}</label><input style={inp} type="number" min="0" value={apl} onChange={e => { ks(); setApl(e.target.value) }} /></div>}
+          {qActif('autres_revenus_mensuels') && <div><label style={lbl}>{qL('autres_revenus_mensuels', t('portail.reduction.alloc.autres'))}</label><input style={inp} type="number" min="0" value={autresRevenus} onChange={e => { ks(); setAutresRevenus(e.target.value) }} /></div>}
+          {qActif('aides_mensuelles') && <div><label style={lbl}>{qL('aides_mensuelles', t('portail.reduction.alloc.aides'))}</label><input style={inp} type="number" min="0" value={aidesMensuelles} onChange={e => { ks(); setAidesMensuelles(e.target.value) }} /></div>}
         </div>
 
         {/* Total auto-calculé */}
@@ -757,7 +876,7 @@ export default function DemandeReductionPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {questionsCustomActives('allocations').map((q: any) => (
               <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
-                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+                onChange={v => { ks(); setReponsesCustom(p => ({ ...p, [q.cle]: v })) }} />
             ))}
           </div>
         )}
@@ -769,7 +888,7 @@ export default function DemandeReductionPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {questionsCustomActives('autres').map((q: any) => (
               <CustomQuestionField key={q.id} q={q} value={reponsesCustom[q.cle]}
-                onChange={v => setReponsesCustom(p => ({ ...p, [q.cle]: v }))} />
+                onChange={v => { ks(); setReponsesCustom(p => ({ ...p, [q.cle]: v })) }} />
             ))}
           </div>
         </Section>
@@ -784,7 +903,7 @@ export default function DemandeReductionPage() {
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.age')}</label><input style={inp} type="number" value={e.age} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.classe')}</label><input style={inp} value={e.classe} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, classe: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.etablissement')}</label><input style={inp} value={e.etablissement} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, etablissement: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.tarif_mois')}</label><input style={inp} type="number" value={e.tarif_mensuel} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, tarif_mensuel: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.tarif_mois')}</label><input style={inp} type="number" min="0" value={e.tarif_mensuel} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, tarif_mensuel: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.mois')}</label><input style={inp} type="number" min="1" max="12" value={e.nb_mois} onChange={ev => { ks(); setEnfantsAutres(p => p.map((x, j) => j === i ? { ...x, nb_mois: ev.target.value } : x)) }} /></div>
             <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setEnfantsAutres(p => p.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20 }}>×</button>}</div>
           </div>
@@ -801,7 +920,7 @@ export default function DemandeReductionPage() {
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.prenom2')}</label><input style={inp} value={p.prenom} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, prenom: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.age')}</label><input style={inp} type="number" value={p.age} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, age: ev.target.value } : x)) }} /></div>
             <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.revenus.lien')}</label><input style={inp} value={p.lien_parente} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, lien_parente: ev.target.value } : x)) }} /></div>
-            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.frais_annuels')}</label><input style={inp} type="number" value={p.montant_annuel_frais} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, montant_annuel_frais: ev.target.value } : x)) }} /></div>
+            <div><label style={{ ...lbl, marginBottom: 3 }}>{t('portail.reduction.field.frais_annuels')}</label><input style={inp} type="number" min="0" value={p.montant_annuel_frais} onChange={ev => { ks(); setPersonnesCharge(prev => prev.map((x, j) => j === i ? { ...x, montant_annuel_frais: ev.target.value } : x)) }} /></div>
             <div style={{ paddingBottom: 2 }}>{i > 0 && <button onClick={() => { ks(); setPersonnesCharge(prev => prev.filter((_, j) => j !== i)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 20 }}>×</button>}</div>
           </div>
         ))}
@@ -818,7 +937,7 @@ export default function DemandeReductionPage() {
           </div>
           <label style={lbl}>{t('portail.reduction.tarif_propose')}</label>
           <input style={{ ...inp, fontSize: 18, fontWeight: 700, color: '#1D4ED8', textAlign: 'center', padding: '12px' }}
-            type="number" value={tarifPropose} placeholder={t('portail.reduction.tarif_ph')}
+            type="number" min="0" value={tarifPropose} placeholder={t('portail.reduction.tarif_ph')}
             onChange={e => { ks(); setTarifPropose(e.target.value) }} />
         </div>
         <div>
@@ -895,7 +1014,12 @@ export default function DemandeReductionPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingTop: 8, flexWrap: 'wrap' }}>
+        {/* Indicateur discret d'autosave du brouillon */}
+        <span style={{ fontSize: 11, color: '#94A3B8' }}>
+          {lastSavedAt ? t('portail.reduction.draft_saved_at', { time: lastSavedAt }, 'Brouillon enregistré à {time}') : ''}
+        </span>
+        <div style={{ display: 'flex', gap: 12, marginLeft: 'auto' }}>
         <button onClick={() => router.push('/portail/inscriptions')}
           style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '11px 20px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>
           {t('portail.common.cancel')}
@@ -904,6 +1028,7 @@ export default function DemandeReductionPage() {
           style={{ background: '#2563EB', border: 'none', borderRadius: 10, padding: '11px 28px', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
           {saving ? t('portail.common.sending') : t('portail.reduction.submit')}
         </button>
+        </div>
       </div>
     </div>
   )
