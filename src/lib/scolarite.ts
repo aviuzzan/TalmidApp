@@ -50,6 +50,73 @@ export const STATUT_SCOLARITE_STYLE: Record<StatutScolarite, { bg: string; fg: s
   sorti: { bg: '#FEF2F2', fg: '#B91C1C' },
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Passage de classe : quelle est la classe SUIVANTE ?
+// ────────────────────────────────────────────────────────────────────────────
+// Règle de référence = celle de la page « Passages de classe »
+// (src/app/[ecole]/passages-de-classe/page.tsx, calcul des cibles par défaut) :
+//   next = classes du MÊME SECTEUR dont `ordre` est strictement supérieur,
+//          triées par `ordre` croissant → la première.
+// En production `classes.ordre` vaut 0 partout : cette règle ne renvoie alors
+// rien. On lui ajoute donc un départage par LIBELLÉ, numérique et non
+// alphabétique (« Kita 10 » vient après « Kita 9 », un tri alphabétique
+// donnerait l'inverse), limité à la même « famille » de nom (préfixe) pour ne
+// jamais enchaîner deux progressions différentes (CM2 ne devient pas Kita 1).
+// Ce départage cherche dans TOUTE l'école : une classe suivante peut changer de
+// secteur/site (ex. Kita 5 → Kita 6).
+
+export type ClasseOrdonnable = {
+  id: string
+  nom: string | null
+  ordre?: number | null
+  secteur_id?: string | null
+}
+
+/** « Kita 10 » → { prefixe: 'kita', numero: 10 } ; « Grande section » → numero null. */
+const decomposerNomClasse = (nom: string | null): { prefixe: string; numero: number | null } => {
+  const norm = (nom || '').toLowerCase().replace(/[\s._-]+/g, ' ').trim()
+  const m = norm.match(/^(.*?)(\d+)$/)
+  if (!m) return { prefixe: norm, numero: null }
+  return { prefixe: m[1].trim(), numero: parseInt(m[2], 10) }
+}
+
+/**
+ * Classe suivante d'un élève au sein d'une école.
+ * @param classes toutes les classes de l'école (id, nom, ordre, secteur_id)
+ * @param classeActuelleId classe de l'année en cours
+ * @returns la classe suivante, ou null (dernière classe de l'école, classe inconnue…)
+ */
+export function trouverClasseSuivante<T extends ClasseOrdonnable>(
+  classes: T[],
+  classeActuelleId: string | null | undefined,
+): T | null {
+  if (!classeActuelleId || !Array.isArray(classes) || classes.length === 0) return null
+  const actuelle = classes.find(c => c.id === classeActuelleId)
+  if (!actuelle) return null
+
+  // 1. Règle historique « Passages de classe » : même secteur, ordre supérieur.
+  const parOrdre = classes
+    .filter(c => c.secteur_id === actuelle.secteur_id && (c.ordre ?? 0) > (actuelle.ordre ?? 0))
+    .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
+  if (parOrdre.length > 0) return parOrdre[0]
+
+  // 2. `ordre` à plat : progression par le libellé (numérique), même préfixe,
+  //    toute l'école (le secteur peut changer), le même secteur l'emportant à
+  //    numéro égal.
+  const ref = decomposerNomClasse(actuelle.nom)
+  if (ref.numero === null) return null
+  const candidats: { classe: T; numero: number; memeSecteur: boolean }[] = []
+  for (const c of classes) {
+    if (c.id === actuelle.id) continue
+    const d = decomposerNomClasse(c.nom)
+    if (d.numero === null || d.prefixe !== ref.prefixe || d.numero <= ref.numero) continue
+    candidats.push({ classe: c, numero: d.numero, memeSecteur: c.secteur_id === actuelle.secteur_id })
+  }
+  if (candidats.length === 0) return null
+  candidats.sort((a, b) => (a.numero - b.numero) || (Number(b.memeSecteur) - Number(a.memeSecteur)))
+  return candidats[0].classe
+}
+
 /** Liste des scolarités d'une école pour un exercice donné (avec identité élève + classe). */
 export async function getScolarites(
   supabase: SupabaseClient,

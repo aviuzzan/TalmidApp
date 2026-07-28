@@ -8,6 +8,7 @@ import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { validerIban, formaterIban, nettoyerIban, validerBic } from '@/lib/iban'
+import { trouverClasseSuivante } from '@/lib/scolarite'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -17,8 +18,45 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </div>
 )
 
+// ── Classe N+1 : LE PASSAGE DE CLASSE FAIT FOI (décision client 28/07) ──
+// 68 contrats sur 94 portaient la classe EN COURS au lieu de celle de l'année
+// suivante : le parent ne choisit plus. La classe est déterminée par l'appli
+//   (a) scolarité déjà créée sur l'exercice d'inscription (N+1) → définitive ;
+//   (b) sinon classe suivante calculée depuis l'année en cours → à confirmer ;
+//   (c) sinon (enfant nouveau, aucune scolarité) → sélecteur libre (admission).
+// La RPC soumettre_contrat_famille refait le contrôle côté serveur.
+type SourceClasse = 'scolarite_n1' | 'passage_calcule'
+type ClasseImposee = {
+  classe_id: string
+  classe_nom: string
+  secteur_id: string | null
+  secteur_nom: string | null
+  source: SourceClasse
+}
+type PosteContrat = { tarif_id: string; nom: string; montant: number }
+
+// Postes d'un enfant pour un secteur donné : tarifs obligatoires + options
+// encore applicables (même filtre secteur/tranche que getTarifsForSecteur —
+// une classe N+1 peut changer de secteur, ex. Kita 5 → Kita 6, et les tarifs
+// doivent suivre).
+const postesPourSecteur = (
+  tarifsSource: any[], trancheId: string | null, secteurId: string | null, optionIds: string[] = [],
+): PosteContrat[] => {
+  const options = new Set(optionIds)
+  return (tarifsSource || [])
+    .filter((t: any) => {
+      const matchSecteur = !t.secteur_id || t.secteur_id === (secteurId || '')
+      const matchTranche = !t.tranche_id || t.tranche_id === trancheId
+      return matchSecteur && matchTranche && (t.obligatoire || options.has(t.id))
+    })
+    .map((t: any) => ({ tarif_id: t.id, nom: t.nom_poste, montant: parseFloat(t.montant) || 0 }))
+}
+
+const sommePostes = (postes: PosteContrat[]): number =>
+  postes.reduce((s, p) => s + (Number(p.montant) || 0), 0)
+
 export default function ContratPage() {
-  const { anneeInscription } = useAnneeInscription()
+  const { anneeInscription, exerciceInscriptionId } = useAnneeInscription()
   const router = useRouter()
   const parent = useParentCtx()
   const { t } = useI18n()
@@ -54,6 +92,8 @@ export default function ContratPage() {
   // Enfants contrat
   const [enfantsContrat, setEnfantsContrat] = useState<any[]>([])
   const [admissions, setAdmissions] = useState<Record<string, string>>({})
+  // Classe N+1 imposée par l'établissement (cf. en-tête du fichier)
+  const [classesImposees, setClassesImposees] = useState<Record<string, ClasseImposee>>({})
 
   // Règlement
   const [modeReglement, setModeReglement] = useState('')
@@ -136,7 +176,8 @@ export default function ContratPage() {
     } catch { /* RPC absente = pas de blocage */ }
 
     // Charger les infos de l'école pour les textes dynamiques (nom institution, SEPA, assurance)
-    const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa, assurance_proposee, assurance_montant_annuel').eq('id', profile.ecole_id).single()
+    // + exercice courant (= année en cours) pour le calcul de la classe N+1.
+    const { data: ecData } = await s.from('ecoles').select('nom, nom_creancier, ics_sepa, assurance_proposee, assurance_montant_annuel, exercice_courant_id').eq('id', profile.ecole_id).single()
     setEcoleInfo(ecData)
 
     // Verrou DDR : si famille éligible mais pas de réponse ni renoncement → on bascule sur un mode lock
@@ -169,10 +210,63 @@ export default function ContratPage() {
       setSepaTitulaire(`${fam.parent1_prenom || ''} ${fam.parent1_nom || ''}`.trim())
     }
 
+    // Tranche effective : tranche de la famille, sinon première tranche présente dans les tarifs
+    const trancheFamilleLoad: string | null = fam?.tranche_id
+      || (Array.from(new Set((tar ?? []).map((t: any) => t.tranche_id).filter(Boolean)))[0] as string | undefined)
+      || null
+
+    // ── Classe N+1 : le passage de classe fait foi ──────────────────────────
+    // (a) scolarité de l'exercice d'inscription → classe définitive ;
+    // (b) sinon classe suivante calculée depuis l'année en cours ;
+    // (c) sinon rien d'imposé → le sélecteur reste libre (enfant nouveau).
+    const clsList: any[] = cls ?? []
+    const enfantsList: any[] = enf ?? []
+    const imposees: Record<string, ClasseImposee> = {}
+    if (enfantsList.length > 0) {
+      const exCourantId: string | null = (ecData as any)?.exercice_courant_id || null
+      let scoRows: any[] = []
+      try {
+        const { data: sco } = await s.from('scolarites')
+          .select('enfant_id, exercice_id, ecole_id, classe_id, annee_scolaire')
+          .in('enfant_id', enfantsList.map((e: any) => e.id))
+        scoRows = (sco ?? []).filter((r: any) => !r.ecole_id || r.ecole_id === profile.ecole_id)
+      } catch { /* scolarités illisibles côté parent : on retombe sur enfants.classe_id */ }
+
+      const imposer = (classeId: string, source: SourceClasse): ClasseImposee | null => {
+        const c = clsList.find((x: any) => x.id === classeId)
+        if (!c) return null
+        return {
+          classe_id: c.id,
+          classe_nom: c.nom || '',
+          secteur_id: c.secteur_id || null,
+          secteur_nom: c.secteurs?.nom || null,
+          source,
+        }
+      }
+
+      for (const e of enfantsList) {
+        // (a) scolarité déjà créée sur l'année demandée
+        const scoN1 = scoRows.find((r: any) => r.enfant_id === e.id && r.classe_id && (
+          exerciceInscriptionId ? r.exercice_id === exerciceInscriptionId : r.annee_scolaire === anneeInscription
+        ))
+        const depuisN1 = scoN1 ? imposer(scoN1.classe_id, 'scolarite_n1') : null
+        if (depuisN1) { imposees[e.id] = depuisN1; continue }
+        // (b) classe de l'année en cours (scolarités = source de vérité ;
+        //     enfants.classe_id en miroir si la scolarité n'est pas lisible)
+        const scoCourante = scoRows.find((r: any) => r.enfant_id === e.id && r.classe_id
+          && exCourantId && r.exercice_id === exCourantId)
+        const classeActuelleId: string = scoCourante?.classe_id || e.classe_id || ''
+        const suivante = trouverClasseSuivante(clsList, classeActuelleId)
+        const depuisPassage = suivante ? imposer(suivante.id, 'passage_calcule') : null
+        if (depuisPassage) imposees[e.id] = depuisPassage
+      }
+    }
+    setClassesImposees(imposees)
+
     // Pré-sélectionner enfants
     if (enf?.length && !cont) {
       // Statut admission par enfant
-      const enfantIds2 = (enf || []).map((e: any) => e.id)
+      const enfantIds2 = enfantsList.map((e: any) => e.id)
       const enfAdmStatuts: Record<string, string> = {}
       if (enfantIds2.length > 0) {
         const { data: fp } = await s.from('inscriptions_pedagogiques')
@@ -182,28 +276,38 @@ export default function ContratPage() {
         setAdmissions(enfAdmStatuts)
       }
 
-      // Tranche effective : tranche de la famille, sinon première tranche présente dans les tarifs
-      const trancheFamilleLoad = fam?.tranche_id
-        || Array.from(new Set((tar ?? []).map((t: any) => t.tranche_id).filter(Boolean)))[0]
-        || null
       // Pre-cocher seulement les enfants dont l'admission est validee
-      const enfAdmis = (enf || []).filter((e: any) => {
+      const enfAdmis = enfantsList.filter((e: any) => {
         const adm = enfAdmStatuts[e.id]
         return adm === 'accepte' || adm === 'valide' || !adm // si pas de fiche encore = enfant historique deja inscrit
       })
       setEnfantsContrat(enfAdmis.map((e: any) => {
-        const cls2 = e.classes
-        const secteurId = cls2?.secteur_id || ''
-        const tarifsApp = (tar ?? []).filter((t: any) => {
-          const matchSecteur = !t.secteur_id || t.secteur_id === secteurId
-          const matchTranche = !t.tranche_id || t.tranche_id === trancheFamilleLoad
-          return matchSecteur && matchTranche
-        })
-        const postesObl = e.classe_id ? tarifsApp.filter((t: any) => t.obligatoire).map((t: any) => ({ tarif_id: t.id, nom: t.nom_poste, montant: parseFloat(t.montant) || 0 })) : []
-        return { enfant_id: e.id, classe_id: e.classe_id || '', classe_nom: cls2?.nom || '', postes: postesObl, sous_total: postesObl.reduce((s: number, p: any) => s + p.montant, 0) }
+        // Classe imposée si elle existe, sinon classe actuelle (comportement historique)
+        const impos = imposees[e.id]
+        const classeId: string = impos?.classe_id || e.classe_id || ''
+        const cls2 = impos ? clsList.find((c: any) => c.id === impos.classe_id) : e.classes
+        const postesObl = classeId
+          ? postesPourSecteur(tar ?? [], trancheFamilleLoad, cls2?.secteur_id || '')
+          : []
+        return {
+          enfant_id: e.id,
+          classe_id: classeId,
+          classe_nom: impos?.classe_nom || cls2?.nom || '',
+          postes: postesObl,
+          sous_total: sommePostes(postesObl),
+        }
       }))
     } else if (cont?.contrat_enfants) {
-      setEnfantsContrat(cont.contrat_enfants)
+      // Contrat repris (non soumis) : la classe imposée prime aussi ici, et les
+      // postes sont recalés sur son secteur (les options déjà cochées sont
+      // conservées si elles restent applicables).
+      setEnfantsContrat((cont.contrat_enfants as any[]).map((ce: any) => {
+        const impos = imposees[ce.enfant_id]
+        if (!impos) return ce
+        const optionIds = (ce.postes || []).map((p: any) => p.tarif_id).filter(Boolean)
+        const postes = postesPourSecteur(tar ?? [], trancheFamilleLoad, impos.secteur_id, optionIds)
+        return { ...ce, classe_id: impos.classe_id, classe_nom: impos.classe_nom, postes, sous_total: sommePostes(postes) }
+      }))
     }
 
     setLoading(false)
@@ -241,7 +345,12 @@ export default function ContratPage() {
     ks()
     setEnfantsContrat(prev => {
       if (prev.some(e => e.enfant_id === enfantId)) return prev.filter(e => e.enfant_id !== enfantId)
-      return [...prev, { enfant_id: enfantId, classe_id: '', classe_nom: '', postes: [], sous_total: 0 }]
+      // Si la classe N+1 est imposée, on la (re)pose directement avec ses postes
+      // obligatoires : le parent n'a pas de sélecteur pour le faire.
+      const impos = classesImposees[enfantId]
+      if (!impos) return [...prev, { enfant_id: enfantId, classe_id: '', classe_nom: '', postes: [], sous_total: 0 }]
+      const postes = postesPourSecteur(tarifs, trancheEffective, impos.secteur_id)
+      return [...prev, { enfant_id: enfantId, classe_id: impos.classe_id, classe_nom: impos.classe_nom, postes, sous_total: sommePostes(postes) }]
     })
   }
 
@@ -440,13 +549,15 @@ export default function ContratPage() {
     // nombreuse, tarif accordé DDR, assurance) puis écrit atomiquement
     // contrat + contrat_enfants + échéancier (jour clampé au dernier jour du
     // mois) + mandat SEPA. On n'envoie QUE des identifiants et des choix.
+    // La classe envoyée est celle déterminée par l'appli quand elle est imposée
+    // (passage de classe) — le serveur la revérifie de toute façon.
     const enfantsPayload = enfantsContrat
-      .filter(e => e.classe_id)
       .map(e => ({
         enfant_id: e.enfant_id,
-        classe_id: e.classe_id,
+        classe_id: classesImposees[e.enfant_id]?.classe_id || e.classe_id,
         tarif_ids: (e.postes || []).map((p: any) => p.tarif_id).filter(Boolean),
       }))
+      .filter(e => e.classe_id)
 
     const { data: rpcData, error: rpcErr } = await s.rpc('soumettre_contrat_famille', {
       p_contrat_id: contrat?.id || null,
@@ -601,6 +712,7 @@ export default function ContratPage() {
         {enfants.map((enfant: any) => {
           const enf = enfantsContrat.find(e => e.enfant_id === enfant.id) || { classe_id: '', postes: [], sous_total: 0 }
           const isSelected = enfantsContrat.some(e => e.enfant_id === enfant.id)
+          const classeImposee = classesImposees[enfant.id] || null
           const cls = classes.find((c: any) => c.id === enf.classe_id)
           const tarifsDispos = getTarifsForSecteur(cls?.secteur_id || '')
           const adm = admissions[enfant.id]
@@ -631,13 +743,32 @@ export default function ContratPage() {
               </div>
               {isSelected && (
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div>
-                    <label style={lbl}>{t('portail.contrat.field.classe_souhaitee', { annee: anneeInscription })}</label>
-                    <select style={inp} value={enf.classe_id || ''} onChange={e => setEnfantClasse(enfant.id, e.target.value)}>
-                      <option value="">{t('portail.contrat.choose_class')}</option>
-                      {classes.map((c: any) => <option key={c.id} value={c.id}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}</option>)}
-                    </select>
-                  </div>
+                  {classeImposee ? (
+                    // Classe N+1 attribuée par l'établissement : lecture seule.
+                    <div>
+                      <label style={lbl}>{t('portail.contrat.field.classe_attribuee', { annee: anneeInscription }, 'Classe pour {annee}')}</label>
+                      <div style={{ ...inp, background: '#F1F5F9', borderColor: '#CBD5E1', color: '#1E293B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flexShrink: 0 }}>🔒</span>
+                        <span>{classeImposee.classe_nom}{classeImposee.secteur_nom ? ` — ${classeImposee.secteur_nom}` : ''}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 6, lineHeight: 1.5 }}>
+                        {t('portail.contrat.classe_attribuee_note', { annee: anneeInscription },
+                          "Classe attribuée par l'école pour {annee}. Pour toute demande de changement, contactez le secrétariat.")}
+                        {classeImposee.source === 'passage_calcule' && (
+                          <> {t('portail.contrat.classe_attribuee_a_confirmer',
+                            "Elle découle du passage de classe et sera confirmée par l'école.")}</>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label style={lbl}>{t('portail.contrat.field.classe_souhaitee', { annee: anneeInscription })}</label>
+                      <select style={inp} value={enf.classe_id || ''} onChange={e => setEnfantClasse(enfant.id, e.target.value)}>
+                        <option value="">{t('portail.contrat.choose_class')}</option>
+                        {classes.map((c: any) => <option key={c.id} value={c.id}>{c.nom}{c.secteurs?.nom ? ` — ${c.secteurs.nom}` : ''}</option>)}
+                      </select>
+                    </div>
+                  )}
                   {enf.classe_id && tarifsDispos.length > 0 && (
                     <div>
                       <label style={lbl}>{t('portail.contrat.prestations')}</label>
