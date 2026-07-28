@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
 import AidePage from '@/components/ui/AidePage'
 
@@ -9,6 +10,11 @@ type Forfait = { id: string; nom: string; zone: string | null; trajet: string | 
 
 export default function TransportPage() {
   const ecole = useEcole()
+  // Annee pilotee par le selecteur d'exercice global (header). On attend que le contexte
+  // ait resolu l'exercice avant de charger : sinon on afficherait une seconde les
+  // chiffres de l'annee calculee par date, qui n'est pas forcement celle selectionnee.
+  const annee = useAnneeScolaireActive()
+  const { loading: exerciceLoading } = useExercice()
   const [tab, setTab] = useState<'inscriptions'|'depuis_contrats'|'forfaits'>('depuis_contrats')
   const [forfaits, setForfaits] = useState<Forfait[]>([])
   const [inscriptions, setInscriptions] = useState<any[]>([])
@@ -19,7 +25,7 @@ export default function TransportPage() {
   const [form, setForm] = useState({ nom: '', zone: '', trajet: 'aller_retour', prix: '' })
 
   const load = useCallback(async () => {
-    if (!ecole?.id) return
+    if (!ecole?.id || exerciceLoading) return
     setLoading(true)
     const s = createClient()
     const [{ data: f }, { data: i }] = await Promise.all([
@@ -31,15 +37,24 @@ export default function TransportPage() {
 
     // Charger les inscriptions "depuis contrat" : enfants ayant un tarif de
     // categorie 'transport' dans leurs postes JSONB (champ explicite, fini l'heuristique)
+    //
+    // FIX audit 28/07/2026 : ni les tarifs ni les contrats n'etaient filtres par annee.
+    // Le "CA annuel (depuis contrats)" cumulait donc toutes les annees d'exploitation et
+    // aurait grossi tout seul chaque annee (~3x la realite a la 3e annee).
+    // On filtre sur `contrats_scolarisation.annee_scolaire` (toujours renseigne, c'est la
+    // cle metier famille+annee) plutot que sur `exercice_id`, qui n'est backfille
+    // qu'opportunement et peut etre NULL sur les contrats existants.
     const { data: tarifsTransport } = await s.from('tarifs_secteur')
       .select('id, nom_poste, montant, groupe_exclusif')
       .eq('ecole_id', ecole.id)
       .eq('categorie', 'transport')
+      .eq('annee_scolaire', annee)
     const idsTransport = new Set((tarifsTransport || []).map((t: any) => t.id))
     if (idsTransport.size > 0) {
       const { data: contratEnfants } = await s.from('contrat_enfants')
         .select('id, enfant_id, postes, sous_total, contrat_id, contrats_scolarisation!inner(id, annee_scolaire, statut, ecole_id), enfants(prenom, nom, classes(nom), familles(nom))')
         .eq('contrats_scolarisation.ecole_id', ecole.id)
+        .eq('contrats_scolarisation.annee_scolaire', annee)
         .in('contrats_scolarisation.statut', ['valide', 'accepte', 'soumis'])
       const filtres: any[] = []
       ;(contratEnfants || []).forEach((ce: any) => {
@@ -61,7 +76,7 @@ export default function TransportPage() {
       setDepuisContrats([])
     }
     setLoading(false)
-  }, [ecole?.id])
+  }, [ecole?.id, annee, exerciceLoading])
   useEffect(() => { load() }, [load])
 
   async function saveForfait(e: React.FormEvent) {
@@ -98,26 +113,32 @@ export default function TransportPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>🚌 Transport</h1>
-        <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Forfaits transport scolaire, inscriptions, facturation.</p>
+        <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Forfaits transport scolaire, inscriptions, facturation — année {annee}.</p>
       </div>
 
       <AidePage route="transport" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Inscrits</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Inscrits (manuels, actifs)</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#1E293B' }}>{inscriptions.length}</div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Hors options portées par les contrats</div>
+        </div>
+        {/* Les deux montants ci-dessous n'ont PAS la meme unite (l'un est mensuel,
+            l'autre annuel) et ne se cumulent pas : l'unite est donc dans le libelle,
+            repetee sous la valeur, et la source est explicitee. */}
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Inscriptions manuelles · € / mois</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#10B981' }}>{fmt(totalMensuel)} <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>/ mois</span></div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Somme des forfaits mensuels des {inscriptions.length} inscrit{inscriptions.length > 1 ? 's' : ''}</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>CA mensuel (inscriptions)</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#10B981' }}>{fmt(totalMensuel)}</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Contrats {annee} · € / an</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#059669' }}>{fmt(totalAnnuelContrats)} <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>/ an</span></div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Options transport des contrats de {annee}</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>CA annuel (depuis contrats)</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#059669' }}>{fmt(totalAnnuelContrats)}</div>
-        </div>
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Forfaits</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Forfaits actifs</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#2563EB' }}>{forfaits.filter(f => f.actif).length}</div>
         </div>
       </div>
@@ -143,7 +164,7 @@ export default function TransportPage() {
       </div>
 
       {tab === 'depuis_contrats' && (
-        <OptionsDepuisContrats ecoleId={ecole.id} categorie="transport" />
+        <OptionsDepuisContrats ecoleId={ecole.id} categorie="transport" annee={annee} />
       )}
 
       {tab === 'forfaits' && (

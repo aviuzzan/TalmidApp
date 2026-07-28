@@ -12,6 +12,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { calcDuADateBatch } from '@/lib/du-a-date'
+import { compterEffectifs } from '@/lib/effectifs'
 
 type Bilan = {
   demandesAujourdhui: number
@@ -27,8 +28,10 @@ type Bilan = {
   nbPaiementsAujourdhui: number
   avoirsImputesAujourdhui: number
   nbAvoirsImputesAujourdhui: number
-  resteAEncaisser: number
-  facturesRetard30Count: number
+  // FIX audit 28/07 : un seul "reste à encaisser" (`totalRestant`), filtré sur
+  // l'exercice — cf. page principale. L'ancien `resteAEncaisser` cumulait toutes
+  // les années depuis la création de l'école.
+  facturesRetard30Count: number      // nb de FAMILLES distinctes en retard (dédupliqué)
   facturesRetard30Montant: number
   echeancesSemaineCount: number
   echeancesSemaineMontant: number
@@ -85,7 +88,7 @@ export default function BilanPrintPage() {
         { count: contratsJour },
         { count: ddrJour },
         { data: reglementsJour },
-        { data: facturesAll },
+        { data: facturesExercice },
         { data: echeancesSemaine },
         { data: echeancesRetard },
         { data: threadsOuverts },
@@ -93,9 +96,7 @@ export default function BilanPrintPage() {
         { count: contratsSoumis },
         { count: pedaSoumis },
         { count: demandesVieilles },
-        { count: famN },
-        { count: eleN },
-        { data: facturesExercice },
+        effectifs,
         { data: contratsRentree },
         { count: enfantsContratRentree },
       ] = await Promise.all([
@@ -116,8 +117,12 @@ export default function BilanPrintPage() {
         s.from('reglements').select('montant, mode_paiement, factures!inner(famille_id, familles!inner(ecole_id))')
           .eq('factures.familles.ecole_id', ecole.id)
           .eq('date_reglement', aujourdhui),
-        s.from('factures_solde').select('id, solde_restant, statut, familles!inner(ecole_id)')
+        // FIX audit 28/07 : requête filtrée sur l'exercice (elle ne l'était pas et
+        // cumulait toutes les années). Source UNIQUE des montants annuels du bilan.
+        s.from('factures_solde')
+          .select('id, famille_id, total_facture, total_regle, solde_restant, statut, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id)
+          .eq('exercice_id', exerciceId)
           .neq('statut', 'annule'),
         s.from('cheques_prevus').select('montant, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id).eq('statut', 'prevu')
@@ -128,20 +133,21 @@ export default function BilanPrintPage() {
         s.from('message_threads')
           .select('id, last_message_at, messages(created_at, auteur_profile_id)')
           .eq('ecole_id', ecole.id).eq('statut', 'ouvert'),
+        // FIX audit 28/07 : alertes filtrées sur l'ANNÉE D'INSCRIPTION, comme /a-traiter
+        // (cf. page principale). Statuts volontairement en sur-ensemble de /a-traiter.
         s.from('demandes_reduction').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecole.id).in('statut', ['soumise', 'en_attente', 'soumis', 'en_etude']),
+          .eq('ecole_id', ecole.id).eq('annee_scolaire', anneeInscription)
+          .in('statut', ['soumise', 'en_attente', 'soumis', 'en_etude']),
         s.from('contrats_scolarisation').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecole.id).eq('statut', 'soumis'),
+          .eq('ecole_id', ecole.id).eq('annee_scolaire', anneeInscription).eq('statut', 'soumis'),
         s.from('inscriptions_pedagogiques').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecole.id).eq('statut', 'soumis'),
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecole.id).eq('statut', 'en_attente')
           .lt('soumis_le', ilYa3jours),
-        s.from('familles').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
-        s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true })
-          .eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
-        s.from('factures_solde').select('total_facture, total_regle, solde_restant, familles!inner(ecole_id)')
-          .eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
+        // FIX audit 28/07 : effectifs via `scolarites` + exercice (lib/effectifs.ts),
+        // même définition que la page /enfants et que la page principale du bilan.
+        compterEffectifs(s, ecole.id, exerciceId),
         // Avancement rentrée — contrats signés (statuts soumis/valide/accepte) sur l'année d'inscription
         s.from('contrats_scolarisation')
           .select('id, famille_id')
@@ -161,18 +167,33 @@ export default function BilanPrintPage() {
       const avoirsImputes = regs.filter(r => r.mode_paiement === 'avoir')
       const encaisseAujourdhui = paiementsReels.reduce((sum, r) => sum + Number(r.montant || 0), 0)
       const avoirsImputesAujourdhui = avoirsImputes.reduce((sum, r) => sum + Number(r.montant || 0), 0)
-      const factAll = (facturesAll ?? []) as any[]
-      const resteAEncaisser = factAll.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
+      // Factures de l'exercice — SOURCE UNIQUE des montants annuels du bilan.
+      // NOTE : `total_regle` exclut les avoirs imputés ; le reste à encaisser vient
+      // de `solde_restant`.
+      const factEx = (facturesExercice ?? []) as any[]
+      const totalFacture = factEx.reduce((sum, f) => sum + Number(f.total_facture || 0), 0)
+      const totalRegle = factEx.reduce((sum, f) => sum + Number(f.total_regle || 0), 0)
+      const totalRestantS5 = factEx.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
       // Vrai retard = du a date (echeances echues non couvertes), plus "emission + 30j".
-      let retardCount = 0
+      // Compteur dédupliqué PAR FAMILLE (cf. page principale).
       let retardMontant = 0
-      const idsAvecSolde = factAll.filter(f => Number(f.solde_restant) > 0).map(f => f.id)
+      const famillesEnRetard = new Set<string>()
+      const familleParFacture: Record<string, string> = {}
+      for (const f of factEx) {
+        if (f.id && f.famille_id) familleParFacture[f.id] = f.famille_id
+      }
+      const idsAvecSolde = factEx.filter(f => Number(f.solde_restant) > 0).map(f => f.id)
       if (idsAvecSolde.length > 0) {
         const duMap = await calcDuADateBatch(s, idsAvecSolde)
-        for (const r of Object.values(duMap)) {
-          if (r.enRetard) { retardCount++; retardMontant += r.duAdate }
+        for (const [factureId, r] of Object.entries(duMap)) {
+          if (r.enRetard) {
+            retardMontant += r.duAdate
+            const fid = familleParFacture[factureId]
+            if (fid) famillesEnRetard.add(fid)
+          }
         }
       }
+      const retardCount = famillesEnRetard.size
       const echSem = (echeancesSemaine ?? []) as any[]
       const echRetard = (echeancesRetard ?? []) as any[]
 
@@ -188,17 +209,10 @@ export default function BilanPrintPage() {
       const contratsSignes = contratsR.length
       const enfantsAvecContrat = enfantsContratRentree ?? 0
       const famillesAvecContratSigne = new Set(contratsR.map(c => c.famille_id).filter(Boolean)).size
-      const totalFam = famN ?? 0
-      const totalEle = eleN ?? 0
+      const totalFam = effectifs.familles
+      const totalEle = effectifs.eleves
       const contratsManquants = Math.max(0, totalFam - famillesAvecContratSigne)
       const enfantsSansContrat = Math.max(0, totalEle - enfantsAvecContrat)
-
-      // NOTE : `total_regle` exclut désormais les avoirs imputés. On utilise `solde_restant`
-      // pour le reste à encaisser (mathématiquement correct).
-      const factEx = (facturesExercice ?? []) as any[]
-      const totalFacture = factEx.reduce((sum, f) => sum + Number(f.total_facture || 0), 0)
-      const totalRegle = factEx.reduce((sum, f) => sum + Number(f.total_regle || 0), 0)
-      const totalRestantS5 = factEx.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
 
       setBilan({
         demandesAujourdhui: demJour ?? 0,
@@ -213,7 +227,6 @@ export default function BilanPrintPage() {
         nbPaiementsAujourdhui: paiementsReels.length,
         avoirsImputesAujourdhui,
         nbAvoirsImputesAujourdhui: avoirsImputes.length,
-        resteAEncaisser,
         facturesRetard30Count: retardCount,
         facturesRetard30Montant: retardMontant,
         echeancesSemaineCount: echSem.length,
@@ -226,8 +239,8 @@ export default function BilanPrintPage() {
         contratsAValider: contratsSoumis ?? 0,
         inscriptionsPedaAValider: pedaSoumis ?? 0,
         demandesEnAttenteVieux: demandesVieilles ?? 0,
-        totalFamilles: famN ?? 0,
-        totalEleves: eleN ?? 0,
+        totalFamilles: effectifs.familles,
+        totalEleves: effectifs.eleves,
         totalFacture,
         totalRegle,
         totalRestant: totalRestantS5,
@@ -351,9 +364,10 @@ export default function BilanPrintPage() {
               <Kpi label="Paiements reçus" value={fmtNum(bilan.nbPaiementsAujourdhui)} color="#065F46" />
               <Kpi label={`Avoirs imputés (${bilan.nbAvoirsImputesAujourdhui})`}
                 value={fmtEur(bilan.avoirsImputesAujourdhui)} color="#7C3AED" />
-              <Kpi label="Reste à encaisser" value={fmtEur(bilan.resteAEncaisser)}
-                color={bilan.resteAEncaisser > 0 ? '#991B1B' : '#065F46'} />
-              <Kpi label={`Retard réel (${bilan.facturesRetard30Count})`}
+              {/* Même valeur que la section « Vue d'ensemble » : un seul calcul, filtré exercice. */}
+              <Kpi label={`Reste à encaisser (${annee})`} value={fmtEur(bilan.totalRestant)}
+                color={bilan.totalRestant > 0 ? '#991B1B' : '#065F46'} />
+              <Kpi label={`Familles en retard (${bilan.facturesRetard30Count})`}
                 value={fmtEur(bilan.facturesRetard30Montant)}
                 color={bilan.facturesRetard30Count > 0 ? '#991B1B' : '#065F46'} />
               <Kpi label={`Échéances 7j (${bilan.echeancesSemaineCount})`}
@@ -361,7 +375,10 @@ export default function BilanPrintPage() {
               <Kpi label={`Échéances échues à pointer (${bilan.echeancesRetardCount})`}
                 value={fmtEur(bilan.echeancesRetardMontant)}
                 color={bilan.echeancesRetardCount > 0 ? '#B45309' : '#065F46'} />
-              <Kpi label="Total échéances à venir" value={fmtEur(bilan.echeancesSemaineMontant + bilan.echeancesRetardMontant)} color="#1E40AF" />
+              {/* Libellé corrigé (audit 28/07) : ce total additionne les échéances des
+                  7 prochains jours ET les échues non pointées — ce ne sont donc pas
+                  uniquement des échéances « à venir ». */}
+              <Kpi label="Total 7j + échues à pointer" value={fmtEur(bilan.echeancesSemaineMontant + bilan.echeancesRetardMontant)} color="#1E40AF" />
             </KpiGrid>
           </Section>
         </div>
@@ -396,7 +413,7 @@ export default function BilanPrintPage() {
         <Section titre={`Vue d'ensemble — Exercice ${annee}`} couleur="#475569" bg="#F8FAFC" border="#E2E8F0">
           <KpiGrid cols={5}>
             <Kpi label="Familles actives" value={fmtNum(bilan.totalFamilles)} color="#1E293B" />
-            <Kpi label="Élèves inscrits" value={fmtNum(bilan.totalEleves)} color="#1E293B" />
+            <Kpi label="Élèves actifs" value={fmtNum(bilan.totalEleves)} color="#1E293B" />
             <Kpi label="Total facturé" value={fmtEur(bilan.totalFacture)} color="#1E293B" />
             <Kpi label="Total réglé" value={fmtEur(bilan.totalRegle)} color="#065F46" />
             <Kpi label="Reste à encaisser" value={fmtEur(bilan.totalRestant)}

@@ -89,7 +89,7 @@ export default function LsuPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>📑 LSU — Livret Scolaire Unique</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
-          Export XML conforme BOEN à partir des bulletins. Pour les écoles sous contrat (CP-CM2, 6e-3e). Obligatoire depuis 2016.
+          Export XML des bulletins (format interne) — l&apos;import direct dans LSU n&apos;est pas encore pris en charge. Pour les écoles sous contrat (CP-CM2, 6e-3e).
         </p>
       </div>
 

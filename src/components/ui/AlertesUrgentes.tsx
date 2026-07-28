@@ -4,10 +4,11 @@
  *
  * Affiche une bannière unique avec les actions prioritaires que l'admin
  * a oubliées ou doit traiter. Calcul live depuis Supabase :
- *  - Demandes de réduction soumises (statut = 'soumise' / 'en_attente')
- *  - Contrats de scolarisation N+1 soumis non validés
+ *  - Demandes de réduction soumises, sur l'année d'INSCRIPTION (comme /a-traiter)
+ *  - Contrats de scolarisation N+1 soumis non validés, même année (comme /a-traiter)
  *  - Demandes d'inscription externes en attente
- *  - Familles en retard REEL (du a date > 0 : echeances echues non couvertes)
+ *  - Familles DISTINCTES en retard REEL (du a date > 0 : echeances echues non
+ *    couvertes) — dédupliquées par famille_id, jamais un comptage de factures
  *  - Chèques prévus à encaisser ce mois (date_echeance dans le mois courant)
  *
  * Si rien d'urgent, affiche un message positif "Tout est à jour".
@@ -16,6 +17,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { calcDuADateBatch } from '@/lib/du-a-date'
+import { getExerciceInscription } from '@/lib/annee-inscription'
 
 type Alerte = {
   icon: string
@@ -37,6 +39,11 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
       const now = new Date()
       const moisDebut = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
       const moisFin = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+      // FIX audit 28/07 : DDR et contrats sont filtrés sur l'ANNÉE D'INSCRIPTION,
+      // exactement comme l'inbox /a-traiter (a-traiter/page.tsx:42-47, même helper).
+      // Sans ce filtre, cette bannière comptait aussi les objets des années
+      // précédentes et affichait des nombres différents de /a-traiter.
+      const { code: anneeInscription } = await getExerciceInscription(s, ecoleId)
 
       const [
         { count: ddrCount },
@@ -47,16 +54,21 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
       ] = await Promise.all([
         // FIX audit 27/07 : le portail ecrit 'soumis' (masculin) -> l'alerte ne se
         // declenchait jamais avec ['soumise','en_attente']. Couvre les deux + en_etude.
+        // La liste de statuts reste volontairement un SUR-ENSEMBLE de celle de
+        // /a-traiter (['soumis','en_etude']) : mieux vaut sur-alerter que masquer
+        // une demande jamais traitée écrite avec l'ancienne orthographe.
         s.from('demandes_reduction').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecoleId).in('statut', ['soumis', 'soumise', 'en_attente', 'en_etude']),
+          .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription)
+          .in('statut', ['soumis', 'soumise', 'en_attente', 'en_etude']),
         s.from('contrats_scolarisation').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecoleId).eq('statut', 'soumis'),
+          .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).eq('statut', 'soumis'),
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecoleId).eq('statut', 'en_attente'),
         // Candidats retard : factures avec solde. Le VRAI retard est calcule ensuite
         // via du-a-date (echeances echues non couvertes), pas date_emission + 30j
         // qui marquait "en retard" toute facture annuelle emise 30j avant.
-        s.from('factures_solde').select('id, familles!inner(ecole_id)')
+        // `famille_id` est nécessaire pour dédupliquer par FAMILLE (cf. plus bas).
+        s.from('factures_solde').select('id, famille_id, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecoleId)
           .gt('solde_restant', 0)
           .neq('statut', 'annule'),
@@ -70,18 +82,32 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
       ])
 
       // Vrai retard : du a date > 0 uniquement.
-      let factCount = 0
-      const idsAvecSolde = ((factAvecSolde ?? []) as any[]).map(f => f.id)
+      // FIX audit 28/07 : `duMap` est indexée PAR FACTURE — on comptait donc des
+      // factures en les libellant « familles » (une famille avec 3 factures était
+      // comptée 3 fois). On déduplique par `famille_id`, comme
+      // finances/dashboard/page.tsx.
+      const factures = (factAvecSolde ?? []) as any[]
+      const familleParFacture: Record<string, string> = {}
+      for (const f of factures) {
+        if (f.id && f.famille_id) familleParFacture[f.id] = f.famille_id
+      }
+      const famillesEnRetard = new Set<string>()
+      const idsAvecSolde = factures.map(f => f.id).filter(Boolean)
       if (idsAvecSolde.length > 0) {
         const duMap = await calcDuADateBatch(s, idsAvecSolde)
-        factCount = Object.values(duMap).filter(r => r.enRetard).length
+        for (const [factureId, r] of Object.entries(duMap)) {
+          if (!r.enRetard) continue
+          const fid = familleParFacture[factureId]
+          if (fid) famillesEnRetard.add(fid)
+        }
       }
+      const famillesEnRetardCount = famillesEnRetard.size
 
       const list: Alerte[] = []
       if ((ddrCount ?? 0) > 0) list.push({ icon: '🧾', label: 'demande(s) de réduction à traiter', count: ddrCount!, href: `/${ecoleSlug}/inscriptions?onglet=ddr`, couleur: 'orange' })
       if ((contratCount ?? 0) > 0) list.push({ icon: '📝', label: 'contrat(s) N+1 à valider', count: contratCount!, href: `/${ecoleSlug}/inscriptions?onglet=contrats`, couleur: 'orange' })
       if ((demandesCount ?? 0) > 0) list.push({ icon: '📨', label: 'demande(s) d\'inscription externe en attente', count: demandesCount!, href: `/${ecoleSlug}/demandes-inscription`, couleur: 'bleu' })
-      if (factCount > 0) list.push({ icon: '💰', label: 'famille(s) en retard sur échéance', count: factCount, href: `/${ecoleSlug}/finances/relances`, couleur: 'rouge' })
+      if (famillesEnRetardCount > 0) list.push({ icon: '💰', label: 'famille(s) en retard sur échéance', count: famillesEnRetardCount, href: `/${ecoleSlug}/finances/relances`, couleur: 'rouge' })
       if ((chequesCount ?? 0) > 0) list.push({ icon: '✉️', label: 'chèque(s) à encaisser ce mois', count: chequesCount!, href: `/${ecoleSlug}/finances/bordereau`, couleur: 'bleu' })
 
       setAlertes(list)

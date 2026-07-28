@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
@@ -8,7 +8,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { labelModePaiement, labelStatutFacture, couleurStatutFacture } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
-import { getAnneeCouranteSync } from '@/lib/annee-courante'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
 import AidePage from '@/components/ui/AidePage'
 
@@ -55,33 +55,29 @@ export default function FinancesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // L'année scolaire courante est calculée par le helper centralisé (@/lib/annee-courante).
+  // FIX audit 28/07/2026 : cette page avait son PROPRE selecteur d'annee persiste dans
+  // localStorage['finances_annee'], independant du selecteur d'exercice global. On pouvait
+  // donc ouvrir Finances sur 2025-2026 et le tableau de bord financier sur 2026-2027 sans
+  // le moindre avertissement. L'annee vient desormais UNIQUEMENT de l'exercice selectionne
+  // dans le header global (meme source que /finances/dashboard, qui utilise le meme helper).
+  const ANNEE = useAnneeScolaireActive()
+  // Tant que le contexte resout l'exercice, `useAnneeScolaireActive()` retombe sur le
+  // calcul par date : on ne charge rien pour ne pas afficher une autre annee une seconde.
+  const { loading: exerciceLoading } = useExercice()
   const [ANNEES_DISPO, setAnneesDispo] = useState<string[]>([])
-  const [ANNEE, setANNEE] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('finances_annee') || getAnneeCouranteSync()
-    }
-    return getAnneeCouranteSync()
-  })
 
-  function changeAnnee(a: string) {
-    setANNEE(a)
-    if (typeof window !== 'undefined') localStorage.setItem('finances_annee', a)
-  }
-
-  // Charge la liste des annees depuis la table exercices (filtree par ecole)
+  // Charge la liste des annees depuis la table exercices (filtree par ecole).
+  // Sert uniquement au champ "Annee scolaire" du formulaire de creation de facture.
   useEffect(() => {
     if (!ecole?.id) return
     const s = createClient()
     s.from('exercices').select('code').eq('ecole_id', ecole.id).order('code', { ascending: false }).then(({ data }) => {
       const codes = Array.from(new Set((data || []).map((r: any) => r.code).filter(Boolean))) as string[]
-      if (codes.length) {
-        // Assure que l'annee courante (deja selectionnee par defaut) est dans la liste
-        const withCurrent = ANNEE && !codes.includes(ANNEE) ? [ANNEE, ...codes] : codes
-        setAnneesDispo(withCurrent)
-      }
+      // Assure que l'annee active (celle du selecteur global) est dans la liste
+      const withCurrent = ANNEE && !codes.includes(ANNEE) ? [ANNEE, ...codes] : codes
+      if (withCurrent.length) setAnneesDispo(withCurrent)
     })
-  }, [ecole?.id])
+  }, [ecole?.id, ANNEE])
 
   // Charge les modes de règlement actifs configurés pour cette école.
   // Colonnes réelles (cf. modes_reglement_ecole) : `type` (code persisté) et `label` (libellé humain).
@@ -115,13 +111,31 @@ export default function FinancesPage() {
   const emptyFacture = { famille_id: '', annee_scolaire: ANNEE, notes: '' }
   const [factureForm, setFactureForm] = useState(emptyFacture)
 
-  const supabase = createClient()
+  // useMemo : `createClient()` cree un nouveau client a chaque appel. Sans memo, la
+  // reference change a chaque render et `load` (useCallback) serait recree en boucle
+  // des qu'on le met dans ses dependances.
+  const supabase = useMemo(() => createClient(), [])
 
   const load = useCallback(async () => {
+    if (!ecole?.id || exerciceLoading) return
+    setLoading(true)
+    // FIX audit 28/07/2026 : les 3 requetes sont desormais filtrees ECOLE + ANNEE.
+    // - factures_solde et reglements n'exposent pas ecole_id : on passe par familles
+    //   (meme pattern que /finances/relances et /bilan-quotidien).
+    // - l'onglet Paiements chargeait `reglements` et `familles` SANS AUCUN filtre :
+    //   toutes les annees confondues, et toutes les ecoles pour un compte super_admin.
     const [{ data: f }, { data: fam }, { data: regs }] = await Promise.all([
-      supabase.from('factures_solde').select('*, familles(nom, numero)').eq('annee_scolaire', ANNEE).order('date_emission', { ascending: false }),
-      supabase.from('familles').select('id, nom, numero').order('nom'),
-      supabase.from('reglements').select('*, familles(nom, numero), factures(numero)').order('date_reglement', { ascending: false }),
+      supabase.from('factures_solde')
+        .select('*, familles!inner(nom, numero, ecole_id)')
+        .eq('familles.ecole_id', ecole.id)
+        .eq('annee_scolaire', ANNEE)
+        .order('date_emission', { ascending: false }),
+      supabase.from('familles').select('id, nom, numero').eq('ecole_id', ecole.id).order('nom'),
+      supabase.from('reglements')
+        .select('*, familles(nom, numero), factures!inner(numero, annee_scolaire, familles!inner(ecole_id))')
+        .eq('factures.familles.ecole_id', ecole.id)
+        .eq('factures.annee_scolaire', ANNEE)
+        .order('date_reglement', { ascending: false }),
     ])
     setFactures(f ?? [])
     setFamilles(fam ?? [])
@@ -137,7 +151,7 @@ export default function FinancesPage() {
     }
 
     setLoading(false)
-  }, [ANNEE])
+  }, [ANNEE, ecole?.id, supabase, exerciceLoading])
 
   useEffect(() => { load() }, [load])
 
@@ -222,7 +236,7 @@ export default function FinancesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>{t('pages.finances.title')}</h1>
-          <p style={{ color: '#64748B', fontSize: 13 }}>Facturation & règlements</p>
+          <p style={{ color: '#64748B', fontSize: 13 }}>Facturation &amp; règlements — exercice {ANNEE}</p>
         </div>
         <button
           onClick={() => router.push(`/${ecole.slug}/parametres?tab=tarifs`)}
@@ -429,7 +443,7 @@ export default function FinancesPage() {
                   {loading ? (
                     <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Chargement...</td></tr>
                   ) : reglementsFiltres.length === 0 ? (
-                    <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucun règlement {reglements.length > 0 ? 'pour ces filtres' : 'enregistré'}</td></tr>
+                    <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#CBD5E1' }}>Aucun règlement {reglements.length > 0 ? 'pour ces filtres' : `enregistré pour ${ANNEE}`}</td></tr>
                   ) : reglementsFiltres.map((r, i) => {
                     const isAvoir = r.mode_paiement === 'avoir'
                     const rowBgBase = isAvoir ? '#FAF5FF' : 'transparent'

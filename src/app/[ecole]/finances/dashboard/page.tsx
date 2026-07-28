@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { useAnneeScolaireActive } from '@/lib/exercice-context'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { labelStatutFacture } from '@/lib/statuts'
 import { calcDuADateBatch } from '@/lib/du-a-date'
 
@@ -15,6 +15,7 @@ type Kpi = {
   nb_factures_payees: number
   nb_factures_partiel: number
   nb_factures_attente: number
+  nb_factures_autres: number
   nb_familles_avec_solde: number
   nb_familles_en_retard: number
   montant_du_a_date: number
@@ -28,19 +29,28 @@ export default function FinancesDashboardPage() {
   const ecole = useEcole()
   const annee = useAnneeScolaireActive()
   // exerciceSelectionne / selectExercice fournis par le header global — pas besoin ici.
+  // On attend seulement que le contexte ait fini de resoudre l'exercice : sinon
+  // `useAnneeScolaireActive()` retombe sur le calcul par date et on afficherait
+  // brievement les chiffres d'une autre annee que celle du selecteur.
+  const { loading: exerciceLoading } = useExercice()
   const [loading, setLoading] = useState(true)
   const [kpi, setKpi] = useState<Kpi | null>(null)
 
-  useEffect(() => { if (ecole?.id) load() }, [ecole?.id, annee])
+  useEffect(() => { if (ecole?.id && !exerciceLoading) load() }, [ecole?.id, annee, exerciceLoading])
 
   async function load() {
     setLoading(true)
     const s = createClient()
 
     // Factures + lignes + règlements pour l'exercice
+    // FIX audit 28/07/2026 : filtre ecole EXPLICITE (la vue factures_solde n'expose pas
+    // ecole_id — on passe par familles, comme /finances/relances et /bilan-quotidien).
+    // Avant, le cloisonnement reposait uniquement sur la RLS : pour un compte super_admin
+    // le tableau de bord agregeait TOUTES les ecoles.
     const { data: factures } = await s
       .from('factures_solde')
-      .select('*, familles(id, nom, numero)')
+      .select('*, familles!inner(id, nom, numero, ecole_id)')
+      .eq('familles.ecole_id', ecole.id)
       .eq('annee_scolaire', annee)
 
     // FIX audit 24/07/2026 : exclure les factures annulees des KPI (regression du fix B4)
@@ -50,9 +60,32 @@ export default function FinancesDashboardPage() {
     const solde_restant = f.reduce((sum, x: any) => sum + Number(x.solde_restant || 0), 0)
 
     const nb_factures = f.length
-    const nb_factures_payees = f.filter((x: any) => x.statut === 'paye').length
-    const nb_factures_partiel = f.filter((x: any) => x.statut === 'partiel').length
-    const nb_factures_attente = f.filter((x: any) => Number(x.solde_restant || 0) > 0 && x.statut !== 'annule').length
+
+    // Repartition par statut — categories MUTUELLEMENT EXCLUSIVES.
+    // FIX audit 28/07/2026 : avant, "en attente" = toutes les factures avec solde > 0,
+    // ce qui incluait les partielles (comptees deux fois) : la somme des trois barres
+    // pouvait depasser 100 % du total. On partitionne desormais sur les MONTANTS
+    // (source de verite, coherente avec les KPI CA facture / CA encaisse / solde) :
+    //   soldees   = solde_restant <= 0                        (payee, ou trop-percu)
+    //   partielle = solde_restant > 0 ET total_regle > 0       (acompte encaisse)
+    //   attente   = solde_restant > 0 ET total_regle = 0       (rien d'encaisse)
+    //   autres    = facture sans montant (total = 0 et rien de regle)
+    // Chaque facture tombe dans une et une seule categorie, donc
+    // payees + partielles + attente + autres === nb_factures, toujours.
+    const EPS = 0.005
+    let nb_factures_payees = 0
+    let nb_factures_partiel = 0
+    let nb_factures_attente = 0
+    let nb_factures_autres = 0
+    for (const x of f as any[]) {
+      const total = Number(x.total_facture || 0)
+      const regle = Number(x.total_regle || 0)
+      const solde = Number(x.solde_restant || 0)
+      if (total <= EPS && regle <= EPS) nb_factures_autres++
+      else if (solde <= EPS) nb_factures_payees++
+      else if (regle > EPS) nb_factures_partiel++
+      else nb_factures_attente++
+    }
 
     // Top débiteurs
     const dette_par_famille: Record<string, { nom: string; numero: string; solde: number }> = {}
@@ -94,9 +127,13 @@ export default function FinancesDashboardPage() {
     debut.setDate(1)
     // Encaissements mensuels : on EXCLUT les avoirs imputés (mode_paiement='avoir') pour
     // refléter de vrais flux de trésorerie.
+    // FIX audit 28/07/2026 : filtre ecole EXPLICITE via facture -> famille (reglements
+    // n'a pas de colonne ecole_id). Sans ce filtre, un compte super_admin voyait la
+    // tresorerie de toutes les ecoles cumulee.
     const { data: regs } = await s
       .from('reglements')
-      .select('montant, mode_paiement, date_reglement, factures!inner(annee_scolaire)')
+      .select('montant, mode_paiement, date_reglement, factures!inner(annee_scolaire, familles!inner(ecole_id))')
+      .eq('factures.familles.ecole_id', ecole.id)
       .eq('factures.annee_scolaire', annee)
       .neq('mode_paiement', 'avoir')
       .gte('date_reglement', debut.toISOString().split('T')[0])
@@ -129,7 +166,7 @@ export default function FinancesDashboardPage() {
 
     setKpi({
       ca_facture, ca_encaisse, solde_restant,
-      nb_factures, nb_factures_payees, nb_factures_partiel, nb_factures_attente,
+      nb_factures, nb_factures_payees, nb_factures_partiel, nb_factures_attente, nb_factures_autres,
       nb_familles_avec_solde, nb_familles_en_retard, montant_du_a_date,
       top_debiteurs, encaissements_par_mois, factures_recentes,
     })
@@ -185,7 +222,7 @@ export default function FinancesDashboardPage() {
         <div style={card}>
           <div style={cardLabel}>Solde restant</div>
           <div style={{ ...cardValue, color: kpi.solde_restant > 0 ? '#F59E0B' : '#10B981' }}>{fmt(kpi.solde_restant)}</div>
-          <div style={cardSub}>{kpi.nb_factures_attente} factures en attente</div>
+          <div style={cardSub}>{kpi.nb_factures_partiel + kpi.nb_factures_attente} factures non soldées</div>
         </div>
         <div style={card}>
           <div style={cardLabel}>Familles en retard</div>
@@ -230,11 +267,15 @@ export default function FinancesDashboardPage() {
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: '0 0 16px' }}>Statut des factures</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { label: 'Payées', count: kpi.nb_factures_payees, color: '#10B981' },
-              { label: 'Partielles', count: kpi.nb_factures_partiel, color: '#F59E0B' },
-              { label: 'En attente', count: kpi.nb_factures_attente, color: '#EF4444' },
-            ].map(s => (
-              <div key={s.label}>
+              { label: 'Soldées', count: kpi.nb_factures_payees, color: '#10B981', aide: 'Solde restant nul (règlements et/ou avoirs imputés)' },
+              { label: 'Partielles', count: kpi.nb_factures_partiel, color: '#F59E0B', aide: 'Un acompte encaissé, il reste un solde' },
+              { label: 'En attente', count: kpi.nb_factures_attente, color: '#EF4444', aide: 'Aucun règlement encaissé à ce jour (un avoir imputé n\'est pas un encaissement)' },
+              // 4e catégorie affichée seulement si elle est non vide : les factures sans
+              // montant (0 €) n'ont ni été payées ni ne sont dues. On préfère l'afficher
+              // plutôt que de masquer l'écart entre la somme des barres et le total.
+              { label: 'Sans montant', count: kpi.nb_factures_autres, color: '#94A3B8', aide: 'Facture à 0 € (aucun poste facturé)' },
+            ].filter(s => s.label !== 'Sans montant' || s.count > 0).map(s => (
+              <div key={s.label} title={s.aide}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
                   <span style={{ color: '#475569', fontWeight: 600 }}>{s.label}</span>
                   <span style={{ color: '#1E293B', fontWeight: 700 }}>{s.count}</span>
@@ -247,6 +288,9 @@ export default function FinancesDashboardPage() {
                 </div>
               </div>
             ))}
+            <div style={{ fontSize: 11, color: '#94A3B8', borderTop: '1px solid #F1F5F9', paddingTop: 8 }}>
+              Total : {kpi.nb_factures} facture{kpi.nb_factures > 1 ? 's' : ''} (hors annulées)
+            </div>
           </div>
         </div>
       </div>

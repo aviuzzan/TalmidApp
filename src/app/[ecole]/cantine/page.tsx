@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
 
 type Forfait = { id: string; nom: string; type: string; jours_par_semaine: number | null; prix: number; actif: boolean; ordre: number }
@@ -11,6 +12,12 @@ const JOURS = ['lundi','mardi','mercredi','jeudi','vendredi']
 
 export default function CantinePage() {
   const ecole = useEcole()
+  // Meme defaut que /transport : le tableau "Depuis contrats" cumulait toutes les annees.
+  // L'annee vient du selecteur d'exercice global (header) et est passee au composant.
+  const annee = useAnneeScolaireActive()
+  // On attend la resolution de l'exercice avant de rendre la page, sinon le tableau
+  // "Depuis contrats" s'afficherait une seconde sur l'annee calculee par date.
+  const { loading: exerciceLoading } = useExercice()
   const [tab, setTab] = useState<'depuis_contrats'|'inscriptions'|'forfaits'>('depuis_contrats')
   const [forfaits, setForfaits] = useState<Forfait[]>([])
   const [inscriptions, setInscriptions] = useState<any[]>([])
@@ -20,17 +27,19 @@ export default function CantinePage() {
   const [form, setForm] = useState({ nom: '', type: 'forfait_mois', jours_par_semaine: 5, prix: '' })
 
   const load = useCallback(async () => {
-    if (!ecole?.id) return
+    if (!ecole?.id || exerciceLoading) return
     setLoading(true)
     const s = createClient()
     const [{ data: f }, { data: i }] = await Promise.all([
       s.from('cantine_forfaits').select('*').eq('ecole_id', ecole.id).order('ordre'),
-      s.from('cantine_inscriptions').select('*, enfants(prenom, nom, classes(nom), familles(nom)), cantine_forfaits(nom, prix)').eq('ecole_id', ecole.id).eq('statut', 'actif').order('created_at', { ascending: false }),
+      // `type` est necessaire pour ne pas additionner des forfaits mensuels avec des
+      // forfaits annuels / repas a l'unite dans un total presente comme mensuel.
+      s.from('cantine_inscriptions').select('*, enfants(prenom, nom, classes(nom), familles(nom)), cantine_forfaits(nom, prix, type)').eq('ecole_id', ecole.id).eq('statut', 'actif').order('created_at', { ascending: false }),
     ])
     setForfaits(f || [])
     setInscriptions(i || [])
     setLoading(false)
-  }, [ecole?.id])
+  }, [ecole?.id, exerciceLoading])
   useEffect(() => { load() }, [load])
 
   async function saveForfait(e: React.FormEvent) {
@@ -59,7 +68,11 @@ export default function CantinePage() {
   }
 
   const fmt = (n: number) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €'
-  const totalMensuel = inscriptions.reduce((s, i: any) => s + Number(i.cantine_forfaits?.prix || 0), 0)
+  // FIX audit 28/07/2026 : on n'additionne QUE les forfaits mensuels. Avant, les forfaits
+  // annuels et les repas a l'unite etaient jetes dans le meme total affiche "CA mensuel".
+  const inscriptionsMensuelles = inscriptions.filter((i: any) => i.cantine_forfaits?.type === 'forfait_mois')
+  const totalMensuel = inscriptionsMensuelles.reduce((s, i: any) => s + Number(i.cantine_forfaits?.prix || 0), 0)
+  const nbAutresTypes = inscriptions.length - inscriptionsMensuelles.length
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }
 
@@ -69,17 +82,23 @@ export default function CantinePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>🍽 Cantine</h1>
-        <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Forfaits, inscriptions, facturation auto.</p>
+        <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>Forfaits, inscriptions, facturation auto — année {annee}.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Inscrits actifs</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Inscrits (manuels, actifs)</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#1E293B' }}>{inscriptions.length}</div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Hors options portées par les contrats</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>CA mensuel cantine</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#10B981' }}>{fmt(totalMensuel)}</div>
+          {/* Montant MENSUEL : ne pas le comparer au total annuel de l'onglet "Depuis contrats". */}
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Inscriptions manuelles · € / mois</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#10B981' }}>{fmt(totalMensuel)} <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>/ mois</span></div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+            {inscriptionsMensuelles.length} forfait{inscriptionsMensuelles.length > 1 ? 's' : ''} mensuel{inscriptionsMensuelles.length > 1 ? 's' : ''}
+            {nbAutresTypes > 0 && ` · ${nbAutresTypes} inscrit${nbAutresTypes > 1 ? 's' : ''} sur forfait annuel / repas à l'unité, non compté${nbAutresTypes > 1 ? 's' : ''} ici`}
+          </div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Forfaits actifs</div>
@@ -100,7 +119,7 @@ export default function CantinePage() {
       </div>
 
       {tab === 'depuis_contrats' && (
-        <OptionsDepuisContrats ecoleId={ecole.id} categorie="cantine" />
+        <OptionsDepuisContrats ecoleId={ecole.id} categorie="cantine" annee={annee} />
       )}
 
       {tab === 'forfaits' && (

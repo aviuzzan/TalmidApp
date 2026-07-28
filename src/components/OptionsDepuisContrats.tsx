@@ -8,8 +8,19 @@ import { chargerPlacesOptions, type PlacesOption } from '@/lib/options-vie-scola
  * catégorie donnée (transport, cantine...) dans leur contrat de scolarisation.
  * Utilisé par /transport et /cantine. Source : tarifs_secteur.categorie
  * + JSONB contrat_enfants.postes.
+ *
+ * FIX audit 28/07/2026 : la liste et le total cumulaient TOUTES les années
+ * d'exploitation (aucun filtre d'année sur les contrats, et `annee_scolaire`
+ * sélectionné sur les tarifs mais jamais utilisé pour filtrer). À la 3e année,
+ * le total affiché aurait valu ~3× la réalité et aurait grossi tout seul.
+ * L'année est désormais imposée par l'appelant (sélecteur d'exercice global).
+ *
+ * Choix du filtre : `contrats_scolarisation.annee_scolaire` et non `exercice_id`.
+ * `annee_scolaire` est renseigné à l'insertion partout (c'est la clé métier
+ * famille+année), alors qu'`exercice_id` n'est backfillé qu'opportunément
+ * (cf. inscriptions/page.tsx et lib/contrat-papier.ts) et peut être NULL.
  */
-export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId: string; categorie: 'transport' | 'cantine' | 'activite' | 'autre' }) {
+export default function OptionsDepuisContrats({ ecoleId, categorie, annee }: { ecoleId: string; categorie: 'transport' | 'cantine' | 'activite' | 'autre'; annee: string }) {
   const [rows, setRows] = useState<any[]>([])
   const [places, setPlaces] = useState<Map<string, PlacesOption>>(new Map())
   const [tarifNoms, setTarifNoms] = useState<Map<string, string>>(new Map())
@@ -17,12 +28,15 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    if (!ecoleId) return
+    if (!ecoleId || !annee) return
     setLoading(true)
     const s = createClient()
+    // `annee_scolaire` etait selectionne mais jamais utilise pour filtrer : les tarifs
+    // de toutes les annees remontaient. Il est maintenu a jour par cloneExerciceConfig()
+    // (cf. lib/exercice.ts) et sert deja de filtre dans Parametres > Tarifs.
     const { data: tarifsCat } = await s.from('tarifs_secteur')
       .select('id, nom_poste, montant, annee_scolaire, places_max')
-      .eq('ecole_id', ecoleId).eq('categorie', categorie)
+      .eq('ecole_id', ecoleId).eq('categorie', categorie).eq('annee_scolaire', annee)
     const ids = new Set((tarifsCat || []).map((t: any) => t.id))
     const noms = new Map<string, string>()
     ;(tarifsCat || []).forEach((t: any) => noms.set(t.id, t.nom_poste))
@@ -33,15 +47,14 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
     const { data: contratEnfants } = await s.from('contrat_enfants')
       .select('id, enfant_id, postes, contrat_id, contrats_scolarisation!inner(id, annee_scolaire, statut, ecole_id), enfants(prenom, nom, classes(nom), familles(nom))')
       .eq('contrats_scolarisation.ecole_id', ecoleId)
+      .eq('contrats_scolarisation.annee_scolaire', annee)
       .in('contrats_scolarisation.statut', ['valide', 'accepte', 'soumis'])
 
     const filtres: any[] = []
-    const annees = new Set<string>()
     ;(contratEnfants || []).forEach((ce: any) => {
       const postes = Array.isArray(ce.postes) ? ce.postes : []
       postes.forEach((p: any) => {
         if (ids.has(p.tarif_id)) {
-          annees.add(ce.contrats_scolarisation?.annee_scolaire)
           filtres.push({
             id: ce.id + '_' + p.tarif_id,
             tarif_id: p.tarif_id,
@@ -55,14 +68,11 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
     })
     setRows(filtres)
 
-    // Compteurs de places (RPC) sur l'annee la plus recente presente
-    const anneesTriees = Array.from(annees).sort()
-    const derniereAnnee = anneesTriees[anneesTriees.length - 1]
-    if (derniereAnnee) {
-      setPlaces(await chargerPlacesOptions(s, ecoleId, derniereAnnee))
-    }
+    // Compteurs de places (RPC) sur l'annee affichee. Avant, on prenait "l'annee la plus
+    // recente presente dans les contrats", qui pouvait ne pas etre celle des lignes listees.
+    setPlaces(await chargerPlacesOptions(s, ecoleId, annee))
     setLoading(false)
-  }, [ecoleId, categorie])
+  }, [ecoleId, categorie, annee])
 
   useEffect(() => { load() }, [load])
 
@@ -83,8 +93,8 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
     <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: 0 }}>Enfants ayant une option {categorie} dans leur contrat</h3>
-          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 3 }}>Source : contrats de scolarisation validés · catégorie «&nbsp;{categorie}&nbsp;» des tarifs</div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: 0 }}>Enfants ayant une option {categorie} dans leur contrat {annee}</h3>
+          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 3 }}>Source : contrats de scolarisation validés de {annee} · catégorie «&nbsp;{categorie}&nbsp;» des tarifs</div>
         </div>
         {rows.length > 0 && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -101,7 +111,7 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
               const url = URL.createObjectURL(blob)
               const suffix = filtreOption === 'toutes' ? '' : '-' + filtreOption.toLowerCase().replace(/\s+/g, '-')
-              const a = document.createElement('a'); a.href = url; a.download = `${categorie}-depuis-contrats${suffix}.csv`; a.click(); URL.revokeObjectURL(url)
+              const a = document.createElement('a'); a.href = url; a.download = `${categorie}-depuis-contrats-${annee}${suffix}.csv`; a.click(); URL.revokeObjectURL(url)
             }} style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>📥 Export CSV</button>
           </div>
         )}
@@ -129,7 +139,7 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
       )}
 
       {rows.length === 0 ? (
-        <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun enfant avec une option {categorie} dans son contrat.</div>
+        <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun enfant avec une option {categorie} dans son contrat {annee}.</div>
       ) : rowsFiltres.length === 0 ? (
         <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Aucun enfant pour «&nbsp;{filtreOption}&nbsp;».</div>
       ) : (
@@ -137,7 +147,7 @@ export default function OptionsDepuisContrats({ ecoleId, categorie }: { ecoleId:
           <div style={{ marginBottom: 10, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, fontSize: 12, color: '#065F46' }}>
             <strong>{rowsFiltres.length}</strong> enfant{rowsFiltres.length > 1 ? 's' : ''}
             {filtreOption !== 'toutes' && <> · option <strong>{filtreOption}</strong></>}
-            {' · '}Total annuel : <strong>{Number(totalFiltres).toLocaleString('fr-FR')} €</strong>
+            {' · '}Total pour l&apos;année {annee} : <strong>{Number(totalFiltres).toLocaleString('fr-FR')} €</strong> / an
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

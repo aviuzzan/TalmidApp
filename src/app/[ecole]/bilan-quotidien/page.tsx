@@ -22,6 +22,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { calcDuADateBatch } from '@/lib/du-a-date'
+import { compterEffectifs } from '@/lib/effectifs'
 
 type Bilan = {
   // Section 1
@@ -39,8 +40,10 @@ type Bilan = {
   nbPaiementsAujourdhui: number
   avoirsImputesAujourdhui: number
   nbAvoirsImputesAujourdhui: number
-  resteAEncaisser: number
-  facturesRetard30Count: number
+  // FIX audit 28/07 : il y avait DEUX "reste à encaisser" contradictoires (un
+  // sans filtre d'exercice = cumul depuis la création de l'école, un filtré).
+  // Il n'en reste qu'UN : `totalRestant`, filtré sur l'exercice sélectionné.
+  facturesRetard30Count: number      // nb de FAMILLES distinctes en retard (dédupliqué)
   facturesRetard30Montant: number
   echeancesSemaineCount: number
   echeancesSemaineMontant: number
@@ -108,7 +111,7 @@ export default function BilanQuotidienPage() {
         { count: ddrJour },
         // S2 — Paiements & finances
         { data: reglementsJour },
-        { data: facturesAll },
+        { data: facturesExercice },
         { data: echeancesSemaine },
         { data: echeancesRetard },
         // S3 — Messages
@@ -118,10 +121,8 @@ export default function BilanQuotidienPage() {
         { count: contratsSoumis },
         { count: pedaSoumis },
         { count: demandesVieilles },
-        // S5 — Vue d'ensemble
-        { count: famN },
-        { count: eleN },
-        { data: facturesExercice },
+        // S5 — Vue d'ensemble : effectifs via `scolarites` + exercice (lib/effectifs.ts)
+        effectifs,
         // Avancement rentrée (année d'inscription en cours)
         { data: contratsRentree },
         { count: enfantsContratRentree },
@@ -145,9 +146,16 @@ export default function BilanQuotidienPage() {
         s.from('reglements').select('montant, mode_paiement, factures!inner(famille_id, familles!inner(ecole_id))')
           .eq('factures.familles.ecole_id', ecole.id)
           .eq('date_reglement', aujourdhui),
-        // Toutes les factures de l'école (vue factures_solde) — sert au "reste à encaisser" et aux retards
-        s.from('factures_solde').select('id, solde_restant, statut, familles!inner(ecole_id)')
+        // Factures de l'EXERCICE SÉLECTIONNÉ (vue factures_solde) — source unique du
+        // "reste à encaisser", des totaux facturé/réglé et du retard réel.
+        // FIX audit 28/07 : cette requête n'avait AUCUN filtre d'exercice, elle cumulait
+        // toutes les années depuis la création de l'école et contredisait la section
+        // "Vue d'ensemble" (elle, correctement filtrée). Les deux blocs lisent désormais
+        // exactement les mêmes données.
+        s.from('factures_solde')
+          .select('id, famille_id, total_facture, total_regle, solde_restant, statut, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecole.id)
+          .eq('exercice_id', exerciceId)
           .neq('statut', 'annule'),
         // Échéances cette semaine
         s.from('cheques_prevus').select('montant, familles!inner(ecole_id)')
@@ -161,22 +169,30 @@ export default function BilanQuotidienPage() {
         s.from('message_threads')
           .select('id, last_message_at, messages(created_at, auteur_profile_id)')
           .eq('ecole_id', ecole.id).eq('statut', 'ouvert'),
-        // S4 — alertes
+        // S4 — alertes.
+        // FIX audit 28/07 : filtrées sur l'ANNÉE D'INSCRIPTION, comme l'inbox
+        // /a-traiter (a-traiter/page.tsx:42-47). Sans ce filtre, cet écran comptait
+        // aussi les DDR/contrats des années précédentes et affichait des nombres
+        // différents de /a-traiter pour les mêmes objets.
+        // La liste de statuts reste un SUR-ENSEMBLE de celle de /a-traiter
+        // (['soumis','en_etude']) : le portail a écrit 'soumise'/'en_attente' par le
+        // passé, on préfère sur-alerter que masquer une demande jamais traitée.
         s.from('demandes_reduction').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecole.id).in('statut', ['soumise', 'en_attente', 'soumis', 'en_etude']),
+          .eq('ecole_id', ecole.id).eq('annee_scolaire', anneeInscription)
+          .in('statut', ['soumise', 'en_attente', 'soumis', 'en_etude']),
         s.from('contrats_scolarisation').select('id', { count: 'exact', head: true })
-          .eq('ecole_id', ecole.id).eq('statut', 'soumis'),
+          .eq('ecole_id', ecole.id).eq('annee_scolaire', anneeInscription).eq('statut', 'soumis'),
         s.from('inscriptions_pedagogiques').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecole.id).eq('statut', 'soumis'),
         s.from('demandes_inscription').select('id', { count: 'exact', head: true })
           .eq('ecole_id', ecole.id).eq('statut', 'en_attente')
           .lt('soumis_le', ilYa3jours),
-        // S5 — vue d'ensemble
-        s.from('familles').select('id', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
-        s.from('enfants').select('id, familles!inner(ecole_id)', { count: 'exact', head: true })
-          .eq('familles.ecole_id', ecole.id).neq('statut_inscription', 'sorti'),
-        s.from('factures_solde').select('total_facture, total_regle, solde_restant, familles!inner(ecole_id)')
-          .eq('familles.ecole_id', ecole.id).eq('exercice_id', exerciceId).neq('statut', 'annule'),
+        // S5 — vue d'ensemble.
+        // FIX audit 28/07 : les effectifs venaient de `familles` (toutes années) et
+        // `enfants.statut_inscription` (aucun filtre d'année) alors que les montants
+        // affichés à côté sont filtrés par exercice. On passe par `scolarites`
+        // (source de vérité de l'affectation par année), comme la page /enfants.
+        compterEffectifs(s, ecole.id, exerciceId),
         // Avancement rentrée — contrats signés (statuts : soumis, valide, accepte) sur
         // l'année d'INSCRIPTION (≠ exercice courant). On récupère famille_id pour pouvoir
         // calculer le nombre de familles DISTINCTES côté JS.
@@ -202,18 +218,34 @@ export default function BilanQuotidienPage() {
       const avoirsImputes = regs.filter(r => r.mode_paiement === 'avoir')
       const encaisseAujourdhui = paiementsReels.reduce((sum, r) => sum + Number(r.montant || 0), 0)
       const avoirsImputesAujourdhui = avoirsImputes.reduce((sum, r) => sum + Number(r.montant || 0), 0)
-      const factAll = (facturesAll ?? []) as any[]
-      const resteAEncaisser = factAll.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
+      // Factures de l'exercice — SOURCE UNIQUE des montants annuels de la page.
+      const factEx = (facturesExercice ?? []) as any[]
+      // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements uniquement).
+      // Le "reste à encaisser" vient donc de `solde_restant` (mathématiquement correct).
+      const totalFacture = factEx.reduce((sum, f) => sum + Number(f.total_facture || 0), 0)
+      const totalRegle = factEx.reduce((sum, f) => sum + Number(f.total_regle || 0), 0)
+      const totalRestantS5 = factEx.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
       // Vrai retard = du a date (echeances echues non couvertes), plus "emission + 30j".
-      let retardCount = 0
+      // Le compteur est dédupliqué PAR FAMILLE (une famille avec 3 factures en retard
+      // n'est qu'UNE famille en retard) — même règle que /finances/dashboard.
       let retardMontant = 0
-      const idsAvecSolde = factAll.filter(f => Number(f.solde_restant) > 0).map(f => f.id)
+      const famillesEnRetard = new Set<string>()
+      const familleParFacture: Record<string, string> = {}
+      for (const f of factEx) {
+        if (f.id && f.famille_id) familleParFacture[f.id] = f.famille_id
+      }
+      const idsAvecSolde = factEx.filter(f => Number(f.solde_restant) > 0).map(f => f.id)
       if (idsAvecSolde.length > 0) {
         const duMap = await calcDuADateBatch(s, idsAvecSolde)
-        for (const r of Object.values(duMap)) {
-          if (r.enRetard) { retardCount++; retardMontant += r.duAdate }
+        for (const [factureId, r] of Object.entries(duMap)) {
+          if (r.enRetard) {
+            retardMontant += r.duAdate
+            const fid = familleParFacture[factureId]
+            if (fid) famillesEnRetard.add(fid)
+          }
         }
       }
+      const retardCount = famillesEnRetard.size
       const echSem = (echeancesSemaine ?? []) as any[]
       const echRetard = (echeancesRetard ?? []) as any[]
 
@@ -230,18 +262,10 @@ export default function BilanQuotidienPage() {
       const contratsSignes = contratsR.length
       const enfantsAvecContrat = enfantsContratRentree ?? 0
       const famillesAvecContratSigne = new Set(contratsR.map(c => c.famille_id).filter(Boolean)).size
-      const totalFam = famN ?? 0
-      const totalEle = eleN ?? 0
+      const totalFam = effectifs.familles
+      const totalEle = effectifs.eleves
       const contratsManquants = Math.max(0, totalFam - famillesAvecContratSigne)
       const enfantsSansContrat = Math.max(0, totalEle - enfantsAvecContrat)
-
-      // S5 — finances année
-      // NOTE : `total_regle` exclut désormais les avoirs imputés (vrais paiements uniquement).
-      // Le "Reste à encaisser" doit donc venir de `solde_restant` (qui reste correct).
-      const factEx = (facturesExercice ?? []) as any[]
-      const totalFacture = factEx.reduce((sum, f) => sum + Number(f.total_facture || 0), 0)
-      const totalRegle = factEx.reduce((sum, f) => sum + Number(f.total_regle || 0), 0)
-      const totalRestantS5 = factEx.reduce((sum, f) => sum + Number(f.solde_restant || 0), 0)
 
       setBilan({
         demandesAujourdhui: demJour ?? 0,
@@ -256,7 +280,6 @@ export default function BilanQuotidienPage() {
         nbPaiementsAujourdhui: paiementsReels.length,
         avoirsImputesAujourdhui,
         nbAvoirsImputesAujourdhui: avoirsImputes.length,
-        resteAEncaisser,
         facturesRetard30Count: retardCount,
         facturesRetard30Montant: retardMontant,
         echeancesSemaineCount: echSem.length,
@@ -269,8 +292,8 @@ export default function BilanQuotidienPage() {
         contratsAValider: contratsSoumis ?? 0,
         inscriptionsPedaAValider: pedaSoumis ?? 0,
         demandesEnAttenteVieux: demandesVieilles ?? 0,
-        totalFamilles: famN ?? 0,
-        totalEleves: eleN ?? 0,
+        totalFamilles: effectifs.familles,
+        totalEleves: effectifs.eleves,
         totalFacture,
         totalRegle,
         totalRestant: totalRestantS5,
@@ -387,12 +410,14 @@ export default function BilanQuotidienPage() {
           <Kpi label={`Avoirs imputés aujourd'hui (${bilan.nbAvoirsImputesAujourdhui})`}
             value={fmtEur(bilan.avoirsImputesAujourdhui)}
             color="#7C3AED" onClick={() => go('finances/avoirs')} />
-          <Kpi label="Reste à encaisser (année)" value={fmtEur(bilan.resteAEncaisser)}
-            color={bilan.resteAEncaisser > 0 ? '#991B1B' : '#065F46'} onClick={() => go('finances')} />
+          {/* Même valeur que la section « Vue d'ensemble » : un seul et unique calcul,
+              filtré sur l'exercice sélectionné (cf. FIX audit 28/07 plus haut). */}
+          <Kpi label={`Reste à encaisser (${annee})`} value={fmtEur(bilan.totalRestant)}
+            color={bilan.totalRestant > 0 ? '#991B1B' : '#065F46'} onClick={() => go('finances')} />
         </KpiGrid>
         <div style={{ height: 12 }} />
         <KpiGrid>
-          <Kpi label="Retard réel (échéances échues)"
+          <Kpi label="Familles en retard (échéances échues)"
             value={`${bilan.facturesRetard30Count} · ${fmtEur(bilan.facturesRetard30Montant)}`}
             color={bilan.facturesRetard30Count > 0 ? '#991B1B' : '#065F46'}
             onClick={() => go('finances/relances')} />
@@ -442,9 +467,11 @@ export default function BilanQuotidienPage() {
       {/* Section 5 — Vue d'ensemble année */}
       <Section titre={`📅 Vue d'ensemble — ${annee}`} couleur="#475569">
         <KpiGrid>
+          {/* Effectifs comptés sur les scolarités de l'exercice — même définition
+              que la liste /enfants (cf. lib/effectifs.ts). */}
           <Kpi label="Familles actives" value={bilan.totalFamilles}
             color="#1E293B" onClick={() => go('familles')} />
-          <Kpi label="Élèves inscrits" value={bilan.totalEleves}
+          <Kpi label="Élèves actifs" value={bilan.totalEleves}
             color="#1E293B" onClick={() => go('enfants')} />
         </KpiGrid>
         <div style={{ height: 12 }} />
@@ -457,6 +484,11 @@ export default function BilanQuotidienPage() {
             color={bilan.totalRestant > 0 ? '#991B1B' : '#065F46'}
             onClick={() => go('finances/relances')} />
         </KpiGrid>
+        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 10, lineHeight: 1.5 }}>
+          Montants filtrés sur l&apos;exercice {annee}. « Reste à encaisser » = solde annuel restant
+          (les échéances non encore échues en font partie) : ce n&apos;est pas un impayé.
+          Les impayés réels sont le KPI « Familles en retard (échéances échues) » ci-dessus.
+        </div>
       </Section>
 
       <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 4, marginBottom: 8 }}>
