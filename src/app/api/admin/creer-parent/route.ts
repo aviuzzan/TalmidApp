@@ -161,12 +161,19 @@ export async function POST(req: NextRequest) {
           emailResult = { ok: false, error: linkErr?.message || 'Lien magique non généré' }
         } else {
           // 2. Charger le template "Bienvenue parent"
-          const { data: tpl } = await supabaseAdmin
+          // onboarding kkkk2 : FIX fuite cross-tenant — le lookup sans filtre
+          // ecole_id pouvait renvoyer le template d'une AUTRE école. On prend
+          // le template de l'école, avec fallback sur le modèle global
+          // (ecole_id NULL, templates historiques), jamais celui d'une autre.
+          const { data: tpls } = await supabaseAdmin
             .from('email_templates')
-            .select('id, sujet, contenu_html')
+            .select('id, sujet, contenu_html, ecole_id')
             .eq('nom', 'Bienvenue parent')
             .eq('actif', true)
-            .maybeSingle()
+            .or(`ecole_id.eq.${ecoleId},ecole_id.is.null`)
+          const tpl = (tpls || []).find(t => t.ecole_id === ecoleId)
+            || (tpls || []).find(t => t.ecole_id === null)
+            || null
 
           if (!tpl) {
             emailResult = { ok: false, error: 'Template "Bienvenue parent" introuvable' }

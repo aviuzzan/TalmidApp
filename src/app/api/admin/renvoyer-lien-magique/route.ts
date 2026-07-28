@@ -68,12 +68,19 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Charger le template "Bienvenue parent"
-    const { data: tpl } = await supabaseAdmin
+    // onboarding kkkk2 : FIX fuite cross-tenant — le lookup sans filtre
+    // ecole_id pouvait renvoyer le template d'une AUTRE école. Template de
+    // l'école en priorité, fallback modèle global (ecole_id NULL), jamais
+    // celui d'une autre école.
+    const { data: tpls } = await supabaseAdmin
       .from('email_templates')
-      .select('id, sujet, contenu_html')
+      .select('id, sujet, contenu_html, ecole_id')
       .eq('nom', 'Bienvenue parent')
       .eq('actif', true)
-      .maybeSingle()
+      .or(`ecole_id.eq.${ecoleId},ecole_id.is.null`)
+    const tpl = (tpls || []).find(t => t.ecole_id === ecoleId)
+      || (tpls || []).find(t => t.ecole_id === null)
+      || null
     if (!tpl) {
       return NextResponse.json({ error: 'Template "Bienvenue parent" introuvable' }, { status: 500 })
     }

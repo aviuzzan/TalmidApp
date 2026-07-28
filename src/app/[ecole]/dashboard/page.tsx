@@ -6,6 +6,8 @@ import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
 import { useAccesFinances } from '@/lib/acces-finances'
 import AlertesUrgentes from '@/components/ui/AlertesUrgentes'
+// onboarding kkkk2 : checklist de mise en service (audit ecole coquille vide)
+import ChecklistMiseEnService from '@/components/ui/ChecklistMiseEnService'
 import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch } from '@/lib/du-a-date'
 
@@ -164,6 +166,9 @@ export default function DashboardPage() {
           📥 À traiter
         </button>
       </div>
+
+      {/* onboarding kkkk2 : etat de configuration de l'ecole (repliable) */}
+      <ChecklistMiseEnService />
 
       <AlertesUrgentes ecoleId={ecole.id} ecoleSlug={ecole.slug} />
 

@@ -65,17 +65,106 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Exercice par défaut (année courante)
+    // onboarding kkkk2 : la table exercices n'a PAS de colonne "actif" (l'ancien
+    // insert avec actif:true echouait silencieusement -> ecole sans exercice).
+    // On pose statut:'ouvert' directement pour que l'ecole soit operationnelle.
     const now = new Date()
     const yStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
     const exerciceCode = `${yStart}-${yStart + 1}`
-    await sb.from('exercices').insert({
+    const { data: exercice, error: exerciceErr } = await sb.from('exercices').insert({
       ecole_id: ecole.id,
       code: exerciceCode,
       libelle: `Année scolaire ${exerciceCode}`,
       date_debut: `${yStart}-09-01`,
       date_fin: `${yStart + 1}-08-31`,
-      actif: true,
-    })
+      statut: 'ouvert',
+    }).select('id').single()
+    if (exerciceErr) console.error('[creer-ecole] seed exercice échoué :', exerciceErr.message)
+
+    // ─────────────────────────────────────────────────────────────
+    // onboarding kkkk2 : seed de défauts sains (audit 27/07 : l'école
+    // sortait en coquille vide -> parcours parent cassé). Chaque insert
+    // est best-effort : un échec est loggé mais ne bloque JAMAIS la
+    // création de l'école. Placé AVANT l'invitation admin pour que
+    // l'école soit saine même si l'invitation échoue (return early).
+    // ─────────────────────────────────────────────────────────────
+
+    // 2a. Exercice courant + assurance : exercice_courant_id posé (sinon le
+    // fallback par date reste fragile) et assurance_proposee explicitement à
+    // false (defaut DB = true + 12 EUR -> ligne fantôme sur les contrats).
+    try {
+      const patch: Record<string, unknown> = { assurance_proposee: false }
+      if (exercice?.id) patch.exercice_courant_id = exercice.id
+      const { error } = await sb.from('ecoles').update(patch).eq('id', ecole.id)
+      if (error) console.error('[creer-ecole] seed ecole (exercice courant/assurance) échoué :', error.message)
+    } catch (e: any) {
+      console.error('[creer-ecole] seed ecole (exercice courant/assurance) échoué :', e?.message)
+    }
+
+    // 2b. Mode de règlement "Chèque" actif : sans au moins un mode actif,
+    // le parent ne peut pas soumettre le contrat de scolarisation.
+    try {
+      const { error } = await sb.from('modes_reglement_ecole').insert({
+        ecole_id: ecole.id, type: 'cheque', label: 'Chèque', actif: true, ordre: 1, config: {},
+      })
+      if (error) console.error('[creer-ecole] seed mode règlement échoué :', error.message)
+    } catch (e: any) {
+      console.error('[creer-ecole] seed mode règlement échoué :', e?.message)
+    }
+
+    // 2c. Service "Secrétariat" : sans service actif, la messagerie parent
+    // n'a aucun destinataire possible.
+    try {
+      const { error } = await sb.from('services').insert({
+        ecole_id: ecole.id, nom: 'Secrétariat', description: 'Service par défaut (messagerie parents)', ordre: 0, actif: true,
+      })
+      if (error) console.error('[creer-ecole] seed service Secrétariat échoué :', error.message)
+    } catch (e: any) {
+      console.error('[creer-ecole] seed service Secrétariat échoué :', e?.message)
+    }
+
+    // 2d. Template "Bienvenue parent" scopé ecole_id : on clone le modèle
+    // global (ecole_id NULL) s'il existe, sinon un HTML sobre par défaut.
+    // Sans lui, creer-parent/renvoyer-lien-magique ne peuvent pas envoyer
+    // le lien magique (ou pire, avant le fix : piochaient le template d'une
+    // autre école).
+    try {
+      const { data: modele } = await sb
+        .from('email_templates')
+        .select('sujet, contenu_html')
+        .eq('nom', 'Bienvenue parent')
+        .eq('actif', true)
+        .is('ecole_id', null)
+        .order('date_creation', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      const sujetDefaut = 'Bienvenue sur votre espace parents'
+      const htmlDefaut = [
+        '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1E293B; line-height: 1.6;">',
+        '  <h2 style="color: #2563EB;">Bonjour {{prenom_parent1}},</h2>',
+        '  <p>Votre espace parents pour la famille <strong>{{nom_famille}}</strong> est prêt.</p>',
+        '  <p>Cliquez sur le bouton ci-dessous pour définir votre mot de passe et accéder à votre espace :</p>',
+        '  <p style="text-align: center; margin: 24px 0;">',
+        '    <a href="{{lien_magique}}" style="background: #2563EB; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Accéder à mon espace</a>',
+        '  </p>',
+        '  <p style="font-size: 13px; color: #64748B;">Ce lien est valable 24 heures. Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>{{lien_magique}}</p>',
+        '  <p>À bientôt,<br><strong>L\'administration</strong></p>',
+        '</div>',
+      ].join('\n')
+
+      const { error } = await sb.from('email_templates').insert({
+        ecole_id: ecole.id,
+        nom: 'Bienvenue parent',
+        sujet: modele?.sujet || sujetDefaut,
+        contenu_html: modele?.contenu_html || htmlDefaut,
+        description: 'Email de bienvenue avec lien magique (créé automatiquement à la création de l\'école)',
+        actif: true,
+      })
+      if (error) console.error('[creer-ecole] seed template Bienvenue parent échoué :', error.message)
+    } catch (e: any) {
+      console.error('[creer-ecole] seed template Bienvenue parent échoué :', e?.message)
+    }
 
     // 3. Création admin via inviteUserByEmail
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
