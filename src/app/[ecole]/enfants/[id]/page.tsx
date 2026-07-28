@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useExercice } from '@/lib/exercice-context'
 import { getScolaritesEnfant } from '@/lib/scolarite'
 import { getSecteurScope, enfantDansSecteur } from '@/lib/secteur-scope'
 import { logAction } from '@/lib/audit-log'
+import { useToast } from '@/components/ui/Toast'
 import OptionsContratSection from '@/components/OptionsContratSection'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 
@@ -13,6 +15,11 @@ export default function EnfantDetailPage() {
   const router = useRouter()
   const params = useParams()
   const ecole = useEcole()
+  const toast = useToast()
+  // ANNÉE (fix classe/scolarites) : la classe éditée sur cette fiche s'applique à
+  // l'exercice choisi dans le sélecteur d'année en haut de page — le même que
+  // celui qui pilote la liste des élèves (src/app/[ecole]/enfants/page.tsx).
+  const { exercice: exerciceCourant, exerciceSelectionne } = useExercice()
   const enfantId = params.id as string
 
   const [enfant, setEnfant] = useState<any>(null)
@@ -31,11 +38,49 @@ export default function EnfantDetailPage() {
   const [optionsConfig, setOptionsConfig] = useState<any[]>([])
   const [anneeCourante, setAnneeCourante] = useState<string>('')
   const [showSortieModal, setShowSortieModal] = useState(false)
+  // ANNÉE (fix classe/scolarites) : classe de l'élève POUR l'exercice sélectionné.
+  // Champ distinct de form.classe_id (qui, lui, n'est qu'un miroir "année courante"
+  // dans la table enfants). C'est cette valeur qui est écrite dans scolarites.
+  const [classeAnnee, setClasseAnnee] = useState<string>('')
+  // Erreur de sauvegarde persistante (les toasts disparaissent après 4 s, et une RLS
+  // qui bloque silencieusement est un piège récurrent : on garde le message affiché).
+  const [erreurSave, setErreurSave] = useState<string>('')
   // SECTEUR (llll2) : true si la fiche est hors du secteur de l'agent → écran "Accès limité"
   const [horsSecteur, setHorsSecteur] = useState(false)
   const [sortieForm, setSortieForm] = useState({ date_sortie: new Date().toISOString().slice(0, 10), motif_sortie: '' })
 
   useEffect(() => { load() }, [enfantId])
+
+  // ── ANNÉE (fix classe/scolarites) ────────────────────────────────────────────
+  // Exercice de travail = celui du sélecteur d'année (identique à la liste élèves).
+  const exerciceId: string | null = exerciceSelectionne?.id ?? null
+  const exerciceCode: string = exerciceSelectionne?.code ?? ''
+  const exerciceCloture: boolean = exerciceSelectionne?.statut === 'cloture'
+  // `enfants.classe_id` n'est qu'une commodité d'affichage de l'année courante :
+  // on ne le touche que si l'année éditée EST l'année courante de l'école
+  // (si l'école n'a pas d'exercice courant défini, on conserve le comportement historique).
+  const editeAnneeCourante: boolean = !exerciceCourant?.id || exerciceCourant.id === exerciceId
+  // Scolarité déjà enregistrée pour cette année (source de vérité de la classe).
+  const scolariteAnnee: any = exerciceId
+    ? (scolarites.find((sc: any) => sc.exercice_id === exerciceId) ?? null)
+    : null
+
+  // Valeur initiale du champ classe pour l'année sélectionnée.
+  // Si aucune scolarité n'existe encore pour l'année COURANTE, on pré-remplit avec
+  // `enfants.classe_id` : enregistrer crée alors la scolarité manquante avec la
+  // classe du dossier (au lieu d'effacer silencieusement l'affectation).
+  const classeAnneeInitiale: string = scolariteAnnee
+    ? (scolariteAnnee.classe_id ?? '')
+    : (editeAnneeCourante ? (enfant?.classe_id ?? '') : '')
+
+  // Hors édition, le champ classe reflète toujours l'année sélectionnée. Sans ce
+  // resync, changer d'année dans le sélecteur laisserait afficher la classe d'une
+  // autre année — et un enregistrement écrirait la mauvaise classe dans scolarites.
+  useEffect(() => {
+    if (editMode) return
+    setClasseAnnee(classeAnneeInitiale)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, exerciceId, scolarites, enfant])
 
   async function load() {
     const s = createClient()
@@ -115,20 +160,122 @@ export default function EnfantDetailPage() {
     setLoading(false)
   }
 
+  // ── ANNÉE (fix classe/scolarites) ────────────────────────────────────────────
+  // `scolarites` est la SOURCE DE VÉRITÉ de l'affectation de classe par année :
+  // c'est elle que lisent la liste des élèves (filtrée sur exercice_id), les
+  // passages de classe et le calcul des contrats. `enfants.classe_id` n'est qu'un
+  // miroir d'affichage de l'année courante. On écrit donc les DEUX, et on ne sort
+  // du mode édition que si tout a réussi (une RLS qui bloque ne doit pas faire
+  // perdre la saisie).
   async function sauvegarder() {
+    setErreurSave('')
+
+    // Aucune année sélectionnée (contexte pas encore chargé / école sans exercice) :
+    // on ne peut pas savoir à quelle année rattacher la classe → on ne sauvegarde pas
+    // à moitié, on garde la saisie et on explique.
+    if (!exerciceId) {
+      const msg = "Aucune année scolaire sélectionnée : impossible d'enregistrer l'affectation de classe. Choisissez une année avec le sélecteur en haut de page."
+      setErreurSave(msg)
+      toast.error(msg)
+      return
+    }
+
+    const s = createClient()
+    const classeCible: string | null = classeAnnee || null
+
+    // Scolarité existante pour (enfant × exercice) — lecture fraîche : l'état local
+    // peut dater, et on veut distinguer "ligne absente" de "lecture interdite".
+    // Pas de .maybeSingle() : il lèverait une erreur sur d'éventuels doublons
+    // historiques (enfant_id, exercice_id) et bloquerait la sauvegarde.
+    const { data: scoRows, error: errLecture } = await s
+      .from('scolarites')
+      .select('id, classe_id')
+      .eq('enfant_id', enfantId)
+      .eq('exercice_id', exerciceId)
+    const scoExistante: any = (scoRows ?? [])[0] ?? null
+    if (errLecture) {
+      const msg = `Impossible de lire la scolarité de ${exerciceCode} : ${errLecture.message}`
+      setErreurSave(msg)
+      toast.error(msg)
+      return
+    }
+
+    const classeChangee = (scoExistante?.classe_id ?? null) !== classeCible
+
+    // Année clôturée = consultation seule (même règle que la liste des élèves et
+    // que les passages de classe). On refuse AVANT toute écriture, pour ne pas
+    // désynchroniser enfants.classe_id et scolarites.
+    if (exerciceCloture && classeChangee) {
+      const msg = `L'année ${exerciceCode} est clôturée : la classe ne peut plus y être modifiée.`
+      setErreurSave(msg)
+      toast.error(msg)
+      return
+    }
+
     setSaving(true)
-    await createClient().from('enfants').update({
+
+    // 1. Table enfants (identité + options). classe_id n'y est mis à jour que si
+    //    l'année éditée est l'année courante de l'école.
+    const payloadEnfant: Record<string, any> = {
       prenom: form.prenom, nom: form.nom,
       date_naissance: form.date_naissance || null,
-      classe_id: form.classe_id || null,
       transport: form.transport,
       instruction_religieuse: form.instruction_religieuse,
       etude_garderie: form.etude_garderie,
       options_choisies: form.options_choisies || {},
-    }).eq('id', enfantId)
+    }
+    // Année clôturée : on ne réécrit rien de ce qui touche à l'affectation.
+    if (editeAnneeCourante && !exerciceCloture) payloadEnfant.classe_id = classeCible
+
+    const { error: errEnfant } = await s.from('enfants').update(payloadEnfant).eq('id', enfantId)
+    if (errEnfant) {
+      setSaving(false)
+      const msg = `Enregistrement refusé : ${errEnfant.message}`
+      setErreurSave(msg)
+      toast.error(msg)
+      return // on reste en mode édition : la saisie est conservée
+    }
+
+    // 2. Table scolarites — select-puis-update/insert explicite (voir commentaire
+    //    en tête) : sur une ligne existante on ne touche QUE la classe, jamais le
+    //    statut ni les dates de sortie.
+    if (!exerciceCloture) {
+      if (scoExistante?.id) {
+        const { error: errUpd } = await s.from('scolarites')
+          .update({ classe_id: classeCible, updated_at: new Date().toISOString() })
+          .eq('id', scoExistante.id)
+        if (errUpd) {
+          setSaving(false)
+          const msg = `La classe n'a pas pu être enregistrée pour ${exerciceCode} : ${errUpd.message}`
+          setErreurSave(msg)
+          toast.error(msg)
+          return
+        }
+      } else {
+        const { error: errIns } = await s.from('scolarites').insert({
+          enfant_id: enfantId,
+          exercice_id: exerciceId,
+          ecole_id: enfant?.ecole_id ?? ecole?.id ?? null,
+          classe_id: classeCible,
+          statut_inscription: enfant?.statut_inscription || 'inscrit',
+          annee_scolaire: exerciceCode || null,
+        })
+        if (errIns) {
+          setSaving(false)
+          const msg = `La scolarité ${exerciceCode} n'a pas pu être créée : ${errIns.message}`
+          setErreurSave(msg)
+          toast.error(msg)
+          return
+        }
+      }
+    }
+
     await load()
     setEditMode(false)
     setSaving(false)
+    toast.success(exerciceCloture
+      ? 'Fiche enregistrée.'
+      : `Fiche enregistrée · classe appliquée à l'année ${exerciceCode}.`)
   }
 
   async function validerInscription() {
@@ -253,18 +400,31 @@ export default function EnfantDetailPage() {
           🏥 Fiche santé
         </button>
         <button
-          onClick={() => editMode ? sauvegarder() : setEditMode(true)}
+          onClick={() => { if (editMode) { sauvegarder() } else { setErreurSave(''); setEditMode(true) } }}
           disabled={saving}
           style={{ background: editMode ? '#2563EB' : '#F1F5F9', border: `1px solid ${editMode ? '#2563EB' : '#E2E8F0'}`, borderRadius: 9, padding: '9px 18px', fontSize: 13, color: editMode ? '#fff' : '#475569', cursor: 'pointer', fontWeight: editMode ? 600 : 400 }}>
           {saving ? 'Enregistrement...' : editMode ? '✓ Enregistrer' : '✏️ Modifier'}
         </button>
         {editMode && (
-          <button onClick={() => { setEditMode(false); setForm({ ...enfant }) }}
+          <button onClick={() => { setEditMode(false); setForm({ ...enfant }); setClasseAnnee(classeAnneeInitiale); setErreurSave('') }}
             style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: '#64748B', cursor: 'pointer' }}>
             Annuler
           </button>
         )}
       </div>
+
+      {/* Erreur de sauvegarde — reste affichée (contrairement au toast) tant que la
+          saisie n'a pas été réenregistrée : une RLS qui refuse l'écriture ne doit
+          jamais passer inaperçue. */}
+      {erreurSave && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#991B1B', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span style={{ fontSize: 15, lineHeight: '18px' }}>⚠️</span>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>Modifications non enregistrées</div>
+            <div style={{ lineHeight: 1.45 }}>{erreurSave}</div>
+          </div>
+        </div>
+      )}
 
       {/* Statut d'inscription (banner avec actions selon le statut) */}
       {(() => {
@@ -346,17 +506,34 @@ export default function EnfantDetailPage() {
               : <div style={{ fontSize: 13, color: '#1E293B' }}>{enfant.date_naissance ? new Date(enfant.date_naissance).toLocaleDateString('fr-FR') : '—'}</div>
             }
           </div>
+          {/* ANNÉE (fix classe/scolarites) : la classe est toujours celle de l'exercice
+              sélectionné en haut de page — le libellé le dit explicitement. */}
           <div>
-            <label style={lbl}>Classe actuelle</label>
+            <label style={lbl}>
+              Classe pour {exerciceCode || '…'}
+            </label>
             {editMode
-              ? <select style={inp} value={form.classe_id || ''} onChange={e => setForm((p: any) => ({ ...p, classe_id: e.target.value || null }))} >
-                  <option value="">Non affecté</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                </select>
+              ? <>
+                  <select style={inp} value={classeAnnee} disabled={exerciceCloture}
+                    onChange={e => setClasseAnnee(e.target.value)}>
+                    <option value="">Non affecté</option>
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                  </select>
+                  <div style={{ fontSize: 11, color: exerciceCloture ? '#B91C1C' : '#94A3B8', marginTop: 5, lineHeight: 1.4 }}>
+                    {exerciceCloture
+                      ? <>🔒 L&apos;année <strong>{exerciceCode}</strong> est clôturée : la classe n&apos;y est plus modifiable.</>
+                      : <>S&apos;applique à l&apos;année <strong>{exerciceCode}</strong>. Changez d&apos;année avec le sélecteur en haut de page pour affecter une autre année.</>}
+                  </div>
+                </>
               : <div style={{ fontSize: 13, color: '#1E293B' }}>
-                  {enfant.classes?.nom
-                    ? <span style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{enfant.classes.nom}</span>
-                    : '—'}
+                  {scolariteAnnee
+                    ? (scolariteAnnee.classes?.nom
+                        ? <span style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>{scolariteAnnee.classes.nom}</span>
+                        : <span style={{ color: '#94A3B8' }}>Sans classe</span>)
+                    : <span style={{ fontSize: 12, color: '#94A3B8' }}>
+                        Aucune scolarité enregistrée pour {exerciceCode || 'cette année'}
+                        {enfant.classes?.nom ? ` (classe au dossier : ${enfant.classes.nom})` : ''}
+                      </span>}
                 </div>
             }
           </div>
