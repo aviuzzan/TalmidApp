@@ -41,13 +41,20 @@ export async function POST(req: NextRequest) {
     const month = String(today.getMonth() + 1).padStart(2, '0')
     const dateStr = `${year}-${month}-${String(dateEncaissement).padStart(2, '0')}`
 
-    const { data: cheques } = await supabase
+    const { data: cheques, error: chequesErr } = await supabase
       .from('cheques_prevus')
       .select('*, familles(nom, parent1_prenom, parent1_nom)')
       .eq('ecole_id', ecoleId)
       .eq('date_echeance', dateStr)
       .eq('mode_paiement', 'sepa')
       .eq('statut', 'prevu')
+
+    // FIX audit RLS 29/07/2026 : ne pas transformer une lecture refusee en
+    // « aucun prelevement » (message trompeur pour l'utilisateur).
+    if (chequesErr) {
+      console.error('[sepa] lecture cheques_prevus failed:', chequesErr.message)
+      return NextResponse.json({ error: 'Lecture des échéances impossible : ' + chequesErr.message }, { status: 500 })
+    }
 
     if (!cheques?.length) {
       return NextResponse.json({ error: 'Aucun prélèvement SEPA pour cette date' }, { status: 404 })
@@ -183,9 +190,53 @@ ${transactions}
 </Document>`
 
     // Marquer les chèques comme "en cours"
-    await supabase.from('cheques_prevus')
+    //
+    // FIX audit RLS 29/07/2026 : ce marquage n'etait pas verifie alors que le
+    // fichier SEPA partait quand meme au client. Si le marquage echoue, les
+    // memes echeances restent au statut 'prevu' et repartent au prochain export
+    // → DOUBLE PRELEVEMENT chez les familles. On ne renvoie donc le XML que si
+    // le marquage est confirme ligne par ligne (le .select() renvoie les lignes
+    // reellement modifiees : une policy qui filtre silencieusement est detectee).
+    const idsAMarquer = chequesAvecMandat.map(c => c.id)
+    // Le filtre `.eq('statut', 'prevu')` rend le marquage atomique vis-a-vis d'un
+    // export concurrent : deux exports simultanes lisent les memes echeances, mais
+    // un seul reussit a les faire passer de 'prevu' a 'exporte'. Le second ne
+    // recupere alors pas toutes les lignes attendues et est rejete par le controle
+    // ci-dessous (sinon : deux fichiers XML avec les memes transactions).
+    const { data: marques, error: marqueErr } = await supabase.from('cheques_prevus')
       .update({ statut: 'exporte' })
-      .in('id', chequesAvecMandat.map(c => c.id))
+      .in('id', idsAMarquer)
+      .eq('statut', 'prevu')
+      .select('id')
+
+    if (marqueErr) {
+      console.error('[sepa] marquage exporte failed:', marqueErr.message)
+      return NextResponse.json({
+        error: 'Fichier NON généré : les échéances n\'ont pas pu être marquées comme exportées (' + marqueErr.message + '). Sans ce marquage elles repartiraient au prochain export (risque de double prélèvement).',
+      }, { status: 500 })
+    }
+    if ((marques?.length || 0) !== idsAMarquer.length) {
+      console.error(`[sepa] marquage partiel : ${marques?.length || 0}/${idsAMarquer.length} échéances marquées`)
+      // Remise a 'prevu' des lignes effectivement marquees : le fichier n'etant
+      // pas envoye, les laisser en 'exporte' ferait sauter ces prelevements.
+      let annule = true
+      const idsMarques = (marques || []).map((m: any) => m.id)
+      if (idsMarques.length > 0) {
+        const { error: revertErr } = await supabase.from('cheques_prevus')
+          .update({ statut: 'prevu' })
+          .in('id', idsMarques)
+        if (revertErr) {
+          annule = false
+          console.error('[sepa] rollback marquage failed:', revertErr.message)
+        }
+      }
+      return NextResponse.json({
+        error: `Fichier NON généré : seules ${marques?.length || 0} échéance(s) sur ${idsAMarquer.length} ont pu être marquées comme exportées.` +
+          (annule
+            ? ' Le marquage partiel a été annulé, aucune échéance n\'a bougé. Corriger les droits puis relancer.'
+            : ` ATTENTION : l'annulation du marquage partiel a échoué — ${idsMarques.length} échéance(s) sont restées au statut « exporté » sans fichier. Les repasser manuellement en « prévu ».`),
+      }, { status: 500 })
+    }
 
     return new NextResponse(xml, {
       headers: {

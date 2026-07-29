@@ -166,6 +166,26 @@ export async function POST(req: NextRequest) {
       console.error('[creer-ecole] seed template Bienvenue parent échoué :', e?.message)
     }
 
+    // 2e. Paramétrage comptable : plan de comptes + axes analytiques
+    // (`seed_plan_comptable`) PUIS imputations par défaut (`proposer_imputations`).
+    //
+    // ssss2 pt5 — POURQUOI LES DEUX : `seed_plan_comptable` ne sème QUE
+    // `comptes_comptables` et `sections_analytiques`. Les `imputations_defaut`
+    // sont créées par `proposer_imputations`. Sans ce second appel, une école
+    // créée ici sort avec zéro imputation, et TOUT export FEC est refusé avec
+    // « clé d'imputation manquante » — sans que personne ne comprenne pourquoi.
+    // Best-effort comme les autres seeds : un échec est tracé, jamais bloquant
+    // (l'écran Paramètres > Comptabilité permet de rattraper via le bouton
+    // « Restaurer le plan de départ », qui enchaîne les deux mêmes fonctions).
+    try {
+      const { error: errPlan } = await sb.rpc('seed_plan_comptable', { p_ecole_id: ecole.id })
+      if (errPlan) console.error('[creer-ecole] seed plan comptable échoué :', errPlan.message)
+      const { error: errImput } = await sb.rpc('proposer_imputations', { p_ecole_id: ecole.id })
+      if (errImput) console.error('[creer-ecole] seed imputations par défaut échoué :', errImput.message)
+    } catch (e: any) {
+      console.error('[creer-ecole] seed paramétrage comptable échoué :', e?.message)
+    }
+
     // 3. Création admin via inviteUserByEmail
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
     const { data: invited, error: inviteErr } = await sb.auth.admin.inviteUserByEmail(adminEmail, {

@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useAccesFinances } from '@/lib/acces-finances'
 import TranchesTab from '@/components/parametres/TranchesTab'
 import SecteursTab from '@/components/parametres/SecteursTab'
 import ClassesTab from '@/components/parametres/ClassesTab'
@@ -24,8 +25,9 @@ import ComptesAccesTab from '@/components/parametres/ComptesAccesTab'
 import DocumentsInscriptionTab from '@/components/parametres/DocumentsInscriptionTab'
 import OptionsEnfantTab from '@/components/parametres/OptionsEnfantTab'
 import AssuranceTab from '@/components/parametres/AssuranceTab'
+import ComptabiliteTab from '@/components/parametres/ComptabiliteTab'
 
-type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'tranches' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'documents_inscription' | 'services' | 'comptes_acces' | 'integrations' | 'relances' | 'options_enfant' | 'assurance'
+type Tab = 'classes' | 'secteurs' | 'exercices' | 'tarifs' | 'tranches' | 'reductions_fn' | 'modes_reglement' | 'config_reduction' | 'config_paiement' | 'commission' | 'sepa' | 'notifications' | 'frais_inscription' | 'documents_ecole' | 'documents_inscription' | 'services' | 'comptes_acces' | 'integrations' | 'relances' | 'options_enfant' | 'assurance' | 'comptabilite'
 type Cat = 'ecole' | 'inscriptions' | 'finances' | 'communication'
 
 const CATEGORIES: { id: Cat; label: string; icon: string; couleur: string; bg: string }[] = [
@@ -54,6 +56,7 @@ const TABS: { id: Tab; label: string; icon: string; cat: Cat }[] = [
   { id: 'assurance',         label: 'Assurance scolaire',   icon: '🛡️', cat: 'inscriptions' },
   // ── Finances ──
   { id: 'modes_reglement',   label: 'Modes de règlement',   icon: '💳', cat: 'finances' },
+  { id: 'comptabilite',      label: 'Comptabilité',         icon: '📒', cat: 'finances' },
   { id: 'config_paiement',   label: 'Config paiement',      icon: '⏰', cat: 'finances' },
   { id: 'sepa',              label: 'SEPA / Banque',        icon: '🏦', cat: 'finances' },
   { id: 'integrations',      label: 'Intégrations',         icon: '🔌', cat: 'finances' },
@@ -81,6 +84,9 @@ export default function ParametresPage() {
   const [cat, setCat] = useState<Cat>(catOfTab(initTab))
   const [annee, setAnnee] = useState(ANNEE_COURANTE)
   const [anneesDispo, setAnneesDispo] = useState<string[]>([])
+  // ssss2-C : l'onglet Comptabilité touche à l'argent, il suit le verrou financier
+  // transversal comme les autres écrans finance (cf. src/lib/acces-finances.tsx).
+  const { acces: accesFinances } = useAccesFinances()
 
   useEffect(() => {
     if (!ecole?.id) return
@@ -93,7 +99,7 @@ export default function ParametresPage() {
 
   const inp = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
 
-  const sousOnglets = TABS.filter(t => t.cat === cat)
+  const sousOnglets = TABS.filter(t => t.cat === cat && (t.id !== 'comptabilite' || accesFinances))
   const catActive = CATEGORIES.find(c => c.id === cat)!
 
   // Onglets qui sont en réalité des pages séparées (route dédiée)
@@ -200,6 +206,9 @@ export default function ParametresPage() {
         {tab === 'tarifs' && <TarifsTab ecoleId={ecole.id} annee={annee} />}
         {tab === 'tranches' && <TranchesTab ecoleId={ecole.id} />}
         {tab === 'reductions_fn' && <ReductionsFNTab ecoleId={ecole.id} annee={annee} />}
+        {tab === 'comptabilite' && (accesFinances
+          ? <ComptabiliteTab ecoleId={ecole.id} />
+          : <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 13 }}>Accès finances non accordé. Le paramétrage comptable est réservé aux comptes disposant de l&apos;accès aux finances.</div>)}
         {tab === 'modes_reglement' && <ModesReglementTab ecoleId={ecole.id} />}
         {tab === 'classes' && <ClassesTab ecoleId={ecole.id} />}
         {tab === 'config_reduction' && <ConfigReductionTab ecoleId={ecole.id} annee={annee} />}

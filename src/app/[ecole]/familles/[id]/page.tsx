@@ -14,6 +14,7 @@ import BoutonReinscription from '@/components/BoutonReinscription'
 import { labelModePaiement, labelStatutFacture } from '@/lib/statuts'
 import { logAction } from '@/lib/audit-log'
 import { calculerEcartFactureContrat, regenererFactureDepuisContrat } from '@/lib/facture-contrat'
+import { chargerImputations, imputer } from '@/lib/comptabilite'
 
 const SITUATIONS: any = {
   marie: 'Marié(e)', celibataire: 'Célibataire', divorce: 'Divorcé(e)',
@@ -118,7 +119,14 @@ export default function FamilleDetailPage() {
       supabase.from('classes').select('*').eq('ecole_id', ecole.id).order('ordre'),
       supabase.from('transports').select('*').eq('ecole_id', ecole.id).order('nom'),
       supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
-      supabase.from('tarifs').select('*').eq('ecole_id', ecole.id).eq('annee_scolaire', ANNEE).order('nom'),
+      // ssss2 : ce sélecteur lisait la table `tarifs`, VIDE depuis l'unification
+      // des tarifs — la liste déroulante ne proposait donc jamais rien, et le
+      // tarif_id posé sur la ligne ne correspondait à aucun poste imputable.
+      // On lit `tarifs_secteur`, la vraie source, en aliasant nom_poste -> nom
+      // pour ne rien changer au rendu ni au libellé généré plus bas.
+      supabase.from('tarifs_secteur')
+        .select('id, nom:nom_poste, montant, tranche_id, secteur_id, categorie, ordre')
+        .eq('ecole_id', ecole.id).eq('annee_scolaire', ANNEE).order('ordre'),
     ])
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? [])
     setTransports(trp ?? []); setModesPaiement(modes ?? []); setTarifs(tar ?? [])
@@ -344,12 +352,19 @@ export default function FamilleDetailPage() {
 
   async function saveLigne(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setError('')
-    const { error: err } = await supabase.from('facture_lignes').insert({
+    // Une ligne saisie à la main doit tomber dans le même compte que la même
+    // ligne générée automatiquement depuis le contrat : sans ça, le FEC et
+    // l'analytique divergeraient selon le chemin de saisie utilisé.
+    // Lecture best effort : chargerImputations ne lève jamais et renvoie au pire
+    // un résolveur vide, la ligne est alors créée avec des colonnes comptables à
+    // NULL plutôt que refusée.
+    const resolveur = await chargerImputations(supabase, ecole?.id || '')
+    const { error: err } = await supabase.from('facture_lignes').insert(imputer({
       facture_id: facture.id, enfant_id: ligneForm.enfant_id,
       tarif_id: ligneForm.tarif_id || null, description: ligneForm.description,
       montant: parseFloat(ligneForm.montant),
       deductible: ligneForm.deductible,
-    })
+    }, resolveur.parTarif(ligneForm.tarif_id || null)))
     if (err) { setError(err.message); setSaving(false); return }
     setShowLigneForm(false); setLigneForm(emptyLigne); load(); setSaving(false)
   }

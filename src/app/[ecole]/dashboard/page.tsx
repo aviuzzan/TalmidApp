@@ -10,6 +10,9 @@ import AlertesUrgentes from '@/components/ui/AlertesUrgentes'
 import ChecklistMiseEnService from '@/components/ui/ChecklistMiseEnService'
 import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch } from '@/lib/du-a-date'
+import { compterEffectifs } from '@/lib/effectifs'
+import { chargerParLots } from '@/lib/pagination'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 
 type Stats = {
   familles: number
@@ -36,8 +39,14 @@ export default function DashboardPage() {
   const { acces: accesFinances } = useAccesFinances()
   const [stats, setStats] = useState<Stats>({ familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_en_retard: 0, montant_du_a_date: 0, solde_annuel: 0, professeurs: 0, classes: 0 })
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  // Exercice sélectionné dans le header global — même source que /direction et /enfants.
+  const annee = useAnneeScolaireActive()
+  const { exerciceSelectionne, loading: exerciceLoading } = useExercice()
+  const exerciceId = exerciceSelectionne?.id ?? null
 
-  useEffect(() => { if (ecole?.id) load() }, [ecole?.id])
+  useEffect(() => { if (ecole?.id && !exerciceLoading) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecole?.id, exerciceId, annee, exerciceLoading])
 
   async function load() {
     setLoading(true)
@@ -58,27 +67,37 @@ export default function DashboardPage() {
     const accessMsg = userRole === 'super_admin' || userRole === 'admin' || p.isAdminPrincipal ||
       ['messagerie', 'documents'].some(m => (p.perms[m] || 'aucun') !== 'aucun')
 
-    const now = new Date().toISOString().split('T')[0]
     const newStats: Stats = { familles: 0, eleves: 0, incomplets: 0, attente: 0, msgNonLus: 0, factures_en_retard: 0, montant_du_a_date: 0, solde_annuel: 0, professeurs: 0, classes: 0 }
 
     if (accessAdmin) {
-      const [famR, enfR, incR, attR, factR, profR, clsR] = await Promise.all([
-        s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
-        s.from('enfants').select('*', { count: 'exact', head: true })
-          .eq('ecole_id', ecole.id)
-          .or(`date_entree.is.null,date_entree.lte.${now}`)
-          .or(`date_sortie.is.null,date_sortie.gte.${now}`),
+      const [effectifs, incR, attR, factR, profR, clsR] = await Promise.all([
+        // FIX audit 29/07/2026 (#8) : l'effectif affiche ici ne passait PAS par le helper
+        // partage et n'avait AUCUN filtre d'annee (`familles` et `enfants` comptes sur
+        // toute la vie de l'ecole, avec un filtre par dates d'entree/sortie qui lui est
+        // propre). /direction et /enfants comptent, eux, les scolarites de l'exercice :
+        // les trois ecrans affichaient donc trois chiffres differents. On utilise
+        // desormais la meme source de verite unique : lib/effectifs.ts.
+        exerciceId ? compterEffectifs(s, ecole.id, exerciceId) : Promise.resolve({ eleves: 0, familles: 0 }),
         s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet'),
         s.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_inscription', 'en_attente'),
         // Factures avec solde (non annulées) : sert au solde annuel + calcul du "dû à date"
-        s.from('factures_solde').select('id, solde_restant, familles!inner(ecole_id)')
+        // FIX audit 29/07/2026 (#7) : filtre d'EXERCICE ajoute (`annee_scolaire` = code de
+        // l'exercice selectionne). Sans lui, le badge « X € a encaisser sur l'annee » /
+        // « N en retard » cumulait toutes les annees depuis la creation de l'ecole.
+        // + PAGINATION : Supabase tronque silencieusement a 1000 lignes.
+        chargerParLots((debut, fin) => s.from('factures_solde')
+          .select('id, solde_restant, familles!inner(ecole_id)')
           .gt('solde_restant', 0).neq('statut', 'annule')
-          .eq('familles.ecole_id', ecole.id),
+          .eq('familles.ecole_id', ecole.id)
+          .eq('annee_scolaire', annee)
+          // Tri déterministe : chaque lot est une NOUVELLE requête.
+          .order('id')
+          .range(debut, fin)),
         s.from('professeurs').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
         s.from('classes').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id),
       ])
-      newStats.familles = famR?.count ?? 0
-      newStats.eleves = enfR?.count ?? 0
+      newStats.familles = effectifs.familles
+      newStats.eleves = effectifs.eleves
       newStats.incomplets = incR?.count ?? 0
       newStats.attente = attR?.count ?? 0
       newStats.professeurs = profR?.count ?? 0
@@ -87,7 +106,8 @@ export default function DashboardPage() {
       // Vrai retard = du a date (echeances echues - reglements), pas solde annuel.
       // Une facture annuelle emise en juillet avec echeancier sept->juin a un solde
       // toute l'annee sans que la famille soit en retard.
-      const factAvecSolde = (factR.data || []) as any[]
+      if (factR.error) console.error('dashboard: liste des impayes incomplete —', factR.error)
+      const factAvecSolde = factR.rows as any[]
       newStats.solde_annuel = factAvecSolde.reduce((sum: number, f: any) => sum + Number(f.solde_restant || 0), 0)
       if (factAvecSolde.length > 0) {
         const duMap = await calcDuADateBatch(s, factAvecSolde.map((f: any) => f.id))
@@ -158,7 +178,7 @@ export default function DashboardPage() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>{t('pages.dashboard.title')}</h1>
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 2, textTransform: 'capitalize' }}>
-            {ecole.nom} · {today} · {userName}
+            {ecole.nom} · {today} · {userName} · exercice {annee}
           </p>
         </div>
         <button onClick={() => router.push(`/${ecole.slug}/a-traiter`)}

@@ -193,17 +193,108 @@ export async function cloneExerciceConfig(
   return { ok: true, cloned }
 }
 
+export type ResultatCloture = {
+  ok: boolean
+  error?: string
+  /** Message d'alerte non bloquant, à afficher même quand `ok` vaut true. */
+  avertissement?: string
+  /** Nombre de reports de solde encore au statut 'propose'. */
+  reportsEnAttente?: number
+}
+
 /**
- * Clôture un exercice (verrouillage). Action quasi-irréversible.
+ * Clôture un exercice (verrouillage).
+ *
+ * Un trigger PostgreSQL refuse ensuite toute écriture sur `factures`,
+ * `facture_lignes`, `reglements`, `cheques_prevus` et `avoirs` rattachés à cet
+ * exercice. Ce n'est plus une simple étiquette de statut : le verrou est réel.
+ * Il reste réversible via `rouvrirExercice`.
+ *
+ * CONTRÔLE ssss2-D : on refuse de clôturer tant que des reports de solde sont
+ * au statut 'propose'. Un report proposé non arbitré, c'est un reliquat que
+ * personne n'a décidé de reprendre ou d'écarter ; clôturer par-dessus revient
+ * à le perdre de vue. `options.force` permet de passer outre en connaissance
+ * de cause (l'appelant doit alors avoir montré l'avertissement).
  */
 export async function cloturerExercice(
   supabase: SupabaseClient,
   exerciceId: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase
+  options?: { force?: boolean },
+): Promise<ResultatCloture> {
+  // 1. Relecture de l'exercice : statut réel + école (filtre explicite ensuite).
+  const { data: ex, error: exErr } = await supabase
+    .from('exercices')
+    .select('id, ecole_id, code, statut')
+    .eq('id', exerciceId)
+    .maybeSingle()
+  if (exErr) return { ok: false, error: 'Lecture de l\'exercice : ' + exErr.message }
+  if (!ex) return { ok: false, error: 'Exercice introuvable.' }
+  if (ex.statut === 'cloture') return { ok: true, avertissement: 'Cet exercice était déjà clôturé.' }
+
+  // 2. Reports de solde encore à arbitrer.
+  const { count, error: cntErr } = await supabase
+    .from('reports_solde')
+    .select('id', { count: 'exact', head: true })
+    .eq('ecole_id', ex.ecole_id)
+    .eq('exercice_origine_id', exerciceId)
+    .eq('statut', 'propose')
+  if (cntErr) {
+    // On ne clôture pas à l'aveugle si le contrôle lui-même est indisponible.
+    return { ok: false, error: 'Contrôle des reports de solde impossible : ' + cntErr.message }
+  }
+  const reportsEnAttente = count ?? 0
+  if (reportsEnAttente > 0 && !options?.force) {
+    return {
+      ok: false,
+      reportsEnAttente,
+      error: `${reportsEnAttente} report${reportsEnAttente > 1 ? 's' : ''} de solde `
+        + `${reportsEnAttente > 1 ? 'sont encore' : 'est encore'} au statut « proposé » et n'`
+        + `${reportsEnAttente > 1 ? 'ont' : 'a'} pas été arbitré${reportsEnAttente > 1 ? 's' : ''}. `
+        + 'Traitez-les dans Finances › Clôture d\'exercice (valider ou écarter) avant de clôturer.',
+    }
+  }
+
+  // 3. Clôture. Une écriture refusée par la RLS ne lève PAS d'exception sur ce
+  //    projet : on vérifie le nombre de lignes réellement modifiées.
+  const { data: maj, error } = await supabase
     .from('exercices')
     .update({ statut: 'cloture', date_cloture: new Date().toISOString() })
     .eq('id', exerciceId)
+    .select('id')
   if (error) return { ok: false, error: error.message }
+  if (!maj || maj.length === 0) {
+    return { ok: false, error: 'Clôture non enregistrée : aucune ligne modifiée (droits insuffisants ?).' }
+  }
+  return {
+    ok: true,
+    reportsEnAttente,
+    avertissement: reportsEnAttente > 0
+      ? `Clôture forcée : ${reportsEnAttente} report(s) de solde restent au statut « proposé ».`
+      : undefined,
+  }
+}
+
+/**
+ * Rouvre un exercice clôturé (RPC `rouvrir_exercice`) : lève le verrou et
+ * trace le motif dans les notes de l'exercice. Le motif est obligatoire — une
+ * réouverture sans justification est exactement ce qu'un contrôle reprocherait.
+ */
+export async function rouvrirExercice(
+  supabase: SupabaseClient,
+  exerciceId: string,
+  motif: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const m = (motif || '').trim()
+  if (!m) return { ok: false, error: 'Un motif de réouverture est obligatoire.' }
+  const { error } = await supabase.rpc('rouvrir_exercice', { p_exercice_id: exerciceId, p_motif: m })
+  if (error) return { ok: false, error: error.message }
+
+  // Vérification explicite : la RPC ne rend rien, on relit le statut plutôt que
+  // d'afficher « rouvert » sur la foi d'une absence d'erreur.
+  const { data: ex } = await supabase
+    .from('exercices').select('statut').eq('id', exerciceId).maybeSingle()
+  if (ex && ex.statut === 'cloture') {
+    return { ok: false, error: 'L\'exercice est toujours clôturé après l\'appel (droits insuffisants ?).' }
+  }
   return { ok: true }
 }

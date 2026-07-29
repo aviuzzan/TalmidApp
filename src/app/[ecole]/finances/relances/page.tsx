@@ -2,7 +2,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
+import { chargerParLots } from '@/lib/pagination'
 import AidePage from '@/components/ui/AidePage'
 
 type Facture = {
@@ -32,19 +34,33 @@ export default function RelancesPage() {
   const [logs, setLogs] = useState<Record<string, RelanceLog[]>>({})
   const [msg, setMsg] = useState('')
   const [showAll, setShowAll] = useState(false)  // false = uniquement en retard reel
+  // Exercice piloté par le sélecteur global (même source que /finances et /finances/dashboard).
+  const annee = useAnneeScolaireActive()
+  const { loading: exerciceLoading } = useExercice()
 
   const load = useCallback(async () => {
-    if (!ecole?.id) return
+    if (!ecole?.id || exerciceLoading) return
     setLoading(true)
     const s = createClient()
 
     // Utilise factures_solde (vue) + jointure familles pour récupérer parent + filtrer école
-    const { data: facts } = await s.from('factures_solde')
+    // FIX audit 29/07/2026 :
+    //  - filtre d'EXERCICE ajouté (`annee_scolaire`) : sans lui, cet écran cumulait les
+    //    impayés de toutes les années depuis la création de l'école, et les KPI
+    //    « Familles en retard » / « Solde annuel total » ne correspondaient à aucun
+    //    exercice. On s'aligne sur le sélecteur global, comme /finances.
+    //  - PAGINATION : Supabase tronque silencieusement à 1000 lignes.
+    const { rows: facts, error: errFacts } = await chargerParLots((debut, fin) => s.from('factures_solde')
       .select('*, familles!inner(nom, parent1_prenom, parent1_nom, parent1_email, ecole_id)')
       .gt('solde_restant', 0)
       .neq('statut', 'annule')
       .eq('familles.ecole_id', ecole.id)
+      .eq('annee_scolaire', annee)
+      // Tri déterministe : chaque lot est une NOUVELLE requête, `id` départage.
       .order('date_echeance', { ascending: true, nullsFirst: false })
+      .order('id')
+      .range(debut, fin))
+    if (errFacts) setMsg('❌ Liste des impayés incomplète : ' + errFacts)
 
     const factsList: Facture[] = (facts || []).map((f: any) => ({
       id: f.id, numero: f.numero, famille_id: f.famille_id,
@@ -81,7 +97,7 @@ export default function RelancesPage() {
       setLogs(map)
     } else setLogs({})
     setLoading(false)
-  }, [ecole?.id])
+  }, [ecole?.id, annee, exerciceLoading])
 
   useEffect(() => { load() }, [load])
 
@@ -125,7 +141,7 @@ export default function RelancesPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>📩 Relances impayés</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>
-          Familles avec au moins une échéance échue non couverte par un règlement.
+          Exercice {annee} — familles avec au moins une échéance échue non couverte par un règlement.
           Le solde annuel est affiché à part — une famille peut avoir un solde sans être en retard.
         </p>
       </div>

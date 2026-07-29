@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { chargerParLots } from '@/lib/pagination'
 import AidePage from '@/components/ui/AidePage'
 
 type Mvt = {
@@ -29,21 +31,46 @@ export default function RapprochementPage() {
   const [impayees, setImpayees] = useState<FactureImpayee[]>([])
   const [filtre, setFiltre] = useState<'a_rapprocher' | 'rapproche' | 'tous'>('a_rapprocher')
   const [loading, setLoading] = useState(true)
+  // Exercice piloté par le sélecteur global (même source que /finances et /finances/dashboard).
+  // Tant que le contexte résout l'exercice, `useAnneeScolaireActive()` retombe sur le calcul
+  // par date : on ne charge rien pour ne pas proposer les impayés d'une autre année.
+  const annee = useAnneeScolaireActive()
+  const { loading: exerciceLoading } = useExercice()
 
-  useEffect(() => { if (ecole?.id) load() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ecole?.id, filtre])
+  useEffect(() => { if (ecole?.id && !exerciceLoading) load() // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecole?.id, filtre, annee, exerciceLoading])
 
   async function load() {
     setLoading(true)
     const s = createClient()
     let q = s.from('mouvements_bancaires').select('*').eq('ecole_id', ecole.id).order('date_op', { ascending: false })
     if (filtre !== 'tous') q = q.eq('statut', filtre)
-    const [{ data: m }, { data: f }] = await Promise.all([
+    // FIX audit 29/07/2026 : les factures impayées candidates au rapprochement n'avaient
+    //   - AUCUN filtre école : la vue `factures_solde` n'expose pas `ecole_id`, le
+    //     cloisonnement ne reposait que sur la RLS. Pour un compte super_admin, la liste
+    //     déroulante « Choisir une facture… » proposait les factures des AUTRES écoles —
+    //     et `rapprocher()` créait alors un règlement sur la facture d'une autre école.
+    //   - AUCUN filtre d'année : on pouvait imputer un virement de l'exercice courant sur
+    //     un impayé d'il y a trois ans.
+    //   - AUCUNE pagination : au-delà de 1000 impayés la liste (et donc le moteur de
+    //     suggestion `matchScore`) était silencieusement tronquée.
+    // Le filtre école passe par `familles!inner` (même méthode que /finances/relances).
+    const [{ data: m }, impayeesRes] = await Promise.all([
       q,
-      s.from('factures_solde').select('id, numero, famille_id, solde_restant, familles(nom, numero)').neq('statut', 'annule').gt('solde_restant', 0),
+      chargerParLots((debut, fin) => s.from('factures_solde')
+        .select('id, numero, famille_id, solde_restant, familles!inner(nom, numero, ecole_id)')
+        .eq('familles.ecole_id', ecole.id)
+        .eq('annee_scolaire', annee)
+        .neq('statut', 'annule')
+        .gt('solde_restant', 0)
+        // Tri déterministe obligatoire : chaque lot est une nouvelle requête.
+        .order('numero', { ascending: true, nullsFirst: false })
+        .order('id')
+        .range(debut, fin)),
     ])
+    if (impayeesRes.error) toast.error('Liste des impayés incomplète : ' + impayeesRes.error)
     setMvts((m ?? []) as Mvt[])
-    setImpayees((f ?? []) as any[])
+    setImpayees(impayeesRes.rows as any[])
     setLoading(false)
   }
 
@@ -163,7 +190,8 @@ export default function RapprochementPage() {
         </button>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Rapprochement bancaire</h1>
         <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
-          Importez votre relevé bancaire et rapprochez automatiquement les recettes contre les factures impayées.
+          Importez votre relevé bancaire et rapprochez automatiquement les recettes contre les factures impayées
+          de l&apos;exercice {annee}.
         </p>
       </div>
 

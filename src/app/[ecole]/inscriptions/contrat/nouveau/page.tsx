@@ -19,6 +19,7 @@ import { getExerciceInscription } from '@/lib/annee-inscription'
 import { labelModePaiement } from '@/lib/statuts'
 import { useToast } from '@/components/ui/Toast'
 import { creerContratPapier, genererLignesEcheancier } from '@/lib/contrat-papier'
+import { chargerReportActif, type ReportSoldeActif } from '@/lib/report-solde'
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -60,6 +61,8 @@ export default function ContratPapierAdminPage() {
   const [reductions, setReductions] = useState<any[]>([])
   const [reductionAccordee, setReductionAccordee] = useState<any>(null)
   const [contratExistant, setContratExistant] = useState<any>(null)
+  // Report de solde validé de l'année précédente, repris dans l'échéancier.
+  const [reportSolde, setReportSolde] = useState<ReportSoldeActif | null>(null)
   const [ecoleInfo, setEcoleInfo] = useState<any>(null)
 
   // Saisie contrat
@@ -110,7 +113,7 @@ export default function ContratPapierAdminPage() {
   async function chargerFamille(fid: string) {
     setFamilleId(fid)
     setFamille(null); setEnfants([]); setEnfantsContrat([]); setContratExistant(null); setReductionAccordee(null)
-    setScanUploaded(null); setSuccess(null)
+    setScanUploaded(null); setSuccess(null); setReportSolde(null)
     if (!fid || !annee) return
     setLoadingFamille(true)
     const s = createClient()
@@ -133,6 +136,19 @@ export default function ContratPapierAdminPage() {
     setTarifs(tar ?? []); setModes(mod ?? [])
     setPaiementConfig(payCfg); setDatesEncaissement(datesEnc ?? [])
     setReductions(redsf ?? []); setReductionAccordee(redAcc); setContratExistant(cont)
+
+    // Report de solde de l'année précédente : chargé pour que l'aperçu de
+    // l'échéancier soit identique à ce qui sera réellement enregistré.
+    // Non bloquant : un échec de lecture ne doit pas empêcher la saisie du contrat.
+    try {
+      const { data: exCible } = await s
+        .from('exercices').select('id')
+        .eq('ecole_id', ecole.id).eq('code', annee).maybeSingle()
+      if (exCible?.id) {
+        const { report } = await chargerReportActif(s, fid, exCible.id)
+        setReportSolde(report)
+      }
+    } catch { /* aperçu sans report */ }
 
     if (mod?.length) setModeReglement(mod[0].type)
     if (datesEnc?.length) setDateEncaissement(datesEnc[0].jour_du_mois)
@@ -247,8 +263,12 @@ export default function ContratPapierAdminPage() {
   const maxEch = paiementConfig?.nb_echeances_max || 12
   const montantEcheance = nbEcheances > 0 ? Math.round((totalAnnuel / nbEcheances) * 100) / 100 : 0
 
+  // ssss2 : l'aperçu doit montrer EXACTEMENT ce qui sera enregistré, report de
+  // solde compris. Sans ça, l'admin validait un échéancier différent de celui
+  // que la création produisait réellement.
   const lignesEcheancier = genererLignesEcheancier({
     totalAnnuel, nbEcheances, anneeScolaire: annee, jourEcheance: dateEncaissement, modeReglement,
+    report: reportSolde,
   })
 
   // ── Upload scan contrat papier ──

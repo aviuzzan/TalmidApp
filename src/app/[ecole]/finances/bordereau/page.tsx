@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { chargerParLots } from '@/lib/pagination'
 
 type Cheque = {
   id: string
@@ -39,25 +41,60 @@ export default function BordereauPage() {
   const [ribDestinataire, setRibDestinataire] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [erreurChargement, setErreurChargement] = useState('')
+  // Exercice piloté par le sélecteur global (même source que /finances).
+  const annee = useAnneeScolaireActive()
+  const { loading: exerciceLoading } = useExercice()
 
-  useEffect(() => { if (ecole?.id) load() }, [ecole?.id, filter, dateFrom, dateTo])
+  useEffect(() => { if (ecole?.id && !exerciceLoading) load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecole?.id, filter, dateFrom, dateTo, annee, exerciceLoading])
 
-  async function load() {
+  // FIX audit 29/07/2026 :
+  //  - AUCUN filtre d'année : le bordereau cumulait les chèques de tous les exercices
+  //    depuis la création de l'école → bordereau pollué remis à la banque.
+  //  - AUCUNE pagination : `cheques_prevus` dépasse déjà 1000 lignes chez l'école
+  //    pilote, la liste était donc AUSSI silencieusement tronquée (bordereau incomplet).
+  //
+  // `cheques_prevus` ne porte pas d'année : elle vient du contrat
+  // (`contrats_scolarisation.annee_scolaire`, cf. inscriptions/page.tsx). Un `!inner`
+  // seul écarterait DÉFINITIVEMENT les chèques saisis à la main depuis la fiche famille
+  // (/familles/[id]/cheques n'écrit pas de `contrat_id`) — or ce sont de vrais chèques
+  // physiques en caisse, les omettre du bordereau serait une régression comptable.
+  // On charge donc deux jeux : les chèques du contrat de l'exercice sélectionné, PLUS
+  // les chèques sans contrat (sans année, donc toujours proposés).
+  const load = async () => {
     setLoading(true)
+    setErreurChargement('')
     const s = createClient()
     // Bordereau de remise = uniquement de vrais chèques physiques à apporter à la banque.
     // La table cheques_prevus stocke aussi virements / prélèvements / espèces / carte
     // depuis le chantier "hhh" : on filtre durement par mode_paiement = cheque (ou cheque_caution).
-    let q = s.from('cheques_prevus')
-      .select('*, familles(nom, numero, parent1_nom, parent1_prenom)')
-      .eq('ecole_id', ecole.id)
-      .in('mode_paiement', ['cheque', 'cheque_caution'])
-      .order('date_echeance', { ascending: true })
-    if (filter === 'prevu') q = q.eq('statut', 'prevu')
-    if (dateFrom) q = q.gte('date_echeance', dateFrom)
-    if (dateTo) q = q.lte('date_echeance', dateTo)
-    const { data } = await q
-    setCheques((data as any) || [])
+    const requete = (avecContrat: boolean) => (debut: number, fin: number) => {
+      let q = s.from('cheques_prevus')
+        .select(avecContrat
+          ? '*, familles(nom, numero, parent1_nom, parent1_prenom), contrats_scolarisation!inner(annee_scolaire)'
+          : '*, familles(nom, numero, parent1_nom, parent1_prenom)')
+        .eq('ecole_id', ecole.id)
+        .in('mode_paiement', ['cheque', 'cheque_caution'])
+      if (avecContrat) q = q.eq('contrats_scolarisation.annee_scolaire', annee)
+      else q = q.is('contrat_id', null)
+      if (filter === 'prevu') q = q.eq('statut', 'prevu')
+      if (dateFrom) q = q.gte('date_echeance', dateFrom)
+      if (dateTo) q = q.lte('date_echeance', dateTo)
+      // Tri déterministe : chaque lot est une NOUVELLE requête, `id` départage.
+      return q.order('date_echeance', { ascending: true }).order('id').range(debut, fin)
+    }
+    const [surContrat, horsContrat] = await Promise.all([
+      chargerParLots(requete(true)),
+      chargerParLots(requete(false)),
+    ])
+    const erreur = surContrat.error || horsContrat.error
+    if (erreur) setErreurChargement('Liste des chèques incomplète : ' + erreur)
+    // Re-tri global après fusion des deux jeux (l'ordre métier reste l'échéance croissante).
+    const lignes = ([...surContrat.rows, ...horsContrat.rows] as any[]).sort((a: any, b: any) =>
+      String(a.date_echeance ?? '').localeCompare(String(b.date_echeance ?? '')))
+    setCheques(lignes as any)
     setLoading(false)
   }
 
@@ -75,14 +112,23 @@ export default function BordereauPage() {
   const total = selectedCheques.reduce((s, c) => s + Number(c.montant), 0)
   const fmt = (n: number) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
 
-  async function marquerDepose() {
+  const marquerDepose = async () => {
     if (selectedCheques.length === 0) return
     if (!confirm(`Marquer ${selectedCheques.length} chèque(s) comme déposé(s) ? (statut → encaisse)`)) return
     const today = new Date().toISOString().split('T')[0]
-    await createClient()
+    // FIX audit 29/07/2026 : l'update de masse ne vérifiait PAS `error`. En cas d'échec
+    // (RLS, réseau, contrainte) l'écran se rechargeait sans rien dire et laissait croire
+    // que les chèques étaient déposés. On remonte désormais l'erreur et on garde la
+    // sélection intacte pour permettre une nouvelle tentative.
+    const { error } = await createClient()
       .from('cheques_prevus')
       .update({ statut: 'encaisse', encaisse_le: today })
       .in('id', selectedCheques.map(c => c.id))
+    if (error) {
+      setErreurChargement(`Échec du marquage : aucun chèque n'a été mis à jour (${error.message})`)
+      return
+    }
+    setErreurChargement('')
     setSelected(new Set())
     await load()
   }
@@ -102,7 +148,12 @@ export default function BordereauPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button onClick={() => router.push(`/${ecole.slug}/finances`)}
             style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Retour</button>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0, flex: 1 }}>Bordereau de remise de chèques</h1>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Bordereau de remise de chèques</h1>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+              Exercice {annee} · les chèques saisis hors contrat (sans année) restent proposés.
+            </div>
+          </div>
           <button onClick={printNow}
             style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
             🖨 Imprimer
@@ -114,6 +165,12 @@ export default function BordereauPage() {
             </button>
           )}
         </div>
+
+        {erreurChargement && (
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>
+            ❌ {erreurChargement}
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
           <div>

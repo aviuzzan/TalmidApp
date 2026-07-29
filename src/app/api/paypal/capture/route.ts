@@ -39,12 +39,17 @@ export async function POST(req: NextRequest) {
     )
 
     // Retrouve le paiement créé à l'étape checkout
-    const { data: paiement } = await supabaseAdmin
+    const { data: paiement, error: paiementErr } = await supabaseAdmin
       .from('paiements_en_ligne')
       .select('*')
       .eq('stripe_session_id', orderId)
       .eq('provider', 'paypal')
       .maybeSingle()
+    // FIX audit RLS 29/07/2026 : ne pas confondre « introuvable » et « lecture refusee ».
+    if (paiementErr) {
+      console.error('[paypal capture] lecture paiements_en_ligne failed:', paiementErr.message)
+      return NextResponse.json({ error: 'Lecture du paiement impossible : ' + paiementErr.message }, { status: 500 })
+    }
     if (!paiement) return NextResponse.json({ error: 'Paiement introuvable' }, { status: 404 })
     // FIX audit 24/07/2026 pt 13 : la garde comparait 'paid' alors que le statut
     // ecrit est 'succeeded' -> garde inoperante, double capture possible
@@ -67,9 +72,44 @@ export async function POST(req: NextRequest) {
     })
     const cap = await capRes.json()
     if (!capRes.ok || cap.status !== 'COMPLETED') {
-      await supabaseAdmin.from('paiements_en_ligne')
+      // FIX audit RLS 29/07/2026 (suite) : ne pas marquer 'failed' un paiement
+      // deja encaisse. Si l'update final vers 'succeeded' avait echoue (500) et
+      // que la famille re-clique, PayPal repond ORDER_ALREADY_CAPTURED (statut
+      // != COMPLETED) alors que l'argent est bien pris et que le reglement
+      // existe deja en base -> etat trompeur au rapprochement.
+      const refPaypal = 'PayPal ' + orderId
+      const { data: reglementExistant, error: reglLookupErr } = await supabaseAdmin
+        .from('reglements')
+        .select('id')
+        .eq('facture_id', paiement.facture_id)
+        .eq('reference', refPaypal)
+        .maybeSingle()
+      if (reglLookupErr) {
+        // Lecture impossible : on ne peut pas trancher, on ne degrade donc pas
+        // le statut (marquer 'failed' a tort est irreversible cote rapprochement).
+        console.error('[paypal capture] lecture reglement existant failed:', reglLookupErr.message)
+        return NextResponse.json({
+          error: 'Capture PayPal non confirmée et vérification du règlement impossible : ' + reglLookupErr.message + '. Ne pas relancer le paiement, prévenir l\'école.',
+        }, { status: 500 })
+      }
+      if (reglementExistant?.id) {
+        // Le reglement est deja enregistre : la capture avait bien abouti.
+        // On se contente de rattraper le statut du paiement en ligne.
+        const { error: upRattrapErr } = await supabaseAdmin.from('paiements_en_ligne')
+          .update({ statut: 'succeeded', metadata: { ...(paiement.metadata || {}), paypal_capture: cap } })
+          .eq('id', paiement.id)
+        if (upRattrapErr) {
+          console.error('[paypal capture] rattrapage statut succeeded failed:', upRattrapErr.message)
+          return NextResponse.json({
+            error: 'Paiement déjà encaissé et règlement enregistré, mais le statut du paiement en ligne n\'a pas pu être mis à jour : ' + upRattrapErr.message + '. Ne pas relancer le paiement, prévenir l\'école.',
+          }, { status: 500 })
+        }
+        return NextResponse.json({ success: true, alreadyPaid: true })
+      }
+      const { error: upFailErr } = await supabaseAdmin.from('paiements_en_ligne')
         .update({ statut: 'failed', metadata: { ...(paiement.metadata || {}), paypal_capture: cap } })
         .eq('id', paiement.id)
+      if (upFailErr) console.error('[paypal capture] update statut failed non enregistre:', upFailErr.message)
       return NextResponse.json({ error: 'Capture PayPal échouée : ' + (cap.message || capRes.status) }, { status: 502 })
     }
 
@@ -91,9 +131,18 @@ export async function POST(req: NextRequest) {
     }
     // Statut facture : recalcule automatiquement par le trigger BDD trg_reglements_statut
 
-    await supabaseAdmin.from('paiements_en_ligne')
+    // FIX audit RLS 29/07/2026 : sans ce test, l'argent est capture chez PayPal
+    // et le paiement reste 'pending' cote TalmidApp — la garde anti-double-capture
+    // ci-dessus (statut === 'succeeded') devient alors inoperante.
+    const { error: upOkErr } = await supabaseAdmin.from('paiements_en_ligne')
       .update({ statut: 'succeeded', metadata: { ...(paiement.metadata || {}), paypal_capture_id: cap.id } })
       .eq('id', paiement.id)
+    if (upOkErr) {
+      console.error('[paypal capture] update statut succeeded failed:', upOkErr.message)
+      return NextResponse.json({
+        error: 'Paiement capture et reglement enregistre, mais le statut du paiement en ligne n\'a pas pu etre mis a jour : ' + upOkErr.message + '. Ne pas relancer le paiement, prevenir l\'ecole.',
+      }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (e: any) {

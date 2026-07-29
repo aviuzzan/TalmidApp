@@ -9,6 +9,7 @@ import { logAction } from '@/lib/audit-log'
 import { COLONNES_FAMILLES, COLONNES_ELEVES, type ColonneExport } from '@/lib/export-colonnes'
 import { useAccesFinances } from '@/lib/acces-finances'
 import { getSecteurScope } from '@/lib/secteur-scope'
+import { chargerParLots } from '@/lib/pagination'
 
 type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
 type ExportAvecColonnes = 'familles' | 'eleves'
@@ -27,34 +28,13 @@ const colonnesParDefaut = (config: ColonneExport[]): string[] =>
 // (`db-max-rows`). Sans `.range()`, un export s'arrêtait donc à 1000 lignes
 // SANS message d'erreur — et le compteur affichait quand même « ✓ 1000 …
 // exportées ». Tous les exports de ce fichier passent désormais par
-// `chargerParLots` : on demande des tranches de 1000 lignes jusqu'à ce qu'un
-// lot revienne incomplet (= dernier lot).
+// `chargerParLots` (helper partagé, cf. src/lib/pagination.ts) : on demande des
+// tranches de 1000 lignes jusqu'à ce qu'un lot revienne incomplet (= dernier).
 //
 // IMPORTANT : chaque lot est une NOUVELLE requête ; le tri doit donc être
 // déterministe (colonne de tri + `id` en départage), sinon deux lots
 // pourraient se recouvrir ou sauter des lignes.
 // ────────────────────────────────────────────────────────────────────────────
-const TAILLE_LOT = 1000
-const MAX_LOTS = 200 // garde-fou : 200 000 lignes max, jamais de boucle infinie
-
-type ResultatLot = { data: any[] | null; error: { message: string } | null }
-
-const chargerParLots = async (
-  // La requête est (re)construite à chaque lot : un builder Supabase ne se
-  // rejoue pas proprement, et `.range()` doit changer d'un lot à l'autre.
-  requeteLot: (debut: number, fin: number) => PromiseLike<any>,
-): Promise<{ rows: any[]; error: string | null }> => {
-  const rows: any[] = []
-  for (let i = 0; i < MAX_LOTS; i++) {
-    const debut = i * TAILLE_LOT
-    const res = (await requeteLot(debut, debut + TAILLE_LOT - 1)) as ResultatLot
-    if (res.error) return { rows, error: res.error.message }
-    const lot = res.data ?? []
-    rows.push(...lot)
-    if (lot.length < TAILLE_LOT) return { rows, error: null }
-  }
-  return { rows, error: null }
-}
 
 export default function ExportsPage() {
   const router = useRouter()
@@ -254,8 +234,15 @@ export default function ExportsPage() {
     const s = createClient()
     // NOTE : `total_regle` exclut désormais les avoirs imputés. On expose donc
     // `total_avoirs_imputes` dans une colonne séparée pour traçabilité comptable.
+    // FIX audit 29/07/2026 (fuite inter-écoles) : la requête n'avait AUCUN filtre
+    // `ecole_id` et ne reposait que sur la RLS. Pour un compte super_admin (RLS
+    // permissive), `factures-{annee}-{ecole.slug}.csv` contenait les factures de
+    // TOUTES les écoles. La vue `factures_solde` n'expose pas `ecole_id` : on
+    // passe donc par `familles!inner(...)` + `.eq('familles.ecole_id', …)`,
+    // exactement comme `exportCheques`/`exportFamilles` ci-dessous.
     const { rows: data, error } = await chargerParLots((debut, fin) => s.from('factures_solde')
-      .select('id, numero, date_emission, annee_scolaire, statut, total_facture, total_regle, total_avoirs_imputes, solde_restant, familles(numero, nom)')
+      .select('id, numero, date_emission, annee_scolaire, statut, total_facture, total_regle, total_avoirs_imputes, solde_restant, familles!inner(numero, nom, ecole_id)')
+      .eq('familles.ecole_id', ecole.id)
       .eq('annee_scolaire', annee)
       .order('date_emission', { ascending: false })
       .order('id')
@@ -291,8 +278,13 @@ export default function ExportsPage() {
     // FIX audit 27/07/2026 : exclure les avoirs imputes (mode 'avoir') — ce ne sont pas
     // des encaissements de tresorerie. Le FEC les exclut deja : les deux exports se
     // rapprochent desormais. (L'export Factures a sa colonne "Avoirs imputes" dediee.)
+    // FIX audit 29/07/2026 (fuite inter-ecoles) : aucun filtre `ecole_id` non plus ici —
+    // `reglements` n'a pas de colonne `ecole_id` exploitable pour ce scope, on passe donc
+    // par facture -> famille (`factures.familles.ecole_id`), meme chaine que
+    // /finances et /finances/dashboard.
     const { rows: data, error } = await chargerParLots((debut, fin) => s.from('reglements')
-      .select('id, date_reglement, montant, mode_paiement, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
+      .select('id, date_reglement, montant, mode_paiement, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles!inner(numero, nom, ecole_id))')
+      .eq('factures.familles.ecole_id', ecole.id)
       .eq('factures.annee_scolaire', annee)
       .neq('mode_paiement', 'avoir')
       .order('date_reglement', { ascending: false })
@@ -327,12 +319,16 @@ export default function ExportsPage() {
     logAction(createClient(), ecole.id, 'export_csv', { type: 'fec' })
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    // Périodes FEC : début + fin de l'exercice (par défaut 1er sept → 31 août année suivante)
+    // ssss2 : on passe le CODE de l'exercice plutôt que des dates calculées à
+    // la main. La route lit alors exercices.date_debut / date_fin, qui font foi
+    // — une école dont l'exercice n'est pas calé sur septembre-août avait
+    // jusqu'ici un FEC couvrant la mauvaise période. Les dates restent envoyées
+    // en repli si l'exercice n'existe pas en base.
     const [yDeb, yFin] = annee.split('-')
     const debut = `${yDeb}-09-01`
     const fin = `${yFin}-08-31`
     try {
-      const res = await fetch(`/api/compta/fec?ecole_id=${ecole.id}&debut=${debut}&fin=${fin}`, {
+      const res = await fetch(`/api/compta/fec?ecole_id=${ecole.id}&exercice=${encodeURIComponent(annee)}&debut=${debut}&fin=${fin}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       })
       if (!res.ok) {

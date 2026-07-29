@@ -13,6 +13,8 @@
  *     .select('*, familles(...), contrat_enfants(*, enfants(prenom, nom))')
  */
 
+import { chargerImputations, imputer } from './comptabilite'
+
 type AnySupabase = any
 
 export interface CreerFactureResult {
@@ -51,7 +53,13 @@ export async function creerFactureDepuisContrat(
   let reactivation = false
   if (existing && existing.statut === 'annule') {
     reactivation = true
-    await s.from('facture_lignes').delete().eq('facture_id', existing.id)
+    // FIX audit RLS 29/07/2026 : une policy qui refuse le delete ne leve pas
+    // d'exception. Sans ce test, les anciennes lignes restaient en place et la
+    // reconstruction ci-dessous les DOUBLAIT (facture reactivee au double).
+    const { error: purgeErr } = await s.from('facture_lignes').delete().eq('facture_id', existing.id)
+    if (purgeErr) {
+      return { ok: false, facture_id: existing.id, numero: existing.numero, error: 'Purge des anciennes lignes : ' + purgeErr.message }
+    }
   }
 
   // 2. Numéro séquentiel FACT-{YYYY}-{NNNN}
@@ -135,6 +143,11 @@ export async function creerFactureDepuisContrat(
  * Construit les lignes de facture théoriques pour un contrat donné (sans insert).
  * Source de vérité UNIQUE du calcul des lignes (DDR ventilée par enfant, postes,
  * assurance, frais d'inscription/réinscription).
+ *
+ * Chaque ligne produite porte aussi son imputation comptable et analytique
+ * (tarif_id, compte_id, activite_id, centre_cout_id, centre_cout). C'est un
+ * SNAPSHOT figé à la génération : le FEC d'un exercice clos ne doit pas bouger
+ * si l'école reparamètre ses postes après coup.
  */
 export async function construireLignesFacture(
   s: AnySupabase,
@@ -145,7 +158,11 @@ export async function construireLignesFacture(
 ): Promise<any[]> {
   const enfants = contrat.contrat_enfants || []
   const enfantIds = enfants.map((e: any) => e.enfant_id).filter(Boolean)
-  const [{ data: ddr }, { data: tarifsList }, { data: fraisCfg }, { data: pedagos }] = await Promise.all([
+  // Le résolveur comptable est chargé DANS le Promise.all : l'imputation ne doit
+  // coûter aucun aller-retour supplémentaire sur le chemin critique de la
+  // facturation. chargerImputations ne lève jamais — au pire il renvoie un
+  // résolveur vide et les lignes partent avec des colonnes comptables à NULL.
+  const [{ data: ddr }, { data: tarifsList }, { data: fraisCfg }, { data: pedagos }, resolveur] = await Promise.all([
     s
       .from('demandes_reduction')
       .select('tarif_accorde, statut')
@@ -158,6 +175,7 @@ export async function construireLignesFacture(
     enfantIds.length
       ? s.from('inscriptions_pedagogiques').select('enfant_id').eq('annee_scolaire', annee).in('enfant_id', enfantIds)
       : Promise.resolve({ data: [] as any[] }),
+    chargerImputations(s, ecoleId),
   ])
   const nouveauxIds = new Set((pedagos || []).map((p: any) => p.enfant_id))
   const tarifMap: Record<string, boolean> = {}
@@ -178,6 +196,10 @@ export async function construireLignesFacture(
       : (parseFloat(p?.montant) || 0)
 
   const nf = { id: factureId }
+  // Toutes les lignes poussées ici passent par `imputer` et portent explicitement
+  // `tarif_id` (null si la ligne ne vient pas d'un poste). Uniformité voulue :
+  // l'insert est un insert de masse, et PostgREST se comporte mal quand les
+  // objets d'un même tableau n'ont pas exactement le même jeu de clés.
   const lignes: any[] = []
 
   if (ddr?.tarif_accorde) {
@@ -207,19 +229,26 @@ export async function construireLignesFacture(
       })
       const totalInclusHorsScol = postesInclusHorsScol.reduce((s: number, p: any) => s + montantPoste(p), 0)
 
+      // La ligne « Scolarité (tarif accordé) » n'est pas une ligne système : elle
+      // vient bien du poste scolarité du contrat, seul son montant est recalculé.
+      // On récupère donc son poste d'origine pour l'imputer sur le bon compte
+      // plutôt que sur le compte de repli.
+      const posteScolarite = postesContrat.find((p: any) => /scolarit/i.test(p.nom || ''))
+
       // Scolarité enfant = part accordée - autres postes inclus (DP, etc.)
       // Si la part est inférieure aux autres postes inclus → réduction additionnelle sur DP
       const scolEnfant = Math.max(0, Math.round((partParEnfant - totalInclusHorsScol) * 100) / 100)
 
       // Ligne Scolarité (tarif accordé)
       if (scolEnfant > 0) {
-        lignes.push({
+        lignes.push(imputer({
           facture_id: nf.id,
           enfant_id: e.enfant_id,
+          tarif_id: posteScolarite?.tarif_id ?? null,
           description: `Scolarité ${annee} — ${enfantLabel}${classe} (tarif accordé)`.trim(),
           montant: scolEnfant,
           deductible: true,
-        })
+        }, posteScolarite?.tarif_id ? resolveur.parTarif(posteScolarite.tarif_id) : resolveur.parCle('poste_defaut')))
       }
 
       // Lignes postes inclus hors scolarité (DP au plein tarif)
@@ -233,13 +262,14 @@ export async function construireLignesFacture(
         excedentARepartir -= reduc
         const montantFinal = Math.round((montantPlein - reduc) * 100) / 100
         if (montantFinal > 0) {
-          lignes.push({
+          lignes.push(imputer({
             facture_id: nf.id,
             enfant_id: e.enfant_id,
+            tarif_id: p.tarif_id ?? null,
             description: `${p.nom || 'Poste'} ${annee} — ${enfantLabel}${classe}`.trim(),
             montant: montantFinal,
             deductible: true,
-          })
+          }, resolveur.parTarif(p.tarif_id)))
         }
       }
 
@@ -248,13 +278,14 @@ export async function construireLignesFacture(
       for (const p of postesNonInclus) {
         const m = montantPoste(p)
         if (m <= 0) continue
-        lignes.push({
+        lignes.push(imputer({
           facture_id: nf.id,
           enfant_id: e.enfant_id,
+          tarif_id: p.tarif_id ?? null,
           description: `${p.nom || 'Poste'} ${annee} — ${enfantLabel}${classe}`.trim(),
           montant: m,
           deductible: false,
-        })
+        }, resolveur.parTarif(p.tarif_id)))
       }
     }
   } else {
@@ -275,36 +306,41 @@ export async function construireLignesFacture(
           const tarifInclus = tarifMap[p.tarif_id]
           const estScolarite = /scolarit/i.test(nom)
           const deductible = tarifInclus !== undefined ? tarifInclus !== false : estScolarite
-          lignes.push({
+          lignes.push(imputer({
             facture_id: nf.id,
             enfant_id: e.enfant_id,
+            tarif_id: p.tarif_id ?? null,
             description: `${nom} ${annee} — ${enfantLabel}${classe}`.trim(),
             montant,
             deductible,
-          })
+          }, resolveur.parTarif(p.tarif_id)))
         }
       } else if (e.sous_total != null) {
         // Fallback : pas de détail des postes → on crée la ligne agrégée comme avant.
-        lignes.push({
+        // Aucun poste identifiable derrière ce montant : imputation de repli, sinon
+        // le montant tomberait hors de tout compte de produit.
+        lignes.push(imputer({
           facture_id: nf.id,
           enfant_id: e.enfant_id,
+          tarif_id: null,
           description: `Scolarité ${annee}${e.classe_prevue ? ' — ' + e.classe_prevue : ''}${enfantLabel ? ' (' + enfantLabel + ')' : ''}`.trim(),
           montant: parseFloat(e.sous_total) || 0,
           deductible: true,
-        })
+        }, resolveur.parCle('poste_defaut')))
       }
     }
   }
 
   // Assurance scolaire si souscrite
   if (contrat.assurance_ecole && contrat.assurance_montant_total) {
-    lignes.push({
+    lignes.push(imputer({
       facture_id: nf.id,
       enfant_id: null,
+      tarif_id: null,
       description: `Assurance scolaire ${annee}`,
       montant: parseFloat(contrat.assurance_montant_total) || 0,
       deductible: false,
-    })
+    }, resolveur.parCle('assurance')))
   }
 
   // Frais inscription / réinscription selon config école
@@ -316,46 +352,50 @@ export async function construireLignesFacture(
     const fraisInscEnfant = parseFloat(fraisCfg.inscription_par_enfant) || 0
     if (fraisInscEnfant > 0) {
       for (const e of nouveauxEnfants) {
-        lignes.push({
+        lignes.push(imputer({
           facture_id: nf.id,
           enfant_id: e.enfant_id,
+          tarif_id: null,
           description: `Frais d'inscription ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
           montant: fraisInscEnfant,
           deductible: false,
-        })
+        }, resolveur.parCle('frais_inscription')))
       }
     }
     const fraisInscFamille = parseFloat(fraisCfg.inscription_par_famille) || 0
     if (fraisInscFamille > 0 && nouveauxEnfants.length > 0) {
-      lignes.push({
+      lignes.push(imputer({
         facture_id: nf.id,
         enfant_id: null,
+        tarif_id: null,
         description: `Frais d'inscription forfait famille ${annee}`,
         montant: fraisInscFamille,
         deductible: false,
-      })
+      }, resolveur.parCle('frais_inscription')))
     }
     const fraisReinsEnfant = parseFloat(fraisCfg.reinscription_par_enfant) || 0
     if (fraisReinsEnfant > 0) {
       for (const e of reinscriptionsEnfants) {
-        lignes.push({
+        lignes.push(imputer({
           facture_id: nf.id,
           enfant_id: e.enfant_id,
+          tarif_id: null,
           description: `Frais de réinscription ${annee} — ${e.enfants?.prenom || ''} ${e.enfants?.nom || ''}`.trim(),
           montant: fraisReinsEnfant,
           deductible: false,
-        })
+        }, resolveur.parCle('frais_reinscription')))
       }
     }
     const fraisReinsFamille = parseFloat(fraisCfg.reinscription_par_famille) || 0
     if (fraisReinsFamille > 0 && reinscriptionsEnfants.length > 0) {
-      lignes.push({
+      lignes.push(imputer({
         facture_id: nf.id,
         enfant_id: null,
+        tarif_id: null,
         description: `Frais de réinscription forfait famille ${annee}`,
         montant: fraisReinsFamille,
         deductible: false,
-      })
+      }, resolveur.parCle('frais_reinscription')))
     }
   }
 
@@ -453,7 +493,7 @@ export async function regenererFactureDepuisContrat(
       const maxNum = Math.max(...(echeances as any[]).map((e: any) => e.numero_cheque || 0))
       const derniereDate = (echeances as any[]).map((e: any) => e.date_echeance).sort().pop()
       const modeEch = (echeances as any[])[0]?.mode_paiement || 'virement'
-      await s.from('cheques_prevus').insert({
+      const { error: chqErr } = await s.from('cheques_prevus').insert({
         contrat_id: (echeances as any[])[0]?.contrat_id || contrat.id,
         famille_id: contrat.famille_id,
         ecole_id: ecoleId,
@@ -465,8 +505,10 @@ export async function regenererFactureDepuisContrat(
         note: 'Régularisation auto : régénération facture depuis contrat',
         facture_id: facture.id,
       })
+      // Reste « best effort » (la facture est correcte), mais l'echec n'est plus muet.
+      if (chqErr) console.error('[regenererFactureDepuisContrat] insert cheques_prevus failed:', chqErr.message)
     }
-  } catch { /* best effort */ }
+  } catch (e: any) { console.error('[regenererFactureDepuisContrat] resync echeancier:', e?.message) }
 
   return { ok: true, facture_id: facture.id, numero: facture.numero }
 }

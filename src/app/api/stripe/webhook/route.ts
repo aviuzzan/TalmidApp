@@ -56,11 +56,19 @@ export async function POST(req: NextRequest) {
         const amountTotal = Number(session.amount_total) || 0
         const meta = session.metadata || {}
 
-        const { data: pe } = await supabaseAdmin
+        // FIX audit RLS 29/07/2026 (suite) : une lecture en echec ne doit JAMAIS
+        // etre confondue avec « aucune ligne ». Avec le design « 5xx = rejeu »,
+        // un `pe` null par erreur transitoire ferait repartir la creation du
+        // reglement depuis les seules metadata -> risque de double reglement.
+        const { data: pe, error: peErr } = await supabaseAdmin
           .from('paiements_en_ligne')
           .select('id, facture_id, ecole_id, famille_id, montant_centimes, reglement_id, statut')
           .eq('stripe_session_id', sessionId)
           .maybeSingle()
+        if (peErr) {
+          console.error('[stripe webhook] lecture paiements_en_ligne failed:', peErr.message)
+          return NextResponse.json({ received: false, error: 'lecture paiement_en_ligne failed' }, { status: 500 })
+        }
 
         const factureId = pe?.facture_id || meta.facture_id
         const ecoleId = pe?.ecole_id || meta.ecole_id || ecole.id
@@ -71,8 +79,15 @@ export async function POST(req: NextRequest) {
           // FIX audit 24/07/2026 pt 13 : anti-doublon (retry de webhook sans ligne
           // paiements_en_ligne) — verifier qu'un reglement avec cette reference n'existe pas deja
           const refStripe = `Stripe ${sessionId.slice(0, 12)}`
-          const { data: dejaLa } = await supabaseAdmin.from('reglements')
+          const { data: dejaLa, error: dejaErr } = await supabaseAdmin.from('reglements')
             .select('id').eq('facture_id', factureId).eq('reference', refStripe).maybeSingle()
+          // Si cette lecture echoue, `dejaLa` vaut null : la garde anti-doublon
+          // sauterait et on inserterait un SECOND reglement au rejeu. On rejoue
+          // plutot l'evenement (meme pattern que api/gocardless/webhook).
+          if (dejaErr) {
+            console.error('[stripe webhook] lecture reglement existant failed:', dejaErr.message)
+            return NextResponse.json({ received: false, error: 'lecture reglement existant failed' }, { status: 500 })
+          }
           if (dejaLa?.id) {
             reglementId = dejaLa.id
           } else {
@@ -96,8 +111,14 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // FIX audit RLS 29/07/2026 : toutes les ecritures ci-dessous sont verifiees.
+        // Une policy qui refuse un update renvoie { error } sans lever d'exception :
+        // on repondait 200 et Stripe ne rejouait JAMAIS l'evenement (paiement
+        // encaisse chez Stripe, invisible dans TalmidApp).
+        // Toutes ces operations sont idempotentes (update par id / statut recalcule
+        // + garde anti-doublon sur le reglement) : un 500 provoque un simple rejeu.
         if (pe?.id) {
-          await supabaseAdmin
+          const { error: upPeErr } = await supabaseAdmin
             .from('paiements_en_ligne')
             .update({
               statut: 'succeeded',
@@ -106,18 +127,30 @@ export async function POST(req: NextRequest) {
               updated_at: new Date().toISOString(),
             })
             .eq('id', pe.id)
+          if (upPeErr) {
+            console.error('[stripe webhook] update paiements_en_ligne failed:', upPeErr.message)
+            return NextResponse.json({ received: false, error: 'update paiement_en_ligne failed' }, { status: 500 })
+          }
         }
 
         if (factureId && paymentIntentId) {
-          await supabaseAdmin.from('factures').update({ stripe_payment_intent_id: paymentIntentId }).eq('id', factureId)
+          const { error: upFactPiErr } = await supabaseAdmin.from('factures').update({ stripe_payment_intent_id: paymentIntentId }).eq('id', factureId)
+          if (upFactPiErr) {
+            console.error('[stripe webhook] update factures.stripe_payment_intent_id failed:', upFactPiErr.message)
+            return NextResponse.json({ received: false, error: 'update facture failed' }, { status: 500 })
+          }
         }
 
         if (factureId) {
-          const { data: sol } = await supabaseAdmin
+          const { data: sol, error: solErr } = await supabaseAdmin
             .from('factures_solde')
             .select('total_facture, total_regle, solde_restant')
             .eq('id', factureId)
             .maybeSingle()
+          if (solErr) {
+            console.error('[stripe webhook] lecture factures_solde failed:', solErr.message)
+            return NextResponse.json({ received: false, error: 'lecture solde facture failed' }, { status: 500 })
+          }
           if (sol) {
             // NOTE : `total_regle` exclut les avoirs imputés (vrais paiements uniquement).
             // Ici on vient d'enregistrer un paiement Stripe (non-avoir) donc `regle > 0` ;
@@ -129,7 +162,11 @@ export async function POST(req: NextRequest) {
             let statut: 'en_attente' | 'partiel' | 'paye' = 'en_attente'
             if (restant <= 0.01 && total > 0) statut = 'paye'
             else if (regle > 0 || restant < total) statut = 'partiel'
-            await supabaseAdmin.from('factures').update({ statut }).eq('id', factureId)
+            const { error: upStatutErr } = await supabaseAdmin.from('factures').update({ statut }).eq('id', factureId)
+            if (upStatutErr) {
+              console.error('[stripe webhook] update factures.statut failed:', upStatutErr.message)
+              return NextResponse.json({ received: false, error: 'update statut facture failed' }, { status: 500 })
+            }
           }
         }
         break
@@ -137,19 +174,27 @@ export async function POST(req: NextRequest) {
 
       case 'checkout.session.expired': {
         const session = event.data.object
-        await supabaseAdmin
+        const { error: upExpErr } = await supabaseAdmin
           .from('paiements_en_ligne')
           .update({ statut: 'expired', updated_at: new Date().toISOString() })
           .eq('stripe_session_id', session.id)
+        if (upExpErr) {
+          console.error('[stripe webhook] update statut expired failed:', upExpErr.message)
+          return NextResponse.json({ received: false, error: 'update paiement_en_ligne failed' }, { status: 500 })
+        }
         break
       }
 
       case 'payment_intent.payment_failed': {
         const pi = event.data.object
-        await supabaseAdmin
+        const { error: upFailErr } = await supabaseAdmin
           .from('paiements_en_ligne')
           .update({ statut: 'failed', stripe_payment_intent_id: pi.id, updated_at: new Date().toISOString() })
           .eq('stripe_payment_intent_id', pi.id)
+        if (upFailErr) {
+          console.error('[stripe webhook] update statut failed:', upFailErr.message)
+          return NextResponse.json({ received: false, error: 'update paiement_en_ligne failed' }, { status: 500 })
+        }
         break
       }
 

@@ -12,6 +12,7 @@ import {
   createExercice,
   cloneExerciceConfig,
   cloturerExercice,
+  rouvrirExercice,
 } from '@/lib/exercice'
 
 export default function ExercicesPage() {
@@ -92,13 +93,59 @@ export default function ExercicesPage() {
     await reload()
   }
 
-  async function handleCloturer(ex: Exercice) {
-    if (!confirm(`Clôturer l'exercice ${ex.code} ? Cette action verrouille l'exercice — les écritures et factures ne pourront plus être modifiées. À utiliser uniquement après contrôle complet.`)) return
-    const res = await cloturerExercice(supabase, ex.id)
-    if (res.ok) {
-      await logAction(supabase, ecole.id, 'exercice_cloture', { exercice_id: ex.id, code: ex.code })
-      setInfo(`✓ Exercice ${ex.code} clôturé`); await reload()
-    } else setError(res.error || 'Erreur clôture')
+  /**
+   * Clôture d'un exercice.
+   *
+   * FIX ssss2-D : la boîte de confirmation promettait que « les écritures et
+   * factures ne pourront plus être modifiées ». C'était FAUX — la clôture ne
+   * faisait qu'un UPDATE de statut, rien n'empêchait de continuer à écrire.
+   * C'est vrai depuis le trigger de verrouillage : le message le dit désormais
+   * sans exagérer, et précise que l'exercice reste réouvrable avec motif.
+   */
+  async function handleCloturer(ex: Exercice, force = false) {
+    setError(''); setInfo('')
+    if (!force && !confirm(
+      `Clôturer l'exercice ${ex.code} ?\n\n`
+      + 'La base refusera ensuite toute écriture sur les factures, lignes de facture, règlements, '
+      + 'échéances et avoirs de cet exercice.\n\n'
+      + 'Ce verrou n\'est pas définitif : l\'exercice peut être rouvert depuis cette page, la '
+      + 'réouverture exigeant un motif qui est conservé dans ses notes.',
+    )) return
+
+    const res = await cloturerExercice(supabase, ex.id, { force })
+    if (!res.ok) {
+      // Reports de solde encore à arbitrer : on propose de passer outre en le disant.
+      if (res.reportsEnAttente && res.reportsEnAttente > 0) {
+        if (confirm(`${res.error}\n\nClôturer quand même ?`)) {
+          await handleCloturer(ex, true)
+          return
+        }
+        setError(res.error || 'Clôture annulée')
+        return
+      }
+      setError(res.error || 'Erreur clôture')
+      return
+    }
+    await logAction(supabase, ecole.id, 'exercice_cloture', {
+      exercice_id: ex.id, code: ex.code, force, reports_en_attente: res.reportsEnAttente ?? 0,
+    })
+    setInfo(`✓ Exercice ${ex.code} clôturé${res.avertissement ? ' — ' + res.avertissement : ''}`)
+    await reload()
+  }
+
+  /** Réouverture d'un exercice clôturé : lève le verrou, trace le motif. */
+  async function handleRouvrir(ex: Exercice) {
+    setError(''); setInfo('')
+    const motif = window.prompt(
+      `Rouvrir l'exercice ${ex.code} ?\n\nMotif de la réouverture (obligatoire, conservé dans les notes de l'exercice) :`,
+    )
+    if (motif === null) return
+    if (!motif.trim()) { setError('Réouverture annulée : aucun motif saisi.'); return }
+    const res = await rouvrirExercice(supabase, ex.id, motif)
+    if (!res.ok) { setError(res.error || 'Erreur réouverture'); return }
+    await logAction(supabase, ecole.id, 'exercice_rouvert', { exercice_id: ex.id, code: ex.code, motif })
+    setInfo(`✓ Exercice ${ex.code} rouvert`)
+    await reload()
   }
 
   return (
@@ -114,7 +161,12 @@ export default function ExercicesPage() {
             Une seule année pour piloter administration, facturation et comptabilité — pas de désynchro possible.
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setShowNouveau(true)}>+ Préparer l'exercice suivant</button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn-secondary" onClick={() => router.push(`/${ecole.slug}/finances/cloture`)}>
+            Clôture et report de solde
+          </button>
+          <button className="btn-primary" onClick={() => setShowNouveau(true)}>+ Préparer l'exercice suivant</button>
+        </div>
       </div>
 
       {info && (
@@ -169,11 +221,22 @@ export default function ExercicesPage() {
                     )}
                   </td>
                   <td style={{ padding: '14px 16px' }}>
-                    {peutCloturer && (
-                      <button onClick={() => handleCloturer(ex)} className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }}>
-                        🔒 Clôturer
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {peutCloturer && (
+                        <button onClick={() => handleCloturer(ex)} className="btn-danger" style={{ padding: '5px 12px', fontSize: 12 }}>
+                          🔒 Clôturer
+                        </button>
+                      )}
+                      {ex.statut === 'cloture' && (
+                        <button onClick={() => handleRouvrir(ex)} className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }}>
+                          Rouvrir
+                        </button>
+                      )}
+                      <button onClick={() => router.push(`/${ecole.slug}/finances/cloture`)}
+                        className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }}>
+                        Reports de solde
                       </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               )
@@ -183,7 +246,7 @@ export default function ExercicesPage() {
       </div>
 
       <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#1E40AF' }}>
-        💡 <strong>Bonnes pratiques</strong> : prépare ton exercice N+1 en mai/juin (clone des tarifs, frais, configs). Garde l'exercice N comme courant jusqu'à la rentrée. Bascule sur N+1 le 1er septembre. Clôture N uniquement après contrôle complet (compta + facturation soldée).
+        💡 <strong>Bonnes pratiques</strong> : prépare ton exercice N+1 en mai/juin (clone des tarifs, frais, configs). Garde l'exercice N comme courant jusqu'à la rentrée. Bascule sur N+1 le 1er septembre. Clôture N uniquement après contrôle complet (compta + facturation soldée), depuis l'écran <strong>Clôture et report de solde</strong> qui enchaîne contrôles préalables, soldes, reports et verrouillage.
       </div>
 
       {/* Modal nouvel exercice */}

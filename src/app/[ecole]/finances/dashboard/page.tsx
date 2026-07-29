@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { labelStatutFacture } from '@/lib/statuts'
 import { calcDuADateBatch } from '@/lib/du-a-date'
+import { chargerParLots } from '@/lib/pagination'
 
 type Kpi = {
   ca_facture: number
@@ -130,13 +131,21 @@ export default function FinancesDashboardPage() {
     // FIX audit 28/07/2026 : filtre ecole EXPLICITE via facture -> famille (reglements
     // n'a pas de colonne ecole_id). Sans ce filtre, un compte super_admin voyait la
     // tresorerie de toutes les ecoles cumulee.
-    const { data: regs } = await s
+    // FIX audit 29/07/2026 : requete PAGINEE. Supabase tronque silencieusement a
+    // 1000 lignes : au-dela, les barres du graphique « Encaissements mensuels »
+    // etaient sous-evaluees sans aucun message. Tri deterministe obligatoire d'un
+    // lot a l'autre (date_reglement puis `id`).
+    const { rows: regs, error: errRegs } = await chargerParLots((deb, fin) => s
       .from('reglements')
-      .select('montant, mode_paiement, date_reglement, factures!inner(annee_scolaire, familles!inner(ecole_id))')
+      .select('id, montant, mode_paiement, date_reglement, factures!inner(annee_scolaire, familles!inner(ecole_id))')
       .eq('factures.familles.ecole_id', ecole.id)
       .eq('factures.annee_scolaire', annee)
       .neq('mode_paiement', 'avoir')
       .gte('date_reglement', debut.toISOString().split('T')[0])
+      .order('date_reglement', { ascending: true })
+      .order('id')
+      .range(deb, fin))
+    if (errRegs) console.error('finances/dashboard: encaissements mensuels incomplets —', errRegs)
 
     const par_mois: Record<string, number> = {}
     for (let i = 0; i < 12; i++) {
@@ -145,7 +154,7 @@ export default function FinancesDashboardPage() {
       const key = d.toISOString().substring(0, 7)
       par_mois[key] = 0
     }
-    for (const r of regs || []) {
+    for (const r of (regs || []) as any[]) {
       const key = (r.date_reglement || '').substring(0, 7)
       if (par_mois[key] !== undefined) par_mois[key] += Number(r.montant || 0)
     }

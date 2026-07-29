@@ -6,6 +6,7 @@ import { useParentCtx } from '@/lib/parent-context'
 import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
+import { chargerReportActif, type ReportSoldeActif } from '@/lib/report-solde'
 
 // Libelles propres des statuts d'avoir (codes BDD -> affichage FR)
 const LABEL_STATUT_AVOIR: Record<string, string> = {
@@ -25,6 +26,10 @@ export default function PortailFacturesPage() {
   const [avoirs, setAvoirs] = useState<any[]>([])
   const [imputations, setImputations] = useState<any[]>([])
   const [echeances, setEcheances] = useState<any[]>([])
+  // Report de solde de l'année précédente repris sur l'année affichée.
+  // Information seule : ce montant n'est PAS refacturé (il figure déjà au
+  // compte de la famille au titre de l'année d'origine).
+  const [report, setReport] = useState<ReportSoldeActif | null>(null)
   const [loading, setLoading] = useState(true)
   const [erreur, setErreur] = useState(false)
   const [stripeActif, setStripeActif] = useState(false)
@@ -49,6 +54,25 @@ export default function PortailFacturesPage() {
         .eq('famille_id', profile.famille_id)
         .order('date_emission', { ascending: false })
       setAvoirs((avs as any[]) || [])
+
+      // Report de solde validé pour l'exercice affiché (résolu par son code).
+      // Lecture indépendante de la facture : un report peut exister alors
+      // qu'aucune facture n'a encore été émise pour l'année.
+      let exerciceCibleId: string | null = null
+      if (profile.ecole_id) {
+        const { data: ex } = await supabase
+          .from('exercices').select('id')
+          .eq('ecole_id', profile.ecole_id)
+          .eq('code', anneeInscription)
+          .maybeSingle()
+        exerciceCibleId = ex?.id ?? null
+      }
+      if (exerciceCibleId) {
+        const { report: rep } = await chargerReportActif(supabase, profile.famille_id, exerciceCibleId)
+        setReport(rep)
+      } else {
+        setReport(null)
+      }
 
       const { data: fact } = await supabase
         .from('factures_solde').select('*')
@@ -140,6 +164,10 @@ export default function PortailFacturesPage() {
   // des imputations (numero/motif) pour l'affichage du bloc "Avoirs disponibles".
   // Les deux sources sont mathematiquement equivalentes.
   const totalAvoirsImputes = isAnnulee ? 0 : imputations.reduce((s, i) => s + Number(i.montant), 0)
+  // Les échéances qui reprennent un report de solde portent `report_solde_id`.
+  // On les liste à part : elles ne concernent pas la scolarité de l'année.
+  const echeancesAnnee = echeances.filter((e: any) => !e.report_solde_id)
+  const echeancesReport = echeances.filter((e: any) => !!e.report_solde_id)
   // Net a regler par la famille apres deduction avoirs (= "facture nette")
   const totalFactureNet = facture && !isAnnulee ? Number(facture.total_facture) - totalAvoirsImputes : 0
   const maPart = facture && !isAnnulee ? totalFactureNet * parent.partPct / 100 : 0
@@ -209,6 +237,56 @@ export default function PortailFacturesPage() {
           </div>
         </div>
       )}
+
+      {/* Report de solde de l'année précédente — information, pas une facture.
+          Ton volontairement factuel : on décrit un montant et son traitement,
+          on ne met pas la famille en cause. */}
+      {report && Number(report.montant) !== 0 && (() => {
+        const montantReport = Number(report.montant) || 0
+        // Si le code d'exercice manque, on reste compréhensible : « l'année précédente ».
+        const anneeOrigine = report.exercice_origine_code || t('portail.factures.report.previous_year', {}, 'précédente')
+        const dejaRepris = Number(report.montant_echeance) || 0
+        const debiteur = montantReport > 0
+        const c = debiteur
+          ? { bg: '#fff', border: '#FDE68A', head: '#FFFBEB', fg: '#92400E' }
+          : { bg: '#fff', border: '#BBF7D0', head: '#F0FDF4', fg: '#065F46' }
+        return (
+          <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${c.border}`, background: c.head, fontWeight: 600, fontSize: 14, color: c.fg }}>
+              {debiteur
+                ? t('portail.factures.report.title_debit', { annee: anneeOrigine }, 'Solde restant de l\'année {annee}')
+                : t('portail.factures.report.title_credit', { annee: anneeOrigine }, 'Trop-perçu de l\'année {annee}')}
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontSize: 13, color: '#475569' }}>
+                  {debiteur
+                    ? t('portail.factures.report.amount_debit', {}, 'Montant restant de l\'année précédente')
+                    : t('portail.factures.report.amount_credit', {}, 'Montant en votre faveur')}
+                </span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: debiteur ? '#B45309' : '#059669' }}>
+                  {Math.abs(montantReport).toLocaleString('fr-FR')} €
+                </span>
+              </div>
+              <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.55 }}>
+                {debiteur
+                  ? t('portail.factures.report.note_debit', {},
+                    'Ce montant provient de l\'année précédente. Il n\'est pas refacturé : il figure ici pour information et il est repris, le cas échéant, dans les échéances signalées « report de solde » ci-dessous.')
+                  : t('portail.factures.report.note_credit', {},
+                    'Ce montant vous reste acquis. Il vient en déduction des échéances de l\'année en cours.')}
+              </div>
+              {debiteur && dejaRepris > 0 && (
+                <div style={{ fontSize: 12, color: '#64748B' }}>
+                  {t('portail.factures.report.scheduled', { montant: dejaRepris.toLocaleString('fr-FR') }, 'Déjà réparti sur vos échéances : {montant} €')}
+                </div>
+              )}
+              {report.note && (
+                <div style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>{report.note}</div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {!facture ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
@@ -358,8 +436,8 @@ export default function PortailFacturesPage() {
             )}
           </div>
 
-          {/* Echeancier */}
-          {echeances.length > 0 && !isAnnulee && (() => {
+          {/* Echeancier de l'annee en cours (les echeances de report sont listees a part) */}
+          {echeancesAnnee.length > 0 && !isAnnulee && ((echeances: any[]) => {
             const today = new Date(); today.setHours(0, 0, 0, 0)
             const reglees = echeances.filter(e => ['encaisse', 'paye'].includes(e.statut))
             const aRegler = echeances.filter(e => !['encaisse', 'paye', 'rejete'].includes(e.statut))
@@ -488,6 +566,64 @@ export default function PortailFacturesPage() {
                     .echeancier-mobile { display: flex !important; }
                   }
                 `}</style>
+              </div>
+            )
+          })(echeancesAnnee)}
+
+          {/* Echeances reprenant le report de solde de l'annee precedente.
+              Bloc distinct : ces echeances ne correspondent pas a la scolarite
+              de l'annee en cours, et aucune facture n'a ete emise pour elles. */}
+          {echeancesReport.length > 0 && !isAnnulee && (() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const total = echeancesReport.reduce((s: number, e: any) => s + Number(e.montant), 0)
+            const anneeOrigine = report?.exercice_origine_code || t('portail.factures.report.previous_year', {}, 'précédente')
+            return (
+              <div style={{ background: '#fff', border: '1px solid #FDE68A', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #FDE68A', background: '#FFFBEB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#92400E' }}>
+                    {t('portail.factures.report.sched_title', { annee: anneeOrigine }, 'Échéances du solde de l\'année {annee}')}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#92400E' }}>
+                    {total.toLocaleString('fr-FR')} € · {echeancesReport.length}
+                  </div>
+                </div>
+                <div style={{ padding: '12px 20px', fontSize: 12, color: '#475569', lineHeight: 1.55 }}>
+                  {t('portail.factures.report.sched_intro', {},
+                    'Ces échéances concernent le solde de l\'année précédente, distinctes de celles de l\'année en cours.')}
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#F8FAFC' }}>
+                      <tr>
+                        {[t('portail.factures.sched.col.due_date'), t('portail.factures.col.amount'), t('portail.factures.col.mode'), t('portail.factures.credits.col.status')].map((h, i) => (
+                          <th key={h} style={{ textAlign: i === 1 ? 'right' : 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {echeancesReport.map((e: any) => {
+                        const dateEch = new Date(e.date_echeance); dateEch.setHours(0, 0, 0, 0)
+                        const reglee = ['encaisse', 'paye'].includes(e.statut)
+                        const enRetard = !['encaisse', 'paye', 'rejete', 'recu'].includes(e.statut) && dateEch < today
+                        const b = reglee
+                          ? { label: t('portail.factures.sched.status.encaisse'), bg: '#ECFDF5', color: '#065F46' }
+                          : enRetard
+                            ? { label: t('portail.factures.sched.status.late'), bg: '#FEF2F2', color: '#991B1B' }
+                            : { label: t('portail.factures.sched.status.upcoming'), bg: '#F1F5F9', color: '#475569' }
+                        return (
+                          <tr key={e.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                            <td style={{ padding: '11px 16px', fontSize: 13, color: '#1E293B' }}>{fmtDate(e.date_echeance, lang)}</td>
+                            <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 700, color: '#1E293B', textAlign: 'right' }}>{Number(e.montant).toLocaleString('fr-FR')} €</td>
+                            <td style={{ padding: '11px 16px', fontSize: 12, color: '#475569' }}>{labelModePaiement(e.mode_paiement)}</td>
+                            <td style={{ padding: '11px 16px' }}>
+                              <span style={{ background: b.bg, color: b.color, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>{b.label}</span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )
           })()}

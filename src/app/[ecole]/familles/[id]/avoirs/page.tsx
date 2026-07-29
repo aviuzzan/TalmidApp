@@ -97,23 +97,32 @@ export default function AvoirsFamillePage() {
         const factLabel = fact ? `${fact.numero} (${fact.annee_scolaire})` : 'la facture'
         const m = Number(payload.montant)
         if (confirm(`Imputer immediatement ${m.toFixed(2)} EUR sur ${factLabel} ?\n\n(L avoir va deduire ce montant du solde restant.)`)) {
-          await s.from('avoirs_imputations').insert({
+          // FIX audit RLS 29/07/2026 : une policy qui refuse l insert renvoie
+          // { error } sans lever d exception. Si l imputation echouait mais pas
+          // le reglement, le solde de la facture baissait alors que l avoir
+          // restait disponible -> avoir consommable deux fois.
+          const { error: errImpA } = await s.from('avoirs_imputations').insert({
             avoir_id: avoirCree.id,
             facture_id: form.facture_origine_id,
             montant: m,
             cree_par: session?.user.id,
           })
-          const { error: errRegA } = await s.from('reglements').insert({
-            facture_id: form.facture_origine_id,
-            famille_id: familleId,
-            montant: m,
-            date_reglement: new Date().toISOString().split('T')[0],
-            mode_paiement: 'avoir',
-            reference: avoirCree.numero,
-            notes: `Imputation avoir ${avoirCree.numero || avoirCree.id.substring(0, 8)} (cree dans le meme geste)`,
-          })
-          if (errRegA) alert('Avoir cree mais reglement non trace : ' + errRegA.message)
-          await s.from('avoirs').update({ statut: 'utilise' }).eq('id', avoirCree.id)
+          if (errImpA) {
+            alert('Avoir cree, mais l imputation a ete refusee : ' + errImpA.message + '\n\nAucun reglement n a ete enregistre. L avoir reste disponible : refaire l imputation depuis la liste.')
+          } else {
+            const { error: errRegA } = await s.from('reglements').insert({
+              facture_id: form.facture_origine_id,
+              famille_id: familleId,
+              montant: m,
+              date_reglement: new Date().toISOString().split('T')[0],
+              mode_paiement: 'avoir',
+              reference: avoirCree.numero,
+              notes: `Imputation avoir ${avoirCree.numero || avoirCree.id.substring(0, 8)} (cree dans le meme geste)`,
+            })
+            if (errRegA) alert('Avoir cree mais reglement non trace : ' + errRegA.message)
+            const { error: errStatutA } = await s.from('avoirs').update({ statut: 'utilise' }).eq('id', avoirCree.id)
+            if (errStatutA) alert('Imputation enregistree mais le statut de l avoir n a pas pu etre mis a jour : ' + errStatutA.message + '\n\nL avoir va apparaitre comme encore disponible : le corriger a la main avant toute nouvelle imputation.')
+          }
         }
       }
     }
@@ -156,9 +165,12 @@ export default function AvoirsFamillePage() {
     }
 
     // 3. Mettre à jour le statut de l'avoir
+    // FIX audit RLS 29/07/2026 : sans ce test, l'avoir restait affiché comme
+    // disponible alors qu'il vient d'être consommé -> imputable une 2e fois.
     const nouveau_utilise = avoir.montant_utilise + m
     const nouveau_statut = nouveau_utilise >= avoir.montant ? 'utilise' : 'partiellement_utilise'
-    await s.from('avoirs').update({ statut: nouveau_statut }).eq('id', imputForm.avoirId)
+    const { error: e3 } = await s.from('avoirs').update({ statut: nouveau_statut }).eq('id', imputForm.avoirId)
+    if (e3) alert('Imputation enregistree mais le statut de l avoir n a pas pu etre mis a jour : ' + e3.message + '\n\nL avoir va apparaitre comme encore disponible : le corriger a la main avant toute nouvelle imputation.')
 
     setImputForm(null)
     await load()
@@ -166,7 +178,8 @@ export default function AvoirsFamillePage() {
 
   async function remove(id: string) {
     if (!confirm('Supprimer cet avoir ? Toutes les imputations seront supprimées.')) return
-    await createClient().from('avoirs').delete().eq('id', id)
+    const { error } = await createClient().from('avoirs').delete().eq('id', id)
+    if (error) { alert('Suppression refusee : ' + error.message); return }
     await load()
   }
 

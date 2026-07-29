@@ -5,6 +5,25 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { labelStatutFacture, labelModePaiement } from '@/lib/statuts'
 import { logAction } from '@/lib/audit-log'
+import { chargerParLots } from '@/lib/pagination'
+import { estReportComptable, labelModeReport, libelleReport, type ReportSoldeActif } from '@/lib/report-solde'
+
+/**
+ * Phrase explicative sous une ligne de report. Elle DÉPEND de `source` : la
+ * formulation historique (« la créance figure déjà sur ce compte via les
+ * factures de … ») est fausse dès que l'exercice d'origine n'a pas été facturé
+ * dans TalmidApp, ce qui est précisément le cas de l'école pilote. Annoncer au
+ * lecteur que la créance est ailleurs sur le relevé alors qu'elle n'y est pas
+ * est pire qu'une absence d'explication.
+ */
+function phraseReport(rep: ReportSoldeActif): string {
+  const exercice = rep.exercice_origine_code || 'l\'exercice d\'origine'
+  if (!estReportComptable(rep)) {
+    return `Ligne non comptabilisée : la créance figure déjà sur ce compte via les factures de ${exercice}.`
+  }
+  const origine = String(rep.source) === 'importe' ? 'repris à l\'import' : 'repris manuellement'
+  return `Solde d'ouverture ${origine} — les factures de ${exercice} ne figurent pas dans TalmidApp : cette ligne est comptabilisée et entre dans les totaux ci-dessous.`
+}
 
 type Facture = {
   id: string; numero: string; date_emission: string; statut: string;
@@ -14,7 +33,11 @@ type Reglement = {
   id: string; facture_id: string; montant: number; date_reglement: string;
   mode_paiement: string; reference: string | null; notes: string | null;
 }
-type Famille = { id: string; nom: string; email: string | null; numero: string | null }
+type Famille = {
+  id: string; nom: string; email: string | null; numero: string | null
+  /** Colonne persistée, convention unique partagée avec le FEC. */
+  compte_auxiliaire: string | null
+}
 
 // FIX audit 24/07/2026 pt 5 : codes lowercase normalises (valeur stockee) + label affiche.
 // Avant, on stockait 'Espèces'/'Chèque'/'CB' capitalises -> filtres, FEC et stats les rataient.
@@ -37,6 +60,16 @@ export default function CompteFamillePage() {
   const [factures, setFactures] = useState<Facture[]>([])
   const [reglements, setReglements] = useState<Reglement[]>([])
   const [pointes, setPointes] = useState<Set<string>>(new Set())
+  // Reports de solde VALIDÉS de la famille, tous exercices cibles confondus.
+  //
+  // FIX ssss2 pt3 — leur traitement DÉPEND DE `source`, cf. `estReportComptable()` :
+  //   - 'calcule' : la créance a été facturée dans TalmidApp, elle figure déjà
+  //     dans le grand livre ci-dessous. Ligne d'INFORMATION, hors totaux.
+  //   - 'saisi' / 'importe' : l'exercice d'origine n'a PAS été facturé dans
+  //     TalmidApp (cas de l'école pilote, zéro facture sur 2025-2026). Aucune
+  //     facture ne porte cette créance : la ligne est un vrai solde d'ouverture,
+  //     elle est COMPTABILISÉE et entre dans les totaux.
+  const [reports, setReports] = useState<ReportSoldeActif[]>([])
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState<any>({
     facture_id: '', montant: '', mode_paiement: 'cheque',
@@ -50,14 +83,24 @@ export default function CompteFamillePage() {
   async function load() {
     setLoading(true)
     const s = createClient()
-    const [{ data: fam }, { data: facs }, { data: regs }] = await Promise.all([
-      s.from('familles').select('id, nom, email, numero').eq('id', familleId).single(),
+    const [{ data: fam }, { data: facs }, { data: regs }, resReports] = await Promise.all([
+      s.from('familles').select('id, nom, email, numero, compte_auxiliaire').eq('id', familleId).single(),
       s.from('factures_solde').select('*').eq('famille_id', familleId).order('date_emission', { ascending: false }),
       s.from('reglements').select('*').eq('famille_id', familleId).order('date_reglement', { ascending: false }),
+      // Reports validés, toutes cibles confondues : le relevé est multi-exercices.
+      chargerParLots<ReportSoldeActif>((debut, fin) => s
+        .from('reports_solde_actifs')
+        .select('id, ecole_id, famille_id, exercice_cible_id, exercice_origine_id, exercice_origine_code, montant, mode, source, note, valide_le, montant_echeance')
+        .eq('famille_id', familleId)
+        .order('valide_le', { ascending: true })
+        .order('id', { ascending: true })
+        .range(debut, fin)),
     ])
     setFamille(fam)
     setFactures((facs ?? []) as Facture[])
     setReglements((regs ?? []) as Reglement[])
+    if (resReports.error) console.error('[compte] reports de solde :', resReports.error)
+    setReports(resReports.rows)
 
     // Pointage : un reglement est "rapproche" s'il a un mouvement_bancaire qui pointe vers lui
     const reglIds = ((regs ?? []) as Reglement[]).map(r => r.id)
@@ -117,16 +160,57 @@ export default function CompteFamillePage() {
   // FIX audit 27/07 : exclure les factures annulees/brouillon des totaux et du grand
   // livre 411 — sinon le releve imprime divergeait de la fiche famille (qui les exclut).
   const facturesActives = factures.filter(f => !['annule', 'annulee', 'brouillon'].includes(String(f.statut || '').toLowerCase()))
-  const soldeTotal = facturesActives.reduce((acc, f) => acc + Number(f.solde_restant || 0), 0)
-  const totalFacture = facturesActives.reduce((acc, f) => acc + Number(f.total_facture || 0), 0)
-  const totalRegle = facturesActives.reduce((acc, f) => acc + Number(f.total_regle || 0), 0)
   const facturesOuvertes = facturesActives.filter(f => Number(f.solde_restant) > 0)
 
-  // Code de compte auxiliaire client (plan comptable : 411 = Clients)
-  const auxBase = (famille.numero || famille.nom || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10)
-  const auxCode = '411' + (auxBase || 'CLIENT')
+  // Reports repris manuellement (`saisi`) ou importés d'un autre logiciel
+  // (`importe`) : les factures de l'exercice d'origine ne sont PAS dans
+  // TalmidApp, donc la créance n'apparaît nulle part ailleurs sur ce relevé.
+  // Ne pas les compter sous-estimerait la dette de la famille du montant exact
+  // du report — c'est le cas réel de l'école pilote.
+  const reportsComptables = reports.filter(estReportComptable)
+  const reportDebit = reportsComptables.reduce((acc, r) => acc + Math.max(0, Number(r.montant) || 0), 0)
+  const reportCredit = reportsComptables.reduce((acc, r) => acc + Math.max(0, -(Number(r.montant) || 0)), 0)
 
-  const mouvements: { date: string; type: 'facture' | 'reglement'; libelle: string; debit: number; credit: number; id: string }[] = []
+  const totalFacture = facturesActives.reduce((acc, f) => acc + Number(f.total_facture || 0), 0) + reportDebit
+  const totalRegle = facturesActives.reduce((acc, f) => acc + Number(f.total_regle || 0), 0) + reportCredit
+  const soldeTotal = facturesActives.reduce((acc, f) => acc + Number(f.solde_restant || 0), 0) + reportDebit - reportCredit
+
+  // Code de compte auxiliaire client (plan comptable : 411 = Clients).
+  // FIX ssss2-D : on lit désormais la colonne PERSISTÉE `familles.compte_auxiliaire`,
+  // qui est celle utilisée par l'export FEC. Le code recalculé à la volée qui se
+  // trouvait ici divergeait dès qu'un numéro de famille était modifié après coup :
+  // le relevé et le FEC désignaient alors la même famille par deux codes
+  // différents, ce qui rend tout lettrage impossible. Le calcul n'est conservé
+  // qu'en repli, à l'identique de `compteAuxiliaireDeRepli()` du FEC.
+  const auxBase = (famille.numero || famille.nom || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10)
+  const auxCode = famille.compte_auxiliaire || ('411' + (auxBase || 'CLIENT'))
+
+  const mouvements: {
+    date: string; type: 'facture' | 'reglement' | 'report'; libelle: string;
+    debit: number; credit: number; id: string; montantInfo?: number
+    /** Report comptabilisé (source 'saisi'/'importe') : il pèse sur le solde. */
+    comptabilise?: boolean
+  }[] = []
+
+  // Reports de solde antérieurs, EN TÊTE du relevé (ce sont des à-nouveaux).
+  //   - source 'calcule' : ligne d'INFORMATION, ni débit, ni crédit, ni solde
+  //     cumulé. La créance est déjà représentée par les factures de l'exercice
+  //     d'origine listées ci-dessous ; la compter une seconde fois la doublerait.
+  //   - source 'saisi' / 'importe' : solde d'ouverture repris à la main, aucune
+  //     facture correspondante en base. La ligne est COMPTABILISÉE, sinon le
+  //     relevé annonce une dette inférieure à la dette réelle.
+  for (const r of reports) {
+    const montant = Number(r.montant) || 0
+    const comptabilise = estReportComptable(r)
+    mouvements.push({
+      date: r.valide_le ? String(r.valide_le).slice(0, 10) : '',
+      type: 'report',
+      libelle: libelleReport(r),
+      debit: comptabilise ? Math.max(0, montant) : 0,
+      credit: comptabilise ? Math.max(0, -montant) : 0,
+      id: r.id, montantInfo: montant, comptabilise,
+    })
+  }
   for (const f of facturesActives) {
     mouvements.push({
       date: f.date_emission, type: 'facture',
@@ -147,7 +231,13 @@ export default function CompteFamillePage() {
       debit: 0, credit: Number(r.montant || 0), id: r.id,
     })
   }
-  mouvements.sort((a, b) => a.date.localeCompare(b.date))
+  // Les lignes d'information restent EN TÊTE ; seuls les mouvements comptables
+  // sont classés chronologiquement (le solde cumulé doit rester lisible).
+  mouvements.sort((a, b) => {
+    if (a.type === 'report' && b.type !== 'report') return -1
+    if (b.type === 'report' && a.type !== 'report') return 1
+    return a.date.localeCompare(b.date)
+  })
 
   const statutColor = (s: string) => {
     if (s === 'paye') return { bg: '#ECFDF5', fg: '#065F46' }
@@ -217,6 +307,17 @@ export default function CompteFamillePage() {
         <Card label="Solde dû" value={soldeTotal} color={soldeTotal > 0 ? '#991B1B' : '#065F46'} highlight />
       </div>
 
+      {/* Les soldes d'ouverture repris à la main ne correspondent à aucune
+          facture en base : sans cette mention, l'écart entre le tableau des
+          factures et les totaux ci-dessus serait inexplicable pour le lecteur. */}
+      {reportsComptables.length > 0 && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', borderRadius: 9, padding: '10px 14px', fontSize: 12, lineHeight: 1.55, marginBottom: 20 }}>
+          Les totaux ci-dessus incluent {reportsComptables.length} solde(s) d&apos;ouverture repris manuellement
+          ({(reportDebit - reportCredit).toFixed(2)} € net), dont les factures d&apos;origine ne sont pas dans TalmidApp.
+          Ils ne figurent donc pas dans le tableau des factures ci-dessous, mais bien dans le relevé chronologique.
+        </div>
+      )}
+
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: 14, marginBottom: 20 }}>
         <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1E293B', margin: '0 0 10px' }}>Factures ({factures.length})</h2>
         {factures.length === 0 ? (
@@ -281,6 +382,50 @@ export default function CompteFamillePage() {
                 {(() => {
                   let solde = 0
                   return mouvements.map(m => {
+                    if (m.type === 'report') {
+                      const rep = reports.find(r => r.id === m.id)
+                      const montant = Number(m.montantInfo) || 0
+                      // Un report comptabilisé pèse sur le solde cumulé comme
+                      // n'importe quelle écriture : il doit être ajouté AVANT
+                      // l'affichage de la ligne.
+                      if (m.comptabilise) solde += m.debit - m.credit
+                      return (
+                        <tr key={m.type + m.id} style={{ borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                          <td style={td}>{m.date ? new Date(m.date).toLocaleDateString('fr-FR') : '—'}</td>
+                          <td style={td}>
+                            <span style={{
+                              background: m.comptabilise ? '#FEF3C7' : '#EEF2FF',
+                              color: m.comptabilise ? '#92400E' : '#4338CA',
+                              fontSize: 10, fontWeight: 700,
+                              padding: '2px 7px', borderRadius: 4, marginRight: 8, textTransform: 'uppercase',
+                            }}>{m.comptabilise ? 'Solde d\'ouverture' : 'Information'}</span>
+                            {m.libelle}
+                            {!m.comptabilise && <span style={{ color: '#64748B' }}> — {montant.toFixed(2)} €</span>}
+                            {rep ? (
+                              <span style={{ color: '#94A3B8', fontSize: 11, display: 'block', marginTop: 3 }}>
+                                Reprise dans l'échéancier : {labelModeReport(rep.mode)}
+                                {' · déjà repris '}{Number(rep.montant_echeance || 0).toFixed(2)} €.
+                                {' '}{phraseReport(rep)}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', color: m.debit > 0 ? '#1E293B' : '#CBD5E1' }}>
+                            {m.debit > 0 ? m.debit.toFixed(2) + ' €' : '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'right', color: m.credit > 0 ? '#065F46' : '#CBD5E1' }}>
+                            {m.credit > 0 ? m.credit.toFixed(2) + ' €' : '—'}
+                          </td>
+                          <td style={{
+                            ...td, textAlign: 'right',
+                            fontWeight: m.comptabilise ? 600 : 400,
+                            color: m.comptabilise ? (solde > 0 ? '#991B1B' : '#065F46') : '#CBD5E1',
+                          }}>
+                            {m.comptabilise ? solde.toFixed(2) + ' €' : '—'}
+                          </td>
+                          <td className="no-print" style={td}></td>
+                        </tr>
+                      )
+                    }
                     solde += m.debit - m.credit
                     return (
                       <tr key={m.type + m.id} style={{ borderBottom: '1px solid #F1F5F9' }}>

@@ -18,6 +18,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { calcDuADateBatch } from '@/lib/du-a-date'
 import { getExerciceInscription } from '@/lib/annee-inscription'
+import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { chargerParLots } from '@/lib/pagination'
 
 type Alerte = {
   icon: string
@@ -31,9 +33,12 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
   const router = useRouter()
   const [alertes, setAlertes] = useState<Alerte[]>([])
   const [loading, setLoading] = useState(true)
+  // Exercice sélectionné dans le header global (même source que /finances, /direction).
+  const anneeExercice = useAnneeScolaireActive()
+  const { loading: exerciceLoading } = useExercice()
 
   useEffect(() => {
-    if (!ecoleId) return
+    if (!ecoleId || exerciceLoading) return
     ;(async () => {
       const s = createClient()
       const now = new Date()
@@ -49,7 +54,7 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
         { count: ddrCount },
         { count: contratCount },
         { count: demandesCount },
-        { data: factAvecSolde },
+        factAvecSoldeRes,
         { count: chequesCount },
       ] = await Promise.all([
         // FIX audit 27/07 : le portail ecrit 'soumis' (masculin) -> l'alerte ne se
@@ -68,10 +73,21 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
         // via du-a-date (echeances echues non couvertes), pas date_emission + 30j
         // qui marquait "en retard" toute facture annuelle emise 30j avant.
         // `famille_id` est nécessaire pour dédupliquer par FAMILLE (cf. plus bas).
-        s.from('factures_solde').select('id, famille_id, familles!inner(ecole_id)')
+        // FIX audit 29/07/2026 :
+        //  - filtre d'EXERCICE ajouté (`annee_scolaire` = code de l'exercice sélectionné) :
+        //    sans lui cette bannière cumulait les impayés de TOUTES les années depuis la
+        //    création de l'école, et affichait donc un nombre de familles en retard
+        //    supérieur à /finances/relances et /direction.
+        //  - PAGINATION : Supabase tronque silencieusement à 1000 lignes.
+        chargerParLots((debut, fin) => s.from('factures_solde')
+          .select('id, famille_id, familles!inner(ecole_id)')
           .eq('familles.ecole_id', ecoleId)
+          .eq('annee_scolaire', anneeExercice)
           .gt('solde_restant', 0)
-          .neq('statut', 'annule'),
+          .neq('statut', 'annule')
+          // Tri déterministe : chaque lot est une NOUVELLE requête.
+          .order('id')
+          .range(debut, fin)),
         // Alerte "chèques à encaisser ce mois" -> uniquement les vrais chèques (l'action
         // pointe vers le bordereau de remise qui n'accepte que des chèques physiques).
         s.from('cheques_prevus').select('id, familles!inner(ecole_id)', { count: 'exact', head: true })
@@ -86,7 +102,8 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
       // factures en les libellant « familles » (une famille avec 3 factures était
       // comptée 3 fois). On déduplique par `famille_id`, comme
       // finances/dashboard/page.tsx.
-      const factures = (factAvecSolde ?? []) as any[]
+      if (factAvecSoldeRes.error) console.error('AlertesUrgentes: liste des impayes incomplete —', factAvecSoldeRes.error)
+      const factures = factAvecSoldeRes.rows as any[]
       const familleParFacture: Record<string, string> = {}
       for (const f of factures) {
         if (f.id && f.famille_id) familleParFacture[f.id] = f.famille_id
@@ -113,7 +130,7 @@ export default function AlertesUrgentes({ ecoleId, ecoleSlug }: { ecoleId: strin
       setAlertes(list)
       setLoading(false)
     })()
-  }, [ecoleId, ecoleSlug])
+  }, [ecoleId, ecoleSlug, anneeExercice, exerciceLoading])
 
   if (loading) return null
   if (alertes.length === 0) {

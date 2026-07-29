@@ -73,14 +73,33 @@ export async function POST(req: NextRequest) {
       }
 
       // Marque le contrat associé comme signé si lien
-      const { data: sig } = await sb.from('signatures_electroniques')
+      // FIX audit RLS 29/07/2026 : ces ecritures n'etaient pas verifiees et la
+      // route repondait 200 quoi qu'il arrive → YouSign ne rejouait jamais
+      // l'evenement et le contrat restait en brouillon alors qu'il etait signe.
+      // Les deux ecritures sont idempotentes : un 500 declenche un simple rejeu.
+      const { data: sig, error: sigErr } = await sb.from('signatures_electroniques')
         .select('contrat_id')
         .eq('provider_request_id', requestId)
         .maybeSingle()
+      if (sigErr) {
+        console.error('[yousign webhook] lecture signatures_electroniques failed:', sigErr.message)
+        return NextResponse.json({ received: false, error: 'lecture signature failed' }, { status: 500 })
+      }
       if (sig?.contrat_id) {
-        await sb.from('contrats_scolarisation')
+        // FIX audit RLS 29/07/2026 (suite) : garde sur le statut de depart.
+        // Sans elle, le rejeu d'un evenement retrograderait en 'signe' un contrat
+        // passe entre-temps a 'valide' par l'ecole (ou reanimerait un 'annule').
+        // Statuts de depart legitimes : 'brouillon' et 'soumis' (cycle de vie reel
+        // du projet : brouillon -> soumis -> [signe] -> valide, + annule),
+        // plus 'signe' lui-meme pour que le rejeu reste idempotent.
+        const { error: upContratErr } = await sb.from('contrats_scolarisation')
           .update({ statut: 'signe', signe_le: new Date().toISOString() })
           .eq('id', sig.contrat_id)
+          .in('statut', ['brouillon', 'soumis', 'signe'])
+        if (upContratErr) {
+          console.error('[yousign webhook] update contrats_scolarisation failed:', upContratErr.message)
+          return NextResponse.json({ received: false, error: 'update contrat failed' }, { status: 500 })
+        }
       }
     } else if (eventName === 'signature_request.declined' || eventName === 'signer.declined') {
       updates.statut = 'declined'
@@ -93,7 +112,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (Object.keys(updates).length > 1) {
-      await sb.from('signatures_electroniques').update(updates).eq('provider_request_id', requestId)
+      const { error: upSigErr } = await sb.from('signatures_electroniques').update(updates).eq('provider_request_id', requestId)
+      if (upSigErr) {
+        console.error('[yousign webhook] update signatures_electroniques failed:', upSigErr.message)
+        return NextResponse.json({ received: false, error: 'update signature failed' }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ received: true, eventName, requestId })

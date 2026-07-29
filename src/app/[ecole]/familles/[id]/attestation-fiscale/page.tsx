@@ -39,7 +39,18 @@ function AttestationFiscaleInner() {
     setLoading(true)
     const s = createClient()
 
-    const { data: e } = await s.from('ecoles').select('*').eq('id', ecole.id).single()
+    // FIX ssss2 pt2 : l'identifiant legal de l'ecole est `ecoles.siren`, il n'y
+    // a pas de colonne `siret`. Le rendu lisait `ecoleInfo.siret`, toujours
+    // undefined : la mention legale n'a donc JAMAIS ete imprimee sur une
+    // attestation. On lit des colonnes nommees plutot que `*` pour qu'une
+    // colonne absente devienne une erreur visible au lieu d'un champ vide, et
+    // on teste `error` explicitement.
+    const { data: e, error: eErr } = await s
+      .from('ecoles')
+      .select('nom, adresse, code_postal, ville, siren')
+      .eq('id', ecole.id)
+      .single()
+    if (eErr) console.error('[attestation-fiscale] lecture ecole :', eErr.message)
     setEcoleInfo(e)
 
     const { data: f } = await s.from('familles').select('*').eq('id', familleId).single()
@@ -172,7 +183,7 @@ function AttestationFiscaleInner() {
             <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{ecoleInfo?.nom}</div>
             {ecoleInfo?.adresse && <div style={{ fontSize: 12, color: '#475569' }}>{ecoleInfo.adresse}</div>}
             {ecoleInfo?.code_postal && <div style={{ fontSize: 12, color: '#475569' }}>{ecoleInfo.code_postal} {ecoleInfo.ville || ''}</div>}
-            {ecoleInfo?.siret && <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>SIRET : {ecoleInfo.siret}</div>}
+            {ecoleInfo?.siren && <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>SIREN : {ecoleInfo.siren}</div>}
           </div>
           <div style={{ textAlign: 'right', fontSize: 11, color: '#64748B' }}>
             <div>Édité le {new Date().toLocaleDateString('fr-FR')}</div>

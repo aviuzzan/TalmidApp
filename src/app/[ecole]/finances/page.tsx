@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
+import { chargerParLots } from '@/lib/pagination'
 import AidePage from '@/components/ui/AidePage'
 
 type Tab = 'factures' | 'paiements'
@@ -124,22 +125,33 @@ export default function FinancesPage() {
     //   (meme pattern que /finances/relances et /bilan-quotidien).
     // - l'onglet Paiements chargeait `reglements` et `familles` SANS AUCUN filtre :
     //   toutes les annees confondues, et toutes les ecoles pour un compte super_admin.
-    const [{ data: f }, { data: fam }, { data: regs }] = await Promise.all([
+    // FIX audit 29/07/2026 : `reglements` est desormais PAGINE. Supabase plafonne
+    // silencieusement chaque requete a 1000 lignes : une ecole qui depasse 1000
+    // reglements sur l'annee (c'est deja le cas de l'ecole pilote sur les
+    // echeances) voyait le "Total periode" de l'onglet Paiements ampute sans le
+    // moindre message. Le tri doit rester DETERMINISTE d'un lot a l'autre :
+    // date_reglement (tri metier, inchange) puis `id` en departage.
+    const [{ data: f }, { data: fam }, regsRes] = await Promise.all([
       supabase.from('factures_solde')
         .select('*, familles!inner(nom, numero, ecole_id)')
         .eq('familles.ecole_id', ecole.id)
         .eq('annee_scolaire', ANNEE)
         .order('date_emission', { ascending: false }),
       supabase.from('familles').select('id, nom, numero').eq('ecole_id', ecole.id).order('nom'),
-      supabase.from('reglements')
+      chargerParLots((debut, fin) => supabase.from('reglements')
         .select('*, familles(nom, numero), factures!inner(numero, annee_scolaire, familles!inner(ecole_id))')
         .eq('factures.familles.ecole_id', ecole.id)
         .eq('factures.annee_scolaire', ANNEE)
-        .order('date_reglement', { ascending: false }),
+        .order('date_reglement', { ascending: false })
+        .order('id')
+        .range(debut, fin)),
     ])
     setFactures(f ?? [])
     setFamilles(fam ?? [])
-    setReglements(regs ?? [])
+    // En cas d'echec d'un lot, `chargerParLots` renvoie les lots deja obtenus + l'erreur :
+    // on affiche ce qu'on a (comme avant) mais on trace, sinon l'incident est invisible.
+    if (regsRes.error) console.error('finances: chargement des reglements incomplet —', regsRes.error)
+    setReglements(regsRes.rows as any[])
 
     // Calcule le du a date pour chaque facture (echeances echues - reglements imputes).
     const facturesList = f ?? []

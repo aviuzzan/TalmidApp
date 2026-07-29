@@ -8,6 +8,7 @@ import { getExerciceInscription } from '@/lib/annee-inscription'
 import { labelModePaiement } from '@/lib/statuts'
 import { creerFactureDepuisContrat } from '@/lib/facture-contrat'
 import { logAction } from '@/lib/audit-log'
+import { chargerParLots } from '@/lib/pagination'
 import { useI18n } from '@/lib/i18n'
 import { useToast } from '@/components/ui/Toast'
 import AidePage from '@/components/ui/AidePage'
@@ -788,24 +789,62 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
     check()
   }, [])
 
-  // On charge TOUTES les echeances de l'ecole une fois, puis on filtre cote client
-  // par mode_paiement (egal au "type" / slug du mode_reglement_ecole choisi a la signature
-  // du contrat). La famille de modes (cheque vs virement vs sepa...) est definie par l'ecole.
+  // On charge les echeances de l'ecole POUR L'ANNEE SELECTIONNEE, puis on filtre cote
+  // client par mode_paiement (egal au "type" / slug du mode_reglement_ecole choisi a la
+  // signature du contrat). La famille de modes (cheque vs virement vs sepa...) est
+  // definie par l'ecole.
   const [allCheques, setAllCheques] = useState<any[]>([])
 
-  function reload() {
+  // ──────────────────────────────────────────────────────────────────────────
+  // FIX audit 29/07/2026 — cet onglet chargeait `cheques_prevus` SANS filtre
+  // d'annee ET SANS pagination :
+  //   - sans filtre d'annee : 3 ans d'historique d'echeanciers cumules ;
+  //   - sans pagination : Supabase tronque SILENCIEUSEMENT a 1000 lignes
+  //     (`cheques_prevus` = 1022 lignes chez l'ecole pilote).
+  // Consequence directe : « ✓ Tout encaisser (N) », le montant total affiche dans
+  // sa confirmation et l'action elle-meme ne portaient que sur ce qui avait ete
+  // charge — alors que le badge de l'onglet (count: 'exact') affichait, lui, le
+  // bon nombre. L'ecran se contredisait a l'ecran.
+  //
+  // `cheques_prevus` ne porte pas d'annee : elle vient du contrat
+  // (`contrats_scolarisation.annee_scolaire`). Un `!inner` seul ecarterait
+  // DEFINITIVEMENT les echeances saisies a la main depuis la fiche famille
+  // (/familles/[id]/cheques n'ecrit pas de `contrat_id`) : elles disparaitraient
+  // de TOUTES les annees. On charge donc deux jeux — les echeances du contrat de
+  // l'annee selectionnee, PLUS les echeances sans contrat (sans annee, donc
+  // toujours visibles). Aucun changement de regle metier : rien n'est recalcule.
+  // ──────────────────────────────────────────────────────────────────────────
+  const reload = async () => {
     setLoading(true)
-    createClient()
-      .from('cheques_prevus')
-      .select('*, familles(nom), contrats_scolarisation(annee_scolaire)')
-      .eq('ecole_id', ecoleId)
-      .order('date_echeance')
-      .then(({ data }) => { setAllCheques(data ?? []); setLoading(false) })
+    const s = createClient()
+    const requete = (avecContrat: boolean) => (debut: number, fin: number) => {
+      let q = s.from('cheques_prevus')
+        .select(avecContrat
+          ? '*, familles(nom), contrats_scolarisation!inner(annee_scolaire)'
+          : '*, familles(nom), contrats_scolarisation(annee_scolaire)')
+        .eq('ecole_id', ecoleId)
+      if (avecContrat) q = q.eq('contrats_scolarisation.annee_scolaire', annee)
+      else q = q.is('contrat_id', null)
+      // Tri deterministe : chaque lot est une NOUVELLE requete, `id` departage.
+      return q.order('date_echeance').order('id').range(debut, fin)
+    }
+    const [surContrat, horsContrat] = await Promise.all([
+      chargerParLots(requete(true)),
+      chargerParLots(requete(false)),
+    ])
+    const erreur = surContrat.error || horsContrat.error
+    if (erreur) toast.error('Liste des échéances incomplète : ' + erreur)
+    // Re-tri global apres fusion (l'ordre metier reste l'echeance croissante).
+    const lignes = ([...surContrat.rows, ...horsContrat.rows] as any[]).sort((a: any, b: any) =>
+      String(a.date_echeance ?? '').localeCompare(String(b.date_echeance ?? '')))
+    setAllCheques(lignes)
+    setLoading(false)
   }
   useEffect(() => {
-    if (accesFinances !== true) return
+    if (accesFinances !== true || !annee) return
     reload()
-  }, [ecoleId, accesFinances])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecoleId, annee, accesFinances])
 
   // Charger la liste des modes de reglement activés pour l'école (pour alimenter le filtre)
   useEffect(() => {

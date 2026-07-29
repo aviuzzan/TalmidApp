@@ -70,7 +70,11 @@ export default function BulletinsPage() {
       .select('id, matiere_id, coefficient, bareme, matieres(id, nom, ordre), notes(id, enfant_id, note, absent)')
       .eq('classe_id', selectedClasse).eq('exercice_id', ex.id).eq('trimestre', trimestre)
 
-    let created = 0, skipped = 0
+    // FIX audit RLS 29/07/2026 : les insert n'etaient pas verifies et `created`
+    // etait incremente inconditionnellement -> le message annoncait des bulletins
+    // qui n'existaient pas. On ne compte desormais que les creations confirmees.
+    let created = 0, skipped = 0, echecs = 0, partiels = 0
+    const detailsErreurs: string[] = []
     for (const e of elevesClasse) {
       // Bulletin existe déjà ?
       const existing = bulletins.find(b => b.enfant_id === e.id)
@@ -104,7 +108,7 @@ export default function BulletinsPage() {
       const moyenneGen = countGen > 0 ? Number((sumGen / countGen).toFixed(2)) : null
 
       // Crée le bulletin
-      const { data: newBul } = await s.from('bulletins').insert({
+      const { data: newBul, error: bulErr } = await s.from('bulletins').insert({
         ecole_id: ecole.id,
         exercice_id: ex.id,
         enfant_id: e.id,
@@ -115,22 +119,50 @@ export default function BulletinsPage() {
         visible_famille: false,
       }).select().single()
 
-      if (newBul?.id && lignes.length > 0) {
-        await s.from('bulletin_lignes').insert(
+      if (bulErr || !newBul?.id) {
+        echecs++
+        console.error('[bulletins] insert bulletin failed:', bulErr?.message)
+        if (detailsErreurs.length < 3) detailsErreurs.push(`${e.prenom} ${e.nom} : ${bulErr?.message || 'aucune ligne créée'}`)
+        continue
+      }
+
+      if (lignes.length > 0) {
+        const { error: lignesErr } = await s.from('bulletin_lignes').insert(
           lignes.map(l => ({ bulletin_id: newBul.id, ...l }))
         )
+        if (lignesErr) {
+          // Le bulletin existe mais sans le détail des matières : ce n'est pas
+          // une création valable, on ne l'inscrit pas dans `created`.
+          partiels++
+          console.error('[bulletins] insert bulletin_lignes failed:', lignesErr.message)
+          if (detailsErreurs.length < 3) detailsErreurs.push(`${e.prenom} ${e.nom} (matières) : ${lignesErr.message}`)
+          continue
+        }
       }
       created++
     }
 
     setGenerating(false)
-    setMsg(`✓ ${created} bulletin${created > 1 ? 's' : ''} créé${created > 1 ? 's' : ''}` + (skipped ? `, ${skipped} déjà existant${skipped > 1 ? 's' : ''}` : ''))
-    setTimeout(() => setMsg(''), 4000)
+    const probleme = echecs + partiels > 0
+    let message = probleme ? '⚠ ' : '✓ '
+    message += `${created} bulletin${created > 1 ? 's' : ''} créé${created > 1 ? 's' : ''}`
+    if (skipped) message += `, ${skipped} déjà existant${skipped > 1 ? 's' : ''}`
+    if (echecs) message += `, ${echecs} échec${echecs > 1 ? 's' : ''} (rien enregistré)`
+    if (partiels) message += `, ${partiels} bulletin${partiels > 1 ? 's' : ''} créé${partiels > 1 ? 's' : ''} sans le détail des matières — à supprimer puis régénérer`
+    if (detailsErreurs.length) message += ` — ${detailsErreurs.join(' ; ')}`
+    setMsg(message)
+    // On ne masque automatiquement que les messages de succès complet.
+    if (!probleme) setTimeout(() => setMsg(''), 4000)
     await load()
   }
 
   async function basculerVisibilite(b: Bulletin) {
-    await createClient().from('bulletins').update({ visible_famille: !b.visible_famille }).eq('id', b.id)
+    const { error } = await createClient().from('bulletins').update({ visible_famille: !b.visible_famille }).eq('id', b.id)
+    if (error) {
+      console.error('[bulletins] update visible_famille failed:', error.message)
+      setMsg('⚠ Changement de visibilité refusé : ' + error.message)
+      return
+    }
     await load()
   }
 

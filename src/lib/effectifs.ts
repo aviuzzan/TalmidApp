@@ -26,6 +26,7 @@
 // changer ce périmètre sans changer aussi /enfants, sinon les écrans divergent.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chargerParLots } from '@/lib/pagination'
 
 /** Statuts de scolarité qui NE comptent PAS dans l'effectif actif. */
 export const STATUTS_SCOLARITE_INACTIFS: readonly string[] = ['sorti', 'radie']
@@ -58,8 +59,26 @@ const estActive = (ligne: LigneScolarite): boolean =>
 
 /**
  * Effectifs actifs (élèves + familles) d'une école sur un exercice donné.
- * Une seule requête : les deux compteurs sont dérivés du même jeu de lignes,
- * ce qui garantit qu'ils ne peuvent pas se contredire.
+ *
+ * FIX pagination 29/07/2026 — POURQUOI deux stratégies différentes ici :
+ * la version précédente chargeait TOUTES les lignes de `scolarites` puis
+ * comptait en JavaScript. Or PostgREST plafonne SILENCIEUSEMENT une requête à
+ * 1000 lignes : l'effectif se figeait donc à 1000 élèves et n'aurait plus jamais
+ * bougé, sans la moindre erreur (cf. src/lib/pagination.ts).
+ *  - ÉLÈVES : compté en SQL (`count: 'exact', head: true`), aucune ligne n'est
+ *    rapatriée, aucun plafond possible. Comme un filtre SQL `not.in.(...)`
+ *    exclurait aussi les lignes à `statut_inscription` NULL (sémantique NULL de
+ *    SQL) alors que la règle métier les compte comme ACTIVES, on fait
+ *    `total − inactifs` (deux counts) plutôt qu'un filtre de négation : le
+ *    périmètre reste EXACTEMENT celui de `estActive`.
+ *  - FAMILLES DISTINCTES : PostgREST n'expose pas de `COUNT(DISTINCT …)` et on
+ *    ne veut pas introduire de RPC/vue SQL pour ça (migration + déploiement
+ *    base, hors périmètre). On rapatrie donc les `famille_id` — mais PAGINÉS
+ *    via `chargerParLots`, avec un tri déterministe sur `id`. Un plafond
+ *    silencieux serait pire qu'un aller-retour de plus. Si un jour le volume le
+ *    justifie, le bon correctif est une vue/RPC `effectifs_par_exercice`.
+ * Les deux compteurs proviennent du même filtre (école + exercice + jointure
+ * interne sur `enfants`) : ils restent cohérents entre eux.
  *
  * @param supabase  client Supabase (browser ou service)
  * @param ecoleId   école — filtre EXPLICITE, on ne s'appuie jamais sur la seule RLS
@@ -79,24 +98,50 @@ export const compterEffectifs = async (
 ): Promise<Effectifs> => {
   if (!ecoleId || !exerciceId) return { eleves: 0, familles: 0 }
 
-  const { data, error } = await supabase
+  // Même périmètre que la lecture ci-dessous : école + exercice + jointure
+  // interne sur `enfants` (une scolarité orpheline ne compte pas).
+  const compte = () => supabase
     .from('scolarites')
-    .select('statut_inscription, enfants!inner(famille_id)')
+    .select('id, enfants!inner(famille_id)', { count: 'exact', head: true })
     .eq('ecole_id', ecoleId)
     .eq('exercice_id', exerciceId)
 
-  if (error) {
-    console.error('compterEffectifs error', error)
+  const [totalRes, inactifsRes, famillesRes] = await Promise.all([
+    compte(),
+    compte().in('statut_inscription', [...STATUTS_SCOLARITE_INACTIFS]),
+    // `famille_id` paginé : tri sur `id` (clé unique) pour que deux lots ne se
+    // recouvrent pas et ne sautent aucune ligne.
+    chargerParLots<LigneScolarite>((debut, fin) => supabase
+      .from('scolarites')
+      .select('statut_inscription, enfants!inner(famille_id)')
+      .eq('ecole_id', ecoleId)
+      .eq('exercice_id', exerciceId)
+      .order('id', { ascending: true })
+      .range(debut, fin)),
+  ])
+
+  const erreur = totalRes.error || inactifsRes.error
+  if (erreur || famillesRes.error) {
+    console.error('compterEffectifs error', erreur || famillesRes.error)
     return { eleves: 0, familles: 0 }
   }
+  if (famillesRes.tronque) {
+    // Ne devrait jamais arriver (200 000 lignes) : on trace plutôt que de
+    // renvoyer en silence un nombre de familles sous-évalué.
+    console.error('compterEffectifs : garde-fou de pagination atteint sur scolarites')
+  }
 
-  const lignes = ((data ?? []) as unknown as LigneScolarite[]).filter(estActive)
+  // Élèves = toutes les scolarités de l'exercice MOINS celles explicitement
+  // inactives ('sorti'/'radie'). Un `statut_inscription` NULL reste donc compté
+  // comme actif, exactement comme `estActive`.
+  const eleves = Math.max(0, (totalRes.count ?? 0) - (inactifsRes.count ?? 0))
+
   const familles = new Set<string>()
-  for (const l of lignes) {
+  for (const l of famillesRes.rows.filter(estActive)) {
     const fid = familleIdDeLaLigne(l)
     if (fid) familles.add(fid)
   }
-  return { eleves: lignes.length, familles: familles.size }
+  return { eleves, familles: familles.size }
 }
 
 /** Élèves actifs de l'école sur l'exercice (cf. `compterEffectifs`). */
