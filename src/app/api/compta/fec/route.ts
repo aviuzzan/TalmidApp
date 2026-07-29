@@ -414,8 +414,13 @@ export async function GET(req: NextRequest) {
       // Débit client (compte auxiliaire famille). Le montant débité est la
       // SOMME DES GROUPES ARRONDIS, pas le total arrondi séparément : sinon
       // un centime d'arrondi ferait basculer l'écriture en déséquilibre.
+      // Array.from plutôt qu'une itération directe sur le Map : le tsconfig du
+      // projet ne définit pas de `target`, donc l'itérateur d'un Map n'est pas
+      // parcourable directement (il faudrait `downlevelIteration`).
+      const groupes = Array.from(parCompte.values())
+
       let debitClient = 0
-      for (const agg of parCompte.values()) debitClient += agg.centimes
+      for (const agg of groupes) debitClient += agg.centimes
 
       lignesFec.push({
         journal: 'VE', journalLib: 'Ventes', num, date,
@@ -425,7 +430,7 @@ export async function GET(req: NextRequest) {
         debit: debitClient, credit: 0,
       })
 
-      for (const agg of parCompte.values()) {
+      for (const agg of groupes) {
         // Libellé de la ligne de crédit : le libellé du compte, complété du
         // détail des postes quand il est court.
         const detail = agg.libelles.length === 1 ? ` (${agg.libelles[0]})` : ''
