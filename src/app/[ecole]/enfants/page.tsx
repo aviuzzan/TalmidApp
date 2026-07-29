@@ -6,6 +6,61 @@ import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { useI18n } from '@/lib/i18n'
 import { getSecteurScope, getSecteurNom } from '@/lib/secteur-scope'
+import { downloadCSV, formatDateCSV } from '@/lib/csv-export'
+import { COLONNES_ELEVES, type ColonneExport } from '@/lib/export-colonnes'
+
+// EXPORT DEPUIS LA PAGE ÉLÈVES (demande client 29/07/2026 : « j'aurais aimé
+// pouvoir les sortir depuis la page élève »).
+// Jeu de colonnes fixe : on réutilise les libellés de COLONNES_ELEVES
+// (src/lib/export-colonnes.ts) pour que les en-têtes soient identiques à ceux
+// de la page Exports, + 2 colonnes propres à cette page (Contrat, Année).
+// La modale de choix des colonnes de la page Exports n'est pas un composant
+// réutilisable (JSX inline), on ne la duplique donc pas ici.
+const CLES_EXPORT_ELEVES = [
+  'prenom', 'nom', 'date_naissance', 'famille_numero', 'famille_nom',
+  'classe', 'statut', 'parent1_telephone', 'parent1_email',
+]
+
+const COLONNES_EXPORT: ColonneExport[] = CLES_EXPORT_ELEVES
+  .map(k => COLONNES_ELEVES.find(c => c.key === k))
+  .filter((c): c is ColonneExport => !!c)
+
+const LIBELLE_CONTRAT: Record<string, string> = {
+  valide: 'Signé', soumis: 'Soumis', brouillon: 'Brouillon', annule: 'Annulé',
+}
+
+// « Kita 7 » → « kita-7 », « Élémentaire A » → « elementaire-a » (nom de fichier)
+const ACCENTS = /[\u0300-\u036f]/g
+const slugifier = (v: string): string =>
+  v.normalize('NFD').replace(ACCENTS, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+// ────────────────────────────────────────────────────────────────────────────
+// PAGINATION (fix 29/07/2026)
+// Supabase/PostgREST plafonne SILENCIEUSEMENT chaque requête à 1000 lignes.
+// Au-delà, la liste — et donc l'export CSV qui en découle — serait tronquée
+// sans le moindre message. On charge donc par lots de 1000 jusqu'à ce qu'un
+// lot revienne incomplet. Le tri doit être déterministe (`id`) : le tri
+// « lisible » (nom, prénom) est fait côté client juste après.
+// (Même helper que src/app/[ecole]/exports/page.tsx — volontairement dupliqué,
+// à factoriser dans src/lib/ le jour où un 3e appelant apparaîtra.)
+// ────────────────────────────────────────────────────────────────────────────
+const TAILLE_LOT = 1000
+const MAX_LOTS = 200
+
+const chargerParLots = async (
+  requeteLot: (debut: number, fin: number) => PromiseLike<any>,
+): Promise<any[]> => {
+  const rows: any[] = []
+  for (let i = 0; i < MAX_LOTS; i++) {
+    const debut = i * TAILLE_LOT
+    const res = (await requeteLot(debut, debut + TAILLE_LOT - 1)) as { data: any[] | null }
+    const lot = res.data ?? []
+    rows.push(...lot)
+    if (lot.length < TAILLE_LOT) break
+  }
+  return rows
+}
 
 export default function EnfantsPage() {
   const { t } = useI18n()
@@ -45,23 +100,30 @@ export default function EnfantsPage() {
 
     // SECTEUR (llll2) : si scope actif, jointure inner sur classes + filtre secteur
     // (les élèves sans classe sortent alors de la vue, c'est voulu — ils n'appartiennent à aucun secteur)
-    let scoQuery = s.from('scolarites')
-      .select(scope.secteurId
-        ? 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(nom, parent1_email, parent1_telephone)), classes!inner(nom, secteur_id)'
-        : 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(nom, parent1_email, parent1_telephone)), classes(nom)')
-      .eq('ecole_id', ecole.id)
-      .eq('exercice_id', exerciceSelectionne.id)
-    if (scope.secteurId) scoQuery = scoQuery.eq('classes.secteur_id', scope.secteurId)
-
-    const [{ data: sco }, { data: cls }, { data: contrats }] = await Promise.all([
-      scoQuery,
+    // `familles.numero` sert à la colonne « N° famille » de l'export CSV.
+    const exerciceId = exerciceSelectionne.id
+    const exerciceCode = exerciceSelectionne.code
+    const secteurId = scope.secteurId
+    const [sco, { data: cls }, contrats] = await Promise.all([
+      chargerParLots((debut, fin) => {
+        let q = s.from('scolarites')
+          .select(secteurId
+            ? 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(numero, nom, parent1_email, parent1_telephone)), classes!inner(nom, secteur_id)'
+            : 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(id, prenom, nom, date_naissance, famille_id, familles(numero, nom, parent1_email, parent1_telephone)), classes(nom)')
+          .eq('ecole_id', ecole.id)
+          .eq('exercice_id', exerciceId)
+        if (secteurId) q = q.eq('classes.secteur_id', secteurId)
+        return q.order('id').range(debut, fin)
+      }),
       s.from('classes').select('id, nom').eq('ecole_id', ecole.id).order('nom'),
-      s.from('contrats_scolarisation')
+      chargerParLots((debut, fin) => s.from('contrats_scolarisation')
         .select('id, statut, annee_scolaire, contrat_enfants(enfant_id)')
         .eq('ecole_id', ecole.id)
-        .eq('annee_scolaire', exerciceSelectionne.code),
+        .eq('annee_scolaire', exerciceCode)
+        .order('id')
+        .range(debut, fin)),
     ])
-    const list = (sco ?? []).slice().sort((a: any, b: any) =>
+    const list = sco.slice().sort((a: any, b: any) =>
       (a.enfants?.nom || '').localeCompare(b.enfants?.nom || '') ||
       (a.enfants?.prenom || '').localeCompare(b.enfants?.prenom || ''))
 
@@ -122,6 +184,49 @@ export default function EnfantsPage() {
     aucun: rows.filter(r => !contratMap[r.enfant_id] || contratMap[r.enfant_id] === 'annule').length,
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // EXPORT CSV DE LA LISTE AFFICHÉE (demande client 29/07/2026)
+  // On exporte `filtered`, c'est-à-dire EXACTEMENT ce que l'utilisateur a sous
+  // les yeux : recherche, filtre de classe, filtre de contrat et inclusion (ou
+  // non) des élèves sortis. Filtrer sur « Kita 7 » puis exporter donne le
+  // fichier de Kita 7.
+  // Source des données : `scolarites` de l'exercice sélectionné → la classe et
+  // le statut sont ceux de l'ANNÉE affichée (règle métier du 28/07 :
+  // `scolarites` fait foi, pas `enfants.classe_id` / `enfants.annee_scolaire`).
+  // Format : identique à la page Exports (CSV UTF-8 BOM, séparateur « ; »).
+  // ──────────────────────────────────────────────────────────────────────────
+  const exporterCSV = () => {
+    if (filtered.length === 0) return
+    const annee = exerciceSelectionne?.code || ''
+    const classeFiltree = filtreClasse ? classes.find(c => c.id === filtreClasse) : null
+    const lignes = filtered.map(r => {
+      const e = r.enfants || {}
+      const f = e.familles || {}
+      const valeurs: Record<string, string> = {
+        prenom: e.prenom || '',
+        nom: e.nom || '',
+        date_naissance: formatDateCSV(e.date_naissance),
+        famille_numero: f.numero || '',
+        famille_nom: f.nom || '',
+        classe: r.classes?.nom || '',
+        statut: r.statut_inscription || '',
+        parent1_telephone: f.parent1_telephone || '',
+        parent1_email: f.parent1_email || '',
+      }
+      return [
+        ...COLONNES_EXPORT.map(c => valeurs[c.key] ?? ''),
+        LIBELLE_CONTRAT[contratMap[r.enfant_id]] || 'Aucun',
+        annee,
+      ]
+    })
+    const suffixe = classeFiltree?.nom ? `-${slugifier(classeFiltree.nom)}` : ''
+    downloadCSV(
+      `eleves-${annee || 'annee'}${suffixe}.csv`,
+      [...COLONNES_EXPORT.map(c => c.label), 'Contrat', 'Année'],
+      lignes,
+    )
+  }
+
   const inp = {
     background: '#fff', border: '1px solid #E2E8F0', borderRadius: 9,
     padding: '9px 14px', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const,
@@ -152,6 +257,20 @@ export default function EnfantsPage() {
             <span style={{ color: '#94A3B8' }}>— {cntContrats.aucun} sans contrat</span>
           </p>
         </div>
+        {/* Export CSV de la liste affichée, filtres compris (demande client 29/07/2026) */}
+        <button
+          onClick={exporterCSV}
+          disabled={loading || filtered.length === 0}
+          title="Télécharge la liste telle que vous la voyez : recherche, classe, contrat et élèves sortis compris."
+          style={{
+            background: '#2563EB', color: '#fff', border: 'none', borderRadius: 9,
+            padding: '10px 16px', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+            cursor: loading || filtered.length === 0 ? 'not-allowed' : 'pointer',
+            opacity: loading || filtered.length === 0 ? 0.5 : 1,
+          }}
+        >
+          ⬇ Exporter CSV ({filtered.length})
+        </button>
       </div>
 
       {exerciceSelectionne?.statut === 'cloture' ? (

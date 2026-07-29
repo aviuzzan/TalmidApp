@@ -8,6 +8,7 @@ import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
 import { COLONNES_FAMILLES, COLONNES_ELEVES, type ColonneExport } from '@/lib/export-colonnes'
 import { useAccesFinances } from '@/lib/acces-finances'
+import { getSecteurScope } from '@/lib/secteur-scope'
 
 type ExportType = 'familles' | 'eleves' | 'factures' | 'reglements' | 'cheques' | 'fec'
 type ExportAvecColonnes = 'familles' | 'eleves'
@@ -17,8 +18,42 @@ const COLS_CONFIG: Record<ExportAvecColonnes, ColonneExport[]> = {
   eleves: COLONNES_ELEVES,
 }
 
-function colonnesParDefaut(config: ColonneExport[]): string[] {
-  return config.filter(c => c.defaut).map(c => c.key)
+const colonnesParDefaut = (config: ColonneExport[]): string[] =>
+  config.filter(c => c.defaut).map(c => c.key)
+
+// ────────────────────────────────────────────────────────────────────────────
+// PAGINATION (fix 29/07/2026)
+// PostgREST/Supabase plafonne SILENCIEUSEMENT chaque requête à 1000 lignes
+// (`db-max-rows`). Sans `.range()`, un export s'arrêtait donc à 1000 lignes
+// SANS message d'erreur — et le compteur affichait quand même « ✓ 1000 …
+// exportées ». Tous les exports de ce fichier passent désormais par
+// `chargerParLots` : on demande des tranches de 1000 lignes jusqu'à ce qu'un
+// lot revienne incomplet (= dernier lot).
+//
+// IMPORTANT : chaque lot est une NOUVELLE requête ; le tri doit donc être
+// déterministe (colonne de tri + `id` en départage), sinon deux lots
+// pourraient se recouvrir ou sauter des lignes.
+// ────────────────────────────────────────────────────────────────────────────
+const TAILLE_LOT = 1000
+const MAX_LOTS = 200 // garde-fou : 200 000 lignes max, jamais de boucle infinie
+
+type ResultatLot = { data: any[] | null; error: { message: string } | null }
+
+const chargerParLots = async (
+  // La requête est (re)construite à chaque lot : un builder Supabase ne se
+  // rejoue pas proprement, et `.range()` doit changer d'un lot à l'autre.
+  requeteLot: (debut: number, fin: number) => PromiseLike<any>,
+): Promise<{ rows: any[]; error: string | null }> => {
+  const rows: any[] = []
+  for (let i = 0; i < MAX_LOTS; i++) {
+    const debut = i * TAILLE_LOT
+    const res = (await requeteLot(debut, debut + TAILLE_LOT - 1)) as ResultatLot
+    if (res.error) return { rows, error: res.error.message }
+    const lot = res.data ?? []
+    rows.push(...lot)
+    if (lot.length < TAILLE_LOT) return { rows, error: null }
+  }
+  return { rows, error: null }
 }
 
 export default function ExportsPage() {
@@ -60,26 +95,28 @@ export default function ExportsPage() {
     setColsSelection({ familles: lire('familles'), eleves: lire('eleves') })
   }, [ecole?.id])
 
-  function setCols(type: ExportAvecColonnes, keys: string[]) {
+  const setCols = (type: ExportAvecColonnes, keys: string[]) => {
     setColsSelection(p => ({ ...p, [type]: keys }))
     try {
       localStorage.setItem(`talmid_export_cols_${type}_${ecole.id}`, JSON.stringify(keys))
     } catch { /* localStorage indisponible */ }
   }
 
-  async function exportFamilles() {
+  const exportFamilles = async () => {
     const colonnes = COLONNES_FAMILLES.filter(c => colsSelection.familles.includes(c.key))
     if (colonnes.length === 0) { setMsg('❌ Aucune colonne sélectionnée pour l\'export familles'); return }
     setLoading('familles'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'familles', tranche_id: filtreTrancheFamilles || null, colonnes: colonnes.map(c => c.key) })
     const s = createClient()
-    let query = s.from('familles')
-      .select('numero, nom, situation_maritale, statut_dossier, mode_paiement, part_pere, part_mere, garde, autorite_parentale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent1_emploi, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, parent2_emploi, parent2_adresse, parent2_code_postal, parent2_ville')
-      .eq('ecole_id', ecole.id)
-    if (filtreTrancheFamilles) query = query.eq('tranche_id', filtreTrancheFamilles)
-    const { data, error } = await query.order('nom')
-    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
-    if (!data || data.length === 0) { setMsg('Aucune famille trouvée pour ce filtre'); setLoading(''); return }
+    const { rows: data, error } = await chargerParLots((debut, fin) => {
+      let query = s.from('familles')
+        .select('id, numero, nom, situation_maritale, statut_dossier, mode_paiement, part_pere, part_mere, garde, autorite_parentale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent1_emploi, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, parent2_emploi, parent2_adresse, parent2_code_postal, parent2_ville')
+        .eq('ecole_id', ecole.id)
+      if (filtreTrancheFamilles) query = query.eq('tranche_id', filtreTrancheFamilles)
+      return query.order('nom').order('id').range(debut, fin)
+    })
+    if (error) { setMsg('❌ Erreur : ' + error); setLoading(''); return }
+    if (data.length === 0) { setMsg('Aucune famille trouvée pour ce filtre'); setLoading(''); return }
     const trancheSelectionnee = filtreTrancheFamilles ? tranches.find(t => t.id === filtreTrancheFamilles) : null
     const suffixeFichier = trancheSelectionnee ? `-${trancheSelectionnee.code}` : ''
     const suffixeMsg = trancheSelectionnee ? ` (tranche ${trancheSelectionnee.code})` : ''
@@ -122,63 +159,109 @@ export default function ExportsPage() {
     setLoading('')
   }
 
-  async function exportEleves() {
+  // ──────────────────────────────────────────────────────────────────────────
+  // EXPORT ÉLÈVES — FIX 29/07/2026 (209 élèves exportés au lieu de 14)
+  //
+  // AVANT : lecture de `enfants` filtrée sur `enfants.annee_scolaire`, classe
+  // lue via `enfants.classe_id`. Or `enfants.annee_scolaire` n'est renseigné
+  // qu'à la création de la fiche et n'est jamais réécrit d'une année sur
+  // l'autre → seuls 14 enfants portaient « 2026-2027 ». Et `enfants.classe_id`
+  // est la classe de l'année COURANTE (vide pour un nouvel élève, fausse pour
+  // l'année suivante) → colonne Classe vide.
+  //
+  // APRÈS : lecture de `scolarites` filtrée sur (ecole_id, exercice_id de
+  // l'exercice sélectionné) — même requête que la page Élèves
+  // (src/app/[ecole]/enfants/page.tsx). Règle métier actée le 28/07 :
+  // `scolarites` est LA source de vérité de l'affectation élève × classe pour
+  // une année ; `enfants.classe_id` / `enfants.annee_scolaire` ne sont que des
+  // commodités d'affichage de l'année courante.
+  // → Classe = scolarites.classe_id (jointure `classes`)
+  // → Statut = scolarites.statut_inscription
+  // → Année  = code de l'exercice sélectionné
+  // Les autres colonnes (identité, options, contacts) restent lues sur
+  // `enfants` / `familles`, comme avant.
+  // ──────────────────────────────────────────────────────────────────────────
+  const exportEleves = async () => {
     const colonnes = COLONNES_ELEVES.filter(c => colsSelection.eleves.includes(c.key))
     if (colonnes.length === 0) { setMsg('❌ Aucune colonne sélectionnée pour l\'export élèves'); return }
+    if (!exerciceSelectionne?.id) { setMsg('❌ Aucune année scolaire sélectionnée'); return }
+    const exerciceId = exerciceSelectionne.id
+    const anneeExport = exerciceSelectionne.code || annee
     setLoading('eleves'); setMsg('')
-    logAction(createClient(), ecole.id, 'export_csv', { type: 'eleves', colonnes: colonnes.map(c => c.key) })
+    logAction(createClient(), ecole.id, 'export_csv', { type: 'eleves', exercice_id: exerciceId, annee: anneeExport, colonnes: colonnes.map(c => c.key) })
     const s = createClient()
-    const { data, error } = await s.from('enfants')
-      .select('prenom, deuxieme_prenom, nom, genre, date_naissance, lieu_naissance, ine, regime, date_sortie, classe_id, transport, instruction_religieuse, etude_garderie, statut_inscription, annee_scolaire, familles(numero, nom, parent1_email, parent1_telephone), classes(nom)')
-      .eq('annee_scolaire', annee)
-      .order('nom')
-    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
-    if (!data || data.length === 0) { setMsg(`Aucun élève trouvé pour ${annee}`); setLoading(''); return }
-    const rows = data.map((e: any) => {
+
+    // SECTEUR (llll2) : un compte restreint à un secteur exporte ce qu'il voit
+    // sur la page Élèves — ni plus, ni moins.
+    const { data: { session } } = await s.auth.getSession()
+    const scope = session ? await getSecteurScope(s, session.user.id) : { secteurId: null }
+
+    const { rows: data, error } = await chargerParLots((debut, fin) => {
+      let q = s.from('scolarites')
+        .select(scope.secteurId
+          ? 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(prenom, deuxieme_prenom, nom, genre, date_naissance, lieu_naissance, ine, regime, transport, instruction_religieuse, etude_garderie, date_sortie, familles(numero, nom, parent1_email, parent1_telephone)), classes!inner(nom, secteur_id)'
+          : 'id, enfant_id, classe_id, statut_inscription, date_sortie, enfants(prenom, deuxieme_prenom, nom, genre, date_naissance, lieu_naissance, ine, regime, transport, instruction_religieuse, etude_garderie, date_sortie, familles(numero, nom, parent1_email, parent1_telephone)), classes(nom)')
+        .eq('ecole_id', ecole.id)
+        .eq('exercice_id', exerciceId)
+      if (scope.secteurId) q = q.eq('classes.secteur_id', scope.secteurId)
+      // Tri déterministe pour la pagination ; le tri « lisible » (nom, prénom)
+      // se fait ensuite côté client, comme sur la page Élèves.
+      return q.order('id').range(debut, fin)
+    })
+    if (error) { setMsg('❌ Erreur : ' + error); setLoading(''); return }
+    if (data.length === 0) { setMsg(`Aucun élève inscrit pour ${anneeExport}`); setLoading(''); return }
+    const triees = data.slice().sort((a: any, b: any) =>
+      (a.enfants?.nom || '').localeCompare(b.enfants?.nom || '') ||
+      (a.enfants?.prenom || '').localeCompare(b.enfants?.prenom || ''))
+    const rows = triees.map((sc: any) => {
+      const e = sc.enfants || {}
+      const f = e.familles || {}
       const valeurs: Record<string, any> = {
-        prenom: e.prenom,
-        nom: e.nom,
+        prenom: e.prenom || '',
+        nom: e.nom || '',
         date_naissance: formatDateCSV(e.date_naissance),
-        famille_numero: e.familles?.numero || '',
-        famille_nom: e.familles?.nom || '',
-        classe: e.classes?.nom || '',
-        statut: e.statut_inscription || '',
+        famille_numero: f.numero || '',
+        famille_nom: f.nom || '',
+        classe: sc.classes?.nom || '',
+        statut: sc.statut_inscription || '',
         transport: e.transport ? 'Oui' : 'Non',
         instruction_religieuse: e.instruction_religieuse ? 'Oui' : 'Non',
         etude_garderie: e.etude_garderie ? 'Oui' : 'Non',
-        annee: e.annee_scolaire || '',
+        annee: anneeExport,
         deuxieme_prenom: e.deuxieme_prenom || '',
         genre: e.genre || '',
         lieu_naissance: e.lieu_naissance || '',
         ine: e.ine || '',
         regime: e.regime || '',
-        parent1_email: e.familles?.parent1_email || '',
-        parent1_telephone: e.familles?.parent1_telephone || '',
-        date_sortie: formatDateCSV(e.date_sortie),
+        parent1_email: f.parent1_email || '',
+        parent1_telephone: f.parent1_telephone || '',
+        date_sortie: formatDateCSV(sc.date_sortie || e.date_sortie),
       }
       return colonnes.map(c => valeurs[c.key])
     })
     downloadCSV(
-      `eleves-${annee}-${ecole.slug}.csv`,
+      `eleves-${anneeExport}-${ecole.slug}.csv`,
       colonnes.map(c => c.label),
       rows,
     )
-    setMsg(`✓ ${rows.length} élèves exportés (${annee})`)
+    setMsg(`✓ ${rows.length} élèves exportés (${anneeExport})`)
     setLoading('')
   }
 
-  async function exportFactures() {
+  const exportFactures = async () => {
     setLoading('factures'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'factures' })
     const s = createClient()
     // NOTE : `total_regle` exclut désormais les avoirs imputés. On expose donc
     // `total_avoirs_imputes` dans une colonne séparée pour traçabilité comptable.
-    const { data, error } = await s.from('factures_solde')
-      .select('numero, date_emission, annee_scolaire, statut, total_facture, total_regle, total_avoirs_imputes, solde_restant, familles(numero, nom)')
+    const { rows: data, error } = await chargerParLots((debut, fin) => s.from('factures_solde')
+      .select('id, numero, date_emission, annee_scolaire, statut, total_facture, total_regle, total_avoirs_imputes, solde_restant, familles(numero, nom)')
       .eq('annee_scolaire', annee)
       .order('date_emission', { ascending: false })
-    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
-    if (!data || data.length === 0) { setMsg(`Aucune facture trouvée pour ${annee}`); setLoading(''); return }
+      .order('id')
+      .range(debut, fin))
+    if (error) { setMsg('❌ Erreur : ' + error); setLoading(''); return }
+    if (data.length === 0) { setMsg(`Aucune facture trouvée pour ${annee}`); setLoading(''); return }
     const rows = data.map((f: any) => [
       f.numero,
       formatDateCSV(f.date_emission),
@@ -200,7 +283,7 @@ export default function ExportsPage() {
     setLoading('')
   }
 
-  async function exportReglements() {
+  const exportReglements = async () => {
     setLoading('reglements'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'reglements' })
     const s = createClient()
@@ -208,13 +291,15 @@ export default function ExportsPage() {
     // FIX audit 27/07/2026 : exclure les avoirs imputes (mode 'avoir') — ce ne sont pas
     // des encaissements de tresorerie. Le FEC les exclut deja : les deux exports se
     // rapprochent desormais. (L'export Factures a sa colonne "Avoirs imputes" dediee.)
-    const { data, error } = await s.from('reglements')
-      .select('date_reglement, montant, mode_paiement, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
+    const { rows: data, error } = await chargerParLots((debut, fin) => s.from('reglements')
+      .select('id, date_reglement, montant, mode_paiement, reference, notes, factures!inner(numero, annee_scolaire, famille_id, familles(numero, nom))')
       .eq('factures.annee_scolaire', annee)
       .neq('mode_paiement', 'avoir')
       .order('date_reglement', { ascending: false })
-    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
-    if (!data || data.length === 0) { setMsg(`Aucun règlement trouvé pour ${annee}`); setLoading(''); return }
+      .order('id')
+      .range(debut, fin))
+    if (error) { setMsg('❌ Erreur : ' + error); setLoading(''); return }
+    if (data.length === 0) { setMsg(`Aucun règlement trouvé pour ${annee}`); setLoading(''); return }
     const rows = data.map((r: any) => [
       formatDateCSV(r.date_reglement),
       formatMontantCSV(r.montant),
@@ -234,7 +319,10 @@ export default function ExportsPage() {
     setLoading('')
   }
 
-  async function exportFEC() {
+  // FEC : le fichier est construit côté serveur (route /api/compta/fec) ; la
+  // pagination des lectures doit donc être traitée là-bas (hors périmètre de
+  // ce fichier — à faire lors du prochain passage sur la route).
+  const exportFEC = async () => {
     setLoading('fec'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'fec' })
     const s = createClient()
@@ -267,16 +355,18 @@ export default function ExportsPage() {
     setLoading('')
   }
 
-  async function exportCheques() {
+  const exportCheques = async () => {
     setLoading('cheques'); setMsg('')
     logAction(createClient(), ecole.id, 'export_csv', { type: 'cheques' })
     const s = createClient()
-    const { data, error } = await s.from('cheques_prevus')
-      .select('numero_cheque, montant, date_echeance, statut, encaisse_le, mode_paiement, note, familles(numero, nom, parent1_prenom, parent1_nom)')
+    const { rows: data, error } = await chargerParLots((debut, fin) => s.from('cheques_prevus')
+      .select('id, numero_cheque, montant, date_echeance, statut, encaisse_le, mode_paiement, note, familles(numero, nom, parent1_prenom, parent1_nom)')
       .eq('ecole_id', ecole.id)
       .order('date_echeance', { ascending: true })
-    if (error) { setMsg('❌ Erreur : ' + error.message); setLoading(''); return }
-    if (!data || data.length === 0) { setMsg('Aucun chèque trouvé'); setLoading(''); return }
+      .order('id')
+      .range(debut, fin))
+    if (error) { setMsg('❌ Erreur : ' + error); setLoading(''); return }
+    if (data.length === 0) { setMsg('Aucun chèque trouvé'); setLoading(''); return }
     const rows = data.map((c: any) => [
       c.numero_cheque,
       formatMontantCSV(c.montant),
