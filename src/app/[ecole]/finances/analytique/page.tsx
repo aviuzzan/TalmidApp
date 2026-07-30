@@ -246,12 +246,38 @@ export default function AnalytiquePage() {
     for (const l of lignes) {
       const ref = vue === 'compte' ? l.compte_id : vue === 'activite' ? l.activite_id : l.tarif_id
       const label = ref ? libelles[ref] : undefined
-      const cle = ref && label ? ref : CLE_NON_IMPUTE
+
+      // ────────────────────────────────────────────────────────────────────
+      // Repli sur le compte pour la vue « par poste ».
+      //
+      // Toutes les lignes de facture ne viennent pas d'un poste tarifaire, et
+      // ce n'est pas une anomalie :
+      //   - une scolarité au TARIF ACCORDÉ vient d'un dossier de réduction,
+      //     son montant est fixé au cas par cas et ne sort d'aucune grille ;
+      //   - les FRAIS D'INSCRIPTION viennent de frais_inscription_config,
+      //     une table distincte des tarifs.
+      // Ces lignes sont parfaitement imputées comptablement (70611, 70616) :
+      // les jeter dans un « Non imputé » orange laissait croire à un défaut de
+      // paramétrage inexistant, et sortait 21 % du chiffre d'affaires de la
+      // ventilation. On les regroupe donc sous le libellé de leur compte.
+      // ────────────────────────────────────────────────────────────────────
+      let cle: string
+      let libelle: string
+      if (ref && label) {
+        cle = ref
+        libelle = String(label)
+      } else if (vue === 'poste' && l.compte_id && libComptes[l.compte_id]) {
+        cle = `compte:${l.compte_id}`
+        libelle = `${libComptes[l.compte_id]} (hors grille tarifaire)`
+      } else {
+        cle = CLE_NON_IMPUTE
+        libelle = 'Non imputé'
+      }
 
       if (!agg[cle]) {
         agg[cle] = {
           cle,
-          label: cle === CLE_NON_IMPUTE ? 'Non imputé' : String(label),
+          label: libelle,
           total_facture: 0,
           total_encaisse: 0,
           nb_lignes: 0,
@@ -355,8 +381,10 @@ export default function AnalytiquePage() {
               <strong>{nonImpute.nb_lignes} ligne{nonImpute.nb_lignes > 1 ? 's' : ''} sans imputation</strong> sur cette
               dimension, soit {fmt(nonImpute.total_facture)}
               {totalLignesVentilees > 0 ? ` (${((nonImpute.total_facture / totalLignesVentilees) * 100).toFixed(1)} % du facturé ventilé)` : ''}.
-              Il s&apos;agit de lignes émises avant la mise en place de l&apos;imputation comptable, ou de postes
-              tarifaires non paramétrés. Ce montant n&apos;est pas réparti sur les autres entrées.
+              Ces lignes n&apos;ont ni compte comptable ni {vue === 'activite' ? 'activité' : 'poste'} renseigné :
+              il s&apos;agit soit de lignes créées avant la mise en place du plan comptable, soit d&apos;un poste
+              tarifaire dont l&apos;imputation reste à définir dans Paramètres &gt; Tarifs. Ce montant n&apos;est pas
+              réparti sur les autres entrées.
             </div>
           )}
 
