@@ -568,8 +568,13 @@ export default function FamilleDetailPage() {
           {nPlus1.contrat ? (
             <div style={{ fontSize: 12, color: nPlus1.contrat?.statut === 'valide' ? '#065F46' : '#1E40AF' }}>
               Contrat <strong>{nPlus1.contrat.statut === 'valide' ? 'validé' : nPlus1.contrat.statut === 'soumis' ? 'soumis (en attente)' : nPlus1.contrat.statut}</strong>
-              {nPlus1.contrat.montant_total ? ` · ${Number(nPlus1.contrat.montant_total).toLocaleString('fr-FR')} €` : ''}
-              {nPlus1.contrat.nb_echeances ? ` · ${nPlus1.contrat.nb_echeances} échéances` : ''}
+              {/* vvvv2 : le montant du contrat et le nombre d'échéances sont des
+                  données financières. Ce bandeau les affichait sans contrôle, alors
+                  que le bloc « Tranche de facturation » plus bas était bien protégé.
+                  Le statut du contrat et le nombre de scolarités restent visibles :
+                  c'est du suivi administratif d'inscription. */}
+              {accesFinancesProfile && nPlus1.contrat.montant_total ? ` · ${Number(nPlus1.contrat.montant_total).toLocaleString('fr-FR')} €` : ''}
+              {accesFinancesProfile && nPlus1.contrat.nb_echeances ? ` · ${nPlus1.contrat.nb_echeances} échéances` : ''}
               {' · '}<strong>{nPlus1.nbScolarites}</strong> scolarité{nPlus1.nbScolarites > 1 ? 's' : ''} créée{nPlus1.nbScolarites > 1 ? 's' : ''}
             </div>
           ) : (

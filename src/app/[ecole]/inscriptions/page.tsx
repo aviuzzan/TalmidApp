@@ -105,15 +105,30 @@ export default function InscriptionsAdminPage() {
     setSaving(false)
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // vvvv2 : le verrou finances ne masquait QUE l'onglet « Échéances ».
+  //
+  // Les onglets « Contrats » et « Demandes de réduction » affichaient les
+  // montants en clair sur toutes les lignes (99 contrats, 41 dossiers) à un
+  // utilisateur privé d'accès finances. Arbitrage d'Avi le 30/07 : un contrat
+  // et une demande de réduction sont des OBJETS FINANCIERS, donc on ferme les
+  // onglets entiers plutôt que de masquer les montants un par un — masquer
+  // champ par champ est précisément ce qui a laissé passer ces deux-là, et
+  // l'oubli y est silencieux.
+  //
+  // Restent accessibles : le tableau de bord, les fiches pédagogiques et le
+  // suivi « À relancer », qui sont du suivi administratif d'inscription.
+  // ──────────────────────────────────────────────────────────────────────────
   const ONGLETS: { id: Onglet; label: string; icon: string; count?: number }[] = [
     { id: 'tableau_bord', label: 'Tableau de bord', icon: '◈' },
     { id: 'pedagogique', label: 'Fiches pédagogiques', icon: '📋', count: stats.pedagogique },
-    { id: 'reduction', label: 'Demandes de réduction', icon: '💸', count: stats.reduction },
-    { id: 'contrats', label: 'Contrats', icon: '📝', count: stats.contrats },
+    ...(accesFinances !== false ? [
+      { id: 'reduction' as Onglet, label: 'Demandes de réduction', icon: '💸', count: stats.reduction },
+      { id: 'contrats' as Onglet, label: 'Contrats', icon: '📝', count: stats.contrats },
+    ] : []),
     { id: 'a_relancer', label: 'À relancer', icon: '📧' },
     // Le badge reflete uniquement les vrais cheques a encaisser (la vue interne propose
     // des onglets pour les autres modes : virement, prelevement, espece, carte).
-    // Onglet masqué si l'utilisateur n'a pas l'accès finances (cf. verrou /finances/**).
     ...(accesFinances !== false ? [{ id: 'cheques' as Onglet, label: 'Échéances', icon: '🏦', count: stats.cheques_a_encaisser }] : []),
   ]
 
@@ -335,10 +350,14 @@ export default function InscriptionsAdminPage() {
         </div>
       )}
 
-      {/* ── CONTRATS ── */}
-      {onglet === 'contrats' && (
+      {/* ── CONTRATS ──
+          vvvv2 : masquer l'onglet ne suffit pas, l'URL ?tab=contrats reste
+          atteignable. On bloque donc aussi le rendu, comme le fait déjà
+          l'onglet Échéances. */}
+      {onglet === 'contrats' && accesFinances === true && (
         <ContratsList ecoleId={ecole.id} ecoleSlug={ecole.slug} annee={annee} />
       )}
+      {onglet === 'contrats' && accesFinances === false && <BlocAccesRefuse />}
 
       {/* ── À RELANCER ── */}
       {onglet === 'a_relancer' && (
@@ -346,9 +365,10 @@ export default function InscriptionsAdminPage() {
       )}
 
       {/* ── RÉDUCTIONS ── */}
-      {onglet === 'reduction' && (
+      {onglet === 'reduction' && accesFinances === true && (
         <ReductionsList ecoleId={ecole.id} annee={annee} ecoleSlug={ecole.slug} />
       )}
+      {onglet === 'reduction' && accesFinances === false && <BlocAccesRefuse />}
 
       {/* ── PÉDAGOGIQUE ── */}
       {onglet === 'pedagogique' && (
@@ -359,20 +379,25 @@ export default function InscriptionsAdminPage() {
       {onglet === 'cheques' && accesFinances === true && (
         <ChequesList ecoleId={ecole.id} annee={annee} />
       )}
-      {onglet === 'cheques' && accesFinances === false && (
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 40, textAlign: 'center' }}>
-          <div style={{ fontSize: 36 }}>🔒</div>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginTop: 10 }}>Accès aux données financières non accordé</h2>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>
-            Vous n&apos;avez pas accès aux données financières. Contactez l&apos;administrateur pour activer cet accès.
-          </p>
-        </div>
-      )}
+      {onglet === 'cheques' && accesFinances === false && <BlocAccesRefuse />}
     </div>
   )
 }
 
 // ── SOUS-COMPOSANTS ──
+
+/** vvvv2 : message unique de refus, partagé par les trois onglets financiers. */
+function BlocAccesRefuse() {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 40, textAlign: 'center' }}>
+      <div style={{ fontSize: 36 }}>🔒</div>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1E293B', marginTop: 10 }}>Accès aux données financières non accordé</h2>
+      <p style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>
+        Vous n&apos;avez pas accès aux données financières. Contactez l&apos;administrateur pour activer cet accès.
+      </p>
+    </div>
+  )
+}
 
 function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlug: string; annee: string }) {
   const router = useRouter()
