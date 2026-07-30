@@ -172,24 +172,78 @@ export async function cloneExerciceConfig(
     'inscriptions_config',
   ]
 
+  if (!fromCode || !toCode) {
+    return { ok: false, cloned, error: "Impossible de lire le code des exercices source et cible : rien n'a été cloné." }
+  }
+
+  const erreurs: string[] = []
+
   for (const tbl of tablesAClone) {
     try {
-      const { data: rows, error: e1 } = await supabase.from(tbl).select('*').eq('exercice_id', fromExerciceId)
-      if (e1) { console.error(`clone ${tbl} read`, e1); continue }
-      if (!rows || rows.length === 0) { cloned[tbl] = 0; continue }
+      // ────────────────────────────────────────────────────────────────────
+      // tttt2 : ce clonage ne clonait RIEN, et le disait avec une coche verte.
+      //
+      // Il lisait sur `exercice_id`, alors qu'AUCUN écran de l'application
+      // n'écrit cette colonne sur ces tables — toutes travaillent sur
+      // `annee_scolaire`. La requête ne remontait donc jamais aucune ligne,
+      // le code passait par la branche `rows.length === 0`, et le wizard
+      // affichait « 0 éléments clonés » avec un succès.
+      //
+      // C'est ce qui a fait que 2026-2027 s'est retrouvée sans questions de
+      // dossier de réduction, sans documents à fournir et sans barème famille
+      // nombreuse : personne ne les avait recopiés, et l'outil censé le faire
+      // ne faisait rien en silence.
+      //
+      // On lit désormais sur `annee_scolaire`, avec repli sur `exercice_id`
+      // pour les tables qui l'auraient renseigné.
+      // ────────────────────────────────────────────────────────────────────
+      const { data: parAnnee, error: e1 } = await supabase
+        .from(tbl).select('*').eq('annee_scolaire', fromCode)
+      if (e1) {
+        console.error(`clone ${tbl} read`, e1)
+        erreurs.push(`${tbl} : ${e1.message}`)
+        cloned[tbl] = -1
+        continue
+      }
+
+      let rows = parAnnee || []
+      if (rows.length === 0) {
+        const { data: parExercice } = await supabase
+          .from(tbl).select('*').eq('exercice_id', fromExerciceId)
+        rows = parExercice || []
+      }
+
+      if (rows.length === 0) { cloned[tbl] = 0; continue }
+
+      // Ne pas recréer ce qui existe déjà sur l'exercice cible : le wizard doit
+      // pouvoir être relancé sans produire de doublons de tarifs.
+      const { data: dejaLa } = await supabase
+        .from(tbl).select('id').eq('annee_scolaire', toCode).limit(1)
+      if (dejaLa && dejaLa.length > 0) { cloned[tbl] = 0; continue }
+
       const toInsert = rows.map((r: any) => {
-        const { id: _id, date_creation: _dc, date_modification: _dm, ...rest } = r
+        const { id: _id, date_creation: _dc, date_modification: _dm, created_at: _ca, updated_at: _ua, ...rest } = r
         return { ...rest, exercice_id: toExerciceId, annee_scolaire: toCode }
       })
       const { error: e2 } = await supabase.from(tbl).insert(toInsert)
-      if (e2) { console.error(`clone ${tbl} insert`, e2); cloned[tbl] = -1; continue }
+      if (e2) {
+        console.error(`clone ${tbl} insert`, e2)
+        erreurs.push(`${tbl} : ${e2.message}`)
+        cloned[tbl] = -1
+        continue
+      }
       cloned[tbl] = toInsert.length
-    } catch (err) {
+    } catch (err: any) {
       console.error(`clone ${tbl} exception`, err)
+      erreurs.push(`${tbl} : ${err?.message || 'erreur inconnue'}`)
       cloned[tbl] = -1
     }
   }
 
+  // Un échec partiel ne doit plus passer pour un succès.
+  if (erreurs.length > 0) {
+    return { ok: false, cloned, error: `Clonage incomplet — ${erreurs.join(' ; ')}` }
+  }
   return { ok: true, cloned }
 }
 

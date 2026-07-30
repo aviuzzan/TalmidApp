@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
-import { ANNEE_COURANTE } from '@/lib/inscriptions'
+import { useAnneeScolaireActive } from '@/lib/exercice-context'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useAccesFinances } from '@/lib/acces-finances'
@@ -82,7 +82,30 @@ export default function ParametresPage() {
     : 'classes'
   const [tab, setTab] = useState<Tab>(initTab)
   const [cat, setCat] = useState<Cat>(catOfTab(initTab))
-  const [annee, setAnnee] = useState(ANNEE_COURANTE)
+  // ────────────────────────────────────────────────────────────────────────
+  // tttt2 : cet écran écrivait sur la MAUVAISE ANNÉE.
+  //
+  // Il s'initialisait sur ANNEE_COURANTE, calculée à partir de la DATE DU JOUR
+  // (règle septembre-août). En juin comme en juillet 2026, cette règle renvoie
+  // « 2025-2026 » — alors que l'année qu'on prépare est 2026-2027. Le sélecteur
+  // n'était relié à rien et se réinitialisait à chaque ouverture de la page.
+  //
+  // Conséquence constatée en production : les 14 questions du dossier de
+  // réduction, les 5 documents à fournir, les 5 barèmes famille nombreuse et
+  // un tarif de tranche sont partis sur 2025-2026 sans le moindre
+  // avertissement. La réduction famille nombreuse n'a donc été appliquée à
+  // personne, et cinq familles ont été surfacturées de 960 EUR.
+  //
+  // On suit désormais l'exercice choisi dans le bandeau du haut, comme tous
+  // les autres écrans (useAnneeScolaireActive). Un choix manuel dans le
+  // sélecteur local reste possible et n'est plus écrasé par le contexte.
+  // ────────────────────────────────────────────────────────────────────────
+  const anneeActive = useAnneeScolaireActive()
+  const [annee, setAnnee] = useState(anneeActive)
+  const choixManuel = useRef(false)
+  useEffect(() => {
+    if (!choixManuel.current) setAnnee(anneeActive)
+  }, [anneeActive])
   const [anneesDispo, setAnneesDispo] = useState<string[]>([])
   // ssss2-C : l'onglet Comptabilité touche à l'argent, il suit le verrou financier
   // transversal comme les autres écrans finance (cf. src/lib/acces-finances.tsx).
@@ -132,16 +155,53 @@ export default function ParametresPage() {
           <p style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>{ecole.nom}</p>
         </div>
         {['tarifs', 'reductions_fn', 'config_reduction', 'config_paiement', 'frais_inscription', 'documents_ecole', 'documents_inscription'].includes(tab) && (
-          <select value={annee} onChange={e => setAnnee(e.target.value)}
-            style={{ ...inp, width: 'auto', fontWeight: 600, color: '#1E293B' }}>
-            {(() => {
-              const list = anneesDispo.length > 0 ? anneesDispo : [annee]
-              const withCurrent = annee && !list.includes(annee) ? [...list, annee] : list
-              return withCurrent.map(code => <option key={code} value={code}>{code}</option>)
-            })()}
-          </select>
+          <div style={{ textAlign: 'right' }}>
+            <label style={{ display: 'block', fontSize: 11, color: '#64748B', marginBottom: 4, fontWeight: 600 }}>
+              Vous configurez l&apos;année
+            </label>
+            <select
+              value={annee}
+              onChange={e => { choixManuel.current = true; setAnnee(e.target.value) }}
+              style={{
+                ...inp, width: 'auto', fontWeight: 700,
+                // Année différente de l'exercice sélectionné : on le montre.
+                color: annee === anneeActive ? '#1E293B' : '#B45309',
+                borderColor: annee === anneeActive ? '#E2E8F0' : '#F59E0B',
+                background: annee === anneeActive ? '#F8FAFC' : '#FFFBEB',
+              }}>
+              {(() => {
+                const list = anneesDispo.length > 0 ? anneesDispo : [annee]
+                const withCurrent = annee && !list.includes(annee) ? [...list, annee] : list
+                return withCurrent.map(code => <option key={code} value={code}>{code}</option>)
+              })()}
+            </select>
+          </div>
         )}
       </div>
+
+      {/* tttt2 : avertissement quand on écrit sur une autre année que l'exercice
+          sélectionné en haut de l'application. C'est exactement le scénario qui a
+          fait partir toute la configuration sur 2025-2026 sans que personne le voie. */}
+      {['tarifs', 'reductions_fn', 'config_reduction', 'config_paiement', 'frais_inscription', 'documents_ecole', 'documents_inscription'].includes(tab)
+        && annee !== anneeActive && (
+        <div style={{
+          background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10,
+          padding: '12px 14px', fontSize: 13, color: '#92400E', lineHeight: 1.5,
+        }}>
+          <strong>Attention : vous modifiez la configuration de {annee}</strong>, alors que
+          l&apos;exercice sélectionné dans l&apos;application est {anneeActive}. Tout ce que vous
+          enregistrez ici ne s&apos;appliquera pas à {anneeActive}.
+          <button
+            onClick={() => { choixManuel.current = false; setAnnee(anneeActive) }}
+            style={{
+              marginLeft: 10, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+              border: '1px solid #B45309', background: '#fff', color: '#B45309',
+              fontSize: 12, fontWeight: 600,
+            }}>
+            Revenir à {anneeActive}
+          </button>
+        </div>
+      )}
 
       {/* ── Niveau 1 : grandes catégories ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>

@@ -72,9 +72,19 @@ export default function ExercicesPage() {
 
     let cloneMsg = ''
     if (form.clone_from) {
-      const { cloned } = await cloneExerciceConfig(supabase, form.clone_from, newEx.id)
+      const { ok: cloneOk, cloned, error: cloneErr } = await cloneExerciceConfig(supabase, form.clone_from, newEx.id)
       const total = Object.values(cloned).reduce((s, n) => s + (n > 0 ? n : 0), 0)
-      cloneMsg = ` · ${total} éléments clonés (tarifs, frais, configs)`
+      // tttt2 : ne plus annoncer un succès quand rien n'a été cloné. Le wizard
+      // affichait « 0 éléments clonés » avec une coche verte, alors que le
+      // clonage était en réalité cassé — c'est ce qui a laissé 2026-2027 sans
+      // barème famille nombreuse ni questions de dossier de réduction.
+      if (!cloneOk) {
+        cloneMsg = ` · ⚠ clonage en échec : ${cloneErr || 'raison inconnue'} — vérifiez la configuration du nouvel exercice`
+      } else if (total === 0) {
+        cloneMsg = ` · ⚠ aucun élément cloné : l'exercice source ne contient aucune configuration à recopier`
+      } else {
+        cloneMsg = ` · ${total} éléments clonés (tarifs, frais, configs)`
+      }
       // Chaînage : exercice source → nouvel exercice
       await supabase.from('exercices').update({ exercice_suivant_id: newEx.id }).eq('id', form.clone_from)
     }
