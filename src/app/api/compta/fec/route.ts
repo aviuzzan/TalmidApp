@@ -211,6 +211,14 @@ export async function GET(req: NextRequest) {
     const cptCaisse = contrepartie('caisse')
     const cptAvoir = contrepartie('avoir')
     const cptDefaut = contrepartie('poste_defaut')
+    // xxxx2 : compte 4161 « Familles - créances douteuses ». Même schéma
+    // fail-closed que les autres clés : s'il n'est pas paramétré alors qu'une
+    // famille douteuse est rencontrée, l'export est REFUSÉ. On ne dérive pas
+    // « 4161 » depuis « 411 » et on ne retombe pas sur le 411 : présenter une
+    // créance douteuse en compte client ordinaire fausse le poste clients du
+    // bilan, et fabriquer un numéro dans un fichier réglementaire est pire
+    // encore.
+    const cptDouteux = contrepartie('creance_douteuse')
 
     /** Clés d'imputation manquantes effectivement RENCONTRÉES pendant la construction. */
     const manques = new Set<string>()
@@ -252,14 +260,14 @@ export async function GET(req: NextRequest) {
       // on le teste desormais explicitement ci-dessous.
       supa.from('ecoles').select('nom, siren').eq('id', ecole_id).single(),
       chargerParLots((from, to) => supa.from('factures')
-        .select('id, numero, date_emission, statut, famille_id, familles!inner(nom, numero, compte_auxiliaire, ecole_id), facture_lignes(id, montant, description, compte_id)')
+        .select('id, numero, date_emission, statut, famille_id, familles!inner(nom, numero, compte_auxiliaire, ecole_id, douteux), facture_lignes(id, montant, description, compte_id)')
         .eq('familles.ecole_id', ecole_id)
         .gte('date_emission', debut).lte('date_emission', fin)
         .order('date_emission', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to)),
       chargerParLots((from, to) => supa.from('reglements')
-        .select('id, date_reglement, montant, mode_paiement, reference, factures!inner(numero, famille_id, familles!inner(nom, numero, compte_auxiliaire, ecole_id))')
+        .select('id, date_reglement, montant, mode_paiement, reference, factures!inner(numero, famille_id, familles!inner(nom, numero, compte_auxiliaire, ecole_id, douteux))')
         .eq('factures.familles.ecole_id', ecole_id)
         .neq('mode_paiement', 'avoir')
         .gte('date_reglement', debut).lte('date_reglement', fin)
@@ -272,7 +280,7 @@ export async function GET(req: NextRequest) {
       // `facture_origine_id` n'est volontairement PAS lu : il designe la facture
       // qui a donne naissance a l'avoir, pas celle sur laquelle il est impute.
       chargerParLots((from, to) => supa.from('avoirs')
-        .select('id, numero, date_emission, montant, montant_utilise, motif, statut, famille_id, familles!inner(nom, numero, compte_auxiliaire, ecole_id)')
+        .select('id, numero, date_emission, montant, montant_utilise, motif, statut, famille_id, familles!inner(nom, numero, compte_auxiliaire, ecole_id, douteux)')
         .eq('familles.ecole_id', ecole_id)
         .neq('statut', 'annule')
         .gte('date_emission', debut).lte('date_emission', fin)
@@ -336,6 +344,49 @@ export async function GET(req: NextRequest) {
     let nbLignesNonImputees = 0        // lignes rattachees au compte de repli
     let nbLignesSansCompteNiRepli = 0  // lignes qu'on ne sait imputer du tout
     const famillesSansAuxiliaire = new Set<string>()
+
+    /** Familles rencontrées en créance douteuse (pour l'avertissement d'en-tête). */
+    const famillesDouteuses = new Set<string>()
+
+    /**
+     * xxxx2 — COMPTE DE CRÉANCE D'UNE FAMILLE : 411 ou 4161 ?
+     * ────────────────────────────────────────────────────────────────────
+     * Une famille marquée `douteux` voit sa créance présentée sur le compte
+     * de la clé `creance_douteuse` (4161) au lieu du compte client ordinaire
+     * (clé `client`, 411). Le COMPTE AUXILIAIRE reste rigoureusement le même :
+     * c'est le même tiers, seule la nature de la créance change. C'est ce qui
+     * permet de continuer à lettrer le dossier de bout en bout.
+     *
+     * Cette fonction est utilisée pour les TROIS mouvements qui touchent la
+     * créance : le débit de facturation (VE), le crédit d'encaissement (BQ) et
+     * le crédit d'avoir imputé (OD). Débiter en 4161 et créditer en 411
+     * rendrait le lettrage impossible et laisserait les deux comptes soldés à
+     * tort — le crédit doit toujours aller là où est le débit.
+     *
+     * ⚠️ SIMPLIFICATION ASSUMÉE — LE STATUT N'EST PAS DATÉ PAR FACTURE.
+     * `familles.douteux` est un état COURANT : la base garde bien une date de
+     * bascule (`douteux_depuis`) et un historique (`familles_douteux_log`),
+     * mais on n'essaie pas de reconstituer, écriture par écriture, si la
+     * famille était douteuse à la date de chaque facture. Le statut ACTUEL est
+     * appliqué à TOUT l'exercice exporté : une famille basculée en mai voit ses
+     * factures de septembre déjà présentées en 4161.
+     * POURQUOI : le classement en douteux est une appréciation portée à la
+     * clôture sur une créance, pas un évènement qui coupe l'exercice en deux.
+     * Reclasser à la date de bascule produirait une famille à cheval sur 411 et
+     * 4161 dans le même exercice, donc deux soldes partiels impossibles à
+     * lettrer. La contrepartie de ce choix : un export relancé après une
+     * bascule ne rend pas le même fichier qu'avant. C'est signalé dans
+     * l'en-tête X-FEC-Avertissements.
+     */
+    const compteCreance = (fam: any): CompteFec | null => {
+      if (fam?.douteux === true) {
+        famillesDouteuses.add(String(fam?.numero || fam?.nom || '?'))
+        if (!cptDouteux) { manques.add('creance_douteuse'); return null }
+        return cptDouteux
+      }
+      if (!cptClient) { manques.add('client'); return null }
+      return cptClient
+    }
 
     /** Compte auxiliaire d'une famille, avec repli signalé. */
     const auxDeFamille = (fam: any, familleId: unknown): string => {
@@ -406,10 +457,9 @@ export async function GET(req: NextRequest) {
       const libEcriture = `Facture ${ref} - ${auxLib}`.trim()
       const num = String(ecritureNum++).padStart(6, '0')
 
-      if (!cptClient) {
-        manques.add('client')
-        continue
-      }
+      // 411 ou 4161 selon le statut ACTUEL de la famille (cf. compteCreance).
+      const cptCreance = compteCreance(fam)
+      if (!cptCreance) continue
 
       // Débit client (compte auxiliaire famille). Le montant débité est la
       // SOMME DES GROUPES ARRONDIS, pas le total arrondi séparément : sinon
@@ -424,7 +474,7 @@ export async function GET(req: NextRequest) {
 
       lignesFec.push({
         journal: 'VE', journalLib: 'Ventes', num, date,
-        compteNum: cptClient.code, compteLib: cptClient.libelle || 'Clients',
+        compteNum: cptCreance.code, compteLib: cptCreance.libelle || 'Clients',
         auxNum: aux, auxLib,
         ref, lib: libEcriture,
         debit: debitClient, credit: 0,
@@ -479,10 +529,11 @@ export async function GET(req: NextRequest) {
         manques.add(modePaiement === 'especes' ? 'caisse' : 'banque')
         continue
       }
-      if (!cptClient) {
-        manques.add('client')
-        continue
-      }
+      // Le crédit doit atterrir sur le MÊME compte que le débit de facturation,
+      // sinon le règlement d'une famille douteuse crédite un 411 qui n'a jamais
+      // été débité : les deux comptes restent ouverts et le lettrage est mort.
+      const cptCreance = compteCreance(fam)
+      if (!cptCreance) continue
       const num = String(ecritureNum++).padStart(6, '0')
 
       lignesFec.push({
@@ -495,7 +546,7 @@ export async function GET(req: NextRequest) {
       })
       lignesFec.push({
         journal: 'BQ', journalLib: 'Banque', num, date,
-        compteNum: cptClient.code, compteLib: cptClient.libelle || 'Clients',
+        compteNum: cptCreance.code, compteLib: cptCreance.libelle || 'Clients',
         auxNum: aux, auxLib,
         ref, lib,
         debit: 0, credit: m,
@@ -558,17 +609,23 @@ export async function GET(req: NextRequest) {
         : Math.min(Math.max(utiliseBrut, 0), m)
       const enAttente = m - impute
 
-      if (impute > 0 && !cptClient) { manques.add('client'); continue }
+      // xxxx2 : même raisonnement qu'en BQ. La part imputée éteint une créance
+      // qui a été débitée en 4161 pour une famille douteuse : elle doit créditer
+      // ce même 4161. Le compte d'attente 4197 de la part NON imputée, lui, ne
+      // change pas — il ne représente aucune créance identifiée, donc rien à
+      // reclasser.
+      const cptCreance = impute > 0 ? compteCreance(fam) : null
+      if (impute > 0 && !cptCreance) continue
       if (enAttente > 0 && !cptAvoir) { manques.add('avoir'); continue }
       if (!cptDefaut) { manques.add('poste_defaut'); continue }
       const num = String(ecritureNum++).padStart(6, '0')
 
       if (impute > 0) {
-        // Crédit du compte client : c'est cette ligne qui manquait et qui
+        // Crédit du compte de créance : c'est cette ligne qui manquait et qui
         // laissait le 411 débiteur à tort.
         lignesFec.push({
           journal: 'OD', journalLib: 'Opérations diverses', num, date,
-          compteNum: cptClient!.code, compteLib: cptClient!.libelle || 'Clients',
+          compteNum: cptCreance!.code, compteLib: cptCreance!.libelle || 'Clients',
           auxNum: aux, auxLib,
           ref, lib: `${lib} (imputé)`.trim(),
           debit: 0, credit: impute,
@@ -683,6 +740,16 @@ export async function GET(req: NextRequest) {
     if (nbLignesNonImputees > 0) {
       avertissements.push(
         `${nbLignesNonImputees} ligne(s) de facture sans compte_id rattachee(s) au compte poste_defaut`,
+      )
+    }
+    // xxxx2 : la simplification « statut actuel applique a tout l'exercice » doit
+    // etre EXPLICITE pour qui recoit le fichier. Sans ce signal, un expert-comptable
+    // qui compare deux exports de la meme periode constaterait des creances passees
+    // de 411 a 4161 sans explication. Message volontairement ASCII (en-tete HTTP).
+    if (famillesDouteuses.size > 0) {
+      avertissements.push(
+        `${famillesDouteuses.size} famille(s) en creance douteuse : creances presentees en ${cptDouteux?.code || '4161'} ` +
+        '(statut ACTUEL applique a tout l\'exercice exporte, la bascule n\'est pas datee par facture)',
       )
     }
 

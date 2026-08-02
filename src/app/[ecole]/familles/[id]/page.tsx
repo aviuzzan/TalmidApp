@@ -49,6 +49,10 @@ export default function FamilleDetailPage() {
   const [showTrancheModal, setShowTrancheModal] = useState(false)
   const [trancheForm, setTrancheForm] = useState<{ exercice_id: string; tranche_id: string; tarif_accorde: string; note: string }>({ exercice_id: '', tranche_id: '', tarif_accorde: '', note: '' })
   const [savingTranche, setSavingTranche] = useState(false)
+  // CRÉANCE DOUTEUSE (xxxx2) : bascule 411 -> 4161. Manuelle, motivée, réversible.
+  const [showDouteuxModal, setShowDouteuxModal] = useState(false)
+  const [douteuxMotif, setDouteuxMotif] = useState('')
+  const [savingDouteux, setSavingDouteux] = useState(false)
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
   const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
@@ -114,6 +118,11 @@ export default function FamilleDetailPage() {
     setHorsSecteur(false)
 
     const [{ data: fam }, { data: enf }, { data: cls }, { data: trp }, { data: modes }, { data: tar }] = await Promise.all([
+      // `select('*')` rapporte déjà les colonnes de créance douteuse (xxxx2) :
+      // `douteux`, `douteux_depuis`, `douteux_motif`. On garde l'étoile plutôt
+      // que de figer une liste explicite : cette fiche lit une trentaine de
+      // colonnes de `familles`, en énumérer une partie ferait disparaître les
+      // autres du rendu au premier oubli.
       supabase.from('familles').select('*').eq('id', id).single(),
       supabase.from('enfants').select('*').eq('famille_id', id).order('nom'),
       supabase.from('classes').select('*').eq('ecole_id', ecole.id).order('ordre'),
@@ -474,6 +483,47 @@ export default function FamilleDetailPage() {
     load()
   }
 
+  /**
+   * CRÉANCE DOUTEUSE (xxxx2) — bascule du statut de la famille.
+   *
+   * Tout passe par la RPC `basculer_famille_douteux` : c'est elle qui vérifie
+   * que l'appelant est admin AVEC accès finances, qui exige un motif, qui
+   * historise la bascule dans `familles_douteux_log` et qui fige le solde au
+   * moment du basculement. Faire l'UPDATE depuis le client contournerait toute
+   * cette traçabilité — et une écriture refusée par la RLS ne lève même pas
+   * d'exception, elle passerait donc inaperçue.
+   *
+   * Une RPC, elle, remonte bien son erreur dans `error` : on la teste.
+   */
+  async function basculerDouteux() {
+    if (!famille) return
+    const cible = !famille.douteux
+    const motif = douteuxMotif.trim()
+    // Même règle que côté base (motif >= 3 caractères) : on la rejoue ici pour
+    // rendre une erreur lisible plutôt qu'un message d'exception Postgres.
+    if (motif.length < 3) { toast.error('Le motif est obligatoire (3 caractères minimum).'); return }
+    setSavingDouteux(true)
+    const { data, error: err } = await supabase.rpc('basculer_famille_douteux', {
+      p_famille_id: id,
+      p_douteux: cible,
+      p_motif: motif,
+    })
+    if (err) { toast.error('Bascule refusée : ' + err.message); setSavingDouteux(false); return }
+    const res = (data || {}) as { ok?: boolean; douteux?: boolean; solde_au_moment?: number | null; inchange?: boolean }
+    if (res.inchange) {
+      toast.info('Statut déjà à jour : rien n\'a été modifié.')
+    } else if (cible) {
+      const solde = res.solde_au_moment != null ? ` (solde au moment de la bascule : ${Number(res.solde_au_moment).toLocaleString('fr-FR')} €)` : ''
+      toast.success('Famille passée en créance douteuse' + solde)
+    } else {
+      toast.success('Statut de créance douteuse retiré')
+    }
+    setShowDouteuxModal(false)
+    setDouteuxMotif('')
+    setSavingDouteux(false)
+    load()
+  }
+
   // SECTEUR (llll2) : fiche hors du secteur de l'agent → pas de crash, message clair
   if (horsSecteur) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
@@ -511,6 +561,18 @@ export default function FamilleDetailPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{famille.numero}</span>
             {famille.situation_maritale && <span style={{ background: '#EFF6FF', color: '#2563EB', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{SITUATIONS[famille.situation_maritale]}</span>}
+            {/* CRÉANCE DOUTEUSE (xxxx2) : le badge est volontairement en rouge et
+                en haut de fiche. Le dossier est en recouvrement direct : encaisser,
+                relancer ou réinscrire sans le savoir serait une faute de gestion.
+                Le badge reste visible de TOUS (pas de garde `accesFinancesProfile`) :
+                c'est une consigne de conduite, pas un montant. */}
+            {famille.douteux && (
+              <span
+                title={`Créance douteuse${famille.douteux_depuis ? ' depuis le ' + new Date(famille.douteux_depuis).toLocaleDateString('fr-FR') : ''}${famille.douteux_motif ? ' — Motif : ' + famille.douteux_motif : ''}`}
+                style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>
+                ⚠️ Créance douteuse
+              </span>
+            )}
             {/* Tranche / code de facturation - masque si pas d'acces finances (chantier lll) */}
             {tranches.length > 0 && accesFinancesProfile && (
               <select
@@ -529,6 +591,14 @@ export default function FamilleDetailPage() {
               </select>
             )}
           </div>
+          {/* Détail sous les badges : le survol du badge ne suffit pas sur mobile,
+              et « depuis quand » conditionne l'ancienneté du recouvrement. */}
+          {famille.douteux && (
+            <div style={{ fontSize: 11, color: '#991B1B', marginTop: 5, lineHeight: 1.45 }}>
+              Depuis le {famille.douteux_depuis ? new Date(famille.douteux_depuis).toLocaleDateString('fr-FR') : 'date inconnue'}
+              {famille.douteux_motif ? <> · Motif : <strong>{famille.douteux_motif}</strong></> : null}
+            </div>
+          )}
         </div>
         {canAdministratif && exercicesDispo.length > 0 && (
           <BoutonReinscription familleId={id} ecoleSlug={ecole.slug} exercicesDisponibles={exercicesDispo} />
@@ -544,8 +614,18 @@ export default function FamilleDetailPage() {
             { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
             { label: '📄 Attestation fiscale', href: `/${ecole.slug}/familles/${id}/attestation-fiscale` },
           ] : []),
+          // CRÉANCE DOUTEUSE (xxxx2) : réservé aux profils avec accès finances.
+          // La RPC refuse de toute façon les autres, mais proposer une action
+          // vouée à l'échec dans un menu est une mauvaise UX.
+          ...(accesFinancesProfile ? [
+            { label: famille.douteux ? '↩️ Retirer le statut douteux' : '⚠️ Passer en créance douteuse', href: '#douteux' },
+          ] : []),
           { label: '🛡️ RGPD — Export / Anonymisation', href: `/${ecole.slug}/familles/${id}/rgpd` },
-        ]} onNav={(h) => { if (h === '#tranche-manuelle') { setShowTrancheModal(true) } else { router.push(h) } }} />
+        ]} onNav={(h) => {
+          if (h === '#tranche-manuelle') { setShowTrancheModal(true) }
+          else if (h === '#douteux') { setDouteuxMotif(''); setShowDouteuxModal(true) }
+          else { router.push(h) }
+        }} />
       </div>
 
       {estSeparee && (
@@ -1031,6 +1111,75 @@ export default function FamilleDetailPage() {
                 }}
                 style={{ background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (savingTranche || !trancheForm.exercice_id || !trancheForm.tranche_id) ? 0.5 : 1 }}>
                 {savingTranche ? '…' : '✓ Valider la tranche'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal : bascule en créance douteuse (xxxx2) */}
+      {showDouteuxModal && famille && (
+        <div onClick={() => !savingDouteux && setShowDouteuxModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, maxWidth: 540, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{ fontSize: 26 }}>{famille.douteux ? '↩️' : '⚠️'}</div>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 800, color: '#1E293B', margin: 0 }}>
+                  {famille.douteux ? 'Retirer le statut de créance douteuse' : 'Passer en créance douteuse'}
+                </h3>
+                <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0' }}>
+                  Famille <strong>{famille.nom}</strong> {famille.numero ? `(${famille.numero})` : ''}
+                </p>
+              </div>
+            </div>
+
+            {/* RÈGLE MÉTIER : aucun seuil réglementaire n'impose la bascule.
+                Le libellé ne doit donc jamais laisser croire qu'un montant ou
+                un nombre de jours de retard « déclenche » le passage en 4161. */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#475569', lineHeight: 1.55, marginTop: 6 }}>
+              {famille.douteux ? (
+                <>
+                  Le retrait remet la créance en compte client ordinaire (411). À faire lorsque
+                  la situation est régularisée ou qu&apos;un plan de règlement est de nouveau tenu.
+                  Les relances automatiques reprendront pour cette famille.
+                </>
+              ) : (
+                <>
+                  La créance sera présentée sur le compte <strong>4161 « Familles — créances douteuses »</strong>
+                  {' '}dans les états comptables, et cette famille sortira des relances automatiques :
+                  un dossier douteux se traite en direct (plan amiable, recouvrement), pas par des
+                  e-mails de rappel.
+                </>
+              )}
+              <div style={{ marginTop: 8, color: '#64748B' }}>
+                Il n&apos;existe <strong>aucun seuil réglementaire</strong> de bascule : c&apos;est une décision
+                au cas par cas de l&apos;établissement. Elle est manuelle, motivée, réversible et tracée.
+              </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                Motif <span style={{ color: '#DC2626' }}>*</span>
+              </label>
+              <textarea
+                value={douteuxMotif}
+                onChange={e => setDouteuxMotif(e.target.value)}
+                autoFocus
+                placeholder={famille.douteux
+                  ? 'Ex : plan de règlement repris et respecté depuis 3 échéances'
+                  : 'Ex : aucun règlement depuis février malgré 3 relances, courrier retourné'}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13, minHeight: 76, resize: 'vertical' }} />
+              <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                Le motif est conservé dans l&apos;historique des bascules (3 caractères minimum).
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={() => setShowDouteuxModal(false)} disabled={savingDouteux}
+                style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, cursor: savingDouteux ? 'not-allowed' : 'pointer' }}>Annuler</button>
+              <button onClick={basculerDouteux} disabled={savingDouteux || douteuxMotif.trim().length < 3}
+                style={{ background: famille.douteux ? '#0F766E' : '#DC2626', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: (savingDouteux || douteuxMotif.trim().length < 3) ? 'not-allowed' : 'pointer', opacity: (savingDouteux || douteuxMotif.trim().length < 3) ? 0.5 : 1 }}>
+                {savingDouteux ? '…' : famille.douteux ? '✓ Retirer le statut' : '✓ Confirmer la bascule'}
               </button>
             </div>
           </div>

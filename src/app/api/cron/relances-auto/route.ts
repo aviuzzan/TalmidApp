@@ -76,17 +76,23 @@ async function handle(req: NextRequest) {
 
   const result = {
     processed: 0, sent: 0, skipped: 0,
+    // Compteur DÉDIÉ : une exclusion silencieuse est indistinguable d'un bug.
+    // Si demain une école ne reçoit plus aucune relance, ce chiffre dit tout de
+    // suite si c'est parce que ses familles sont passées en créance douteuse.
+    douteuxSkipped: 0,
     errors: [] as any[], parEcole: [] as any[],
   }
 
   for (const cfg of configs || []) {
     const ecoleId = cfg.ecole_id
     const ecoleNom = (cfg as any).ecoles?.nom || 'Votre école'
-    let ecoleSent = 0, ecoleSkipped = 0
+    let ecoleSent = 0, ecoleSkipped = 0, ecoleDouteuxSkipped = 0
 
     const { data: factures } = await supabaseAdmin
       .from('factures_solde')
-      .select('id, numero, total_facture, solde_restant, date_echeance, statut, famille_id, familles!inner(ecole_id, parent1_prenom, parent1_email, parent2_prenom, parent2_email, situation_maritale, part_pere, part_mere)')
+      // `familles.douteux` est lu ici pour pouvoir écarter les créances douteuses
+      // avant tout envoi (cf. le test en tête de boucle).
+      .select('id, numero, total_facture, solde_restant, date_echeance, statut, famille_id, familles!inner(ecole_id, douteux, parent1_prenom, parent1_email, parent2_prenom, parent2_email, situation_maritale, part_pere, part_mere)')
       .gt('solde_restant', 0)
       .neq('statut', 'annule')
       .eq('familles.ecole_id', ecoleId)
@@ -99,6 +105,18 @@ async function handle(req: NextRequest) {
 
     for (const f of (factures || []) as any[]) {
       result.processed++
+
+      // ── CRÉANCE DOUTEUSE (xxxx2) : on n'envoie RIEN, et on le dit ──────────
+      // POURQUOI avant tout le reste : une famille passée en créance douteuse
+      // est un dossier suivi en direct — plan amiable négocié, échéancier
+      // exceptionnel, dossier confié au recouvrement, parfois situation
+      // familiale dramatique. Un e-mail de rappel automatique arrive alors à
+      // contretemps : il contredit ce qui a été convenu de vive voix, casse la
+      // relation, et n'a jamais fait rentrer un euro sur ce type de dossier.
+      // La décision de relancer redevient humaine.
+      // Le compteur dédié rend l'exclusion VISIBLE dans le log du cron : sans
+      // lui, un dossier écarté ressemblerait à un dossier oublié.
+      if (f.familles?.douteux) { ecoleDouteuxSkipped++; continue }
 
       const du = (duMap as any)[f.id]
       if (!du || !du.enRetard || du.duAdate <= 0) { ecoleSkipped++; continue }
@@ -186,7 +204,11 @@ async function handle(req: NextRequest) {
     }
 
     result.skipped += ecoleSkipped
-    result.parEcole.push({ ecole: ecoleNom, envoyes: ecoleSent, ignores: ecoleSkipped })
+    result.douteuxSkipped += ecoleDouteuxSkipped
+    // `ignores` reste le nombre de factures écartées pour cause « pas en retard /
+    // pas encore le moment d'escalader ». Les créances douteuses sont comptées à
+    // part : ce n'est pas le même motif, et les confondre masquerait l'exclusion.
+    result.parEcole.push({ ecole: ecoleNom, envoyes: ecoleSent, ignores: ecoleSkipped, douteux_exclus: ecoleDouteuxSkipped })
   }
 
   return NextResponse.json({ ok: true, today: todayIso, ...result })

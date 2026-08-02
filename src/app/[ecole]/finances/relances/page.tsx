@@ -22,6 +22,11 @@ type Facture = {
   parent_email?: string
   famille_nom?: string
   duAdate?: DuADateResult
+  // CRÉANCE DOUTEUSE (xxxx2) : ces familles sortent de la liste des relances
+  // mais restent affichées à part — l'admin doit voir qu'elles existent.
+  douteux?: boolean
+  douteux_depuis?: string | null
+  douteux_motif?: string | null
 }
 
 type RelanceLog = { facture_id: string; niveau: number; envoyee_le: string }
@@ -34,6 +39,9 @@ export default function RelancesPage() {
   const [logs, setLogs] = useState<Record<string, RelanceLog[]>>({})
   const [msg, setMsg] = useState('')
   const [showAll, setShowAll] = useState(false)  // false = uniquement en retard reel
+  // Bloc « Créances douteuses » replié par défaut : c'est un rappel de suivi,
+  // pas la file de travail du jour.
+  const [showDouteuses, setShowDouteuses] = useState(false)
   // Exercice piloté par le sélecteur global (même source que /finances et /finances/dashboard).
   const annee = useAnneeScolaireActive()
   const { loading: exerciceLoading } = useExercice()
@@ -51,7 +59,7 @@ export default function RelancesPage() {
     //    exercice. On s'aligne sur le sélecteur global, comme /finances.
     //  - PAGINATION : Supabase tronque silencieusement à 1000 lignes.
     const { rows: facts, error: errFacts } = await chargerParLots((debut, fin) => s.from('factures_solde')
-      .select('*, familles!inner(nom, parent1_prenom, parent1_nom, parent1_email, ecole_id)')
+      .select('*, familles!inner(nom, parent1_prenom, parent1_nom, parent1_email, ecole_id, douteux, douteux_depuis, douteux_motif)')
       .gt('solde_restant', 0)
       .neq('statut', 'annule')
       .eq('familles.ecole_id', ecole.id)
@@ -74,6 +82,9 @@ export default function RelancesPage() {
       parent_prenom: f.familles?.parent1_prenom || '',
       parent_nom: f.familles?.parent1_nom || '',
       parent_email: f.familles?.parent1_email || '',
+      douteux: f.familles?.douteux === true,
+      douteux_depuis: f.familles?.douteux_depuis || null,
+      douteux_motif: f.familles?.douteux_motif || null,
     }))
 
     // Calcule le du a date pour chaque facture (echeances echues - reglements imputes).
@@ -130,11 +141,24 @@ export default function RelancesPage() {
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
 
+  // CRÉANCE DOUTEUSE (xxxx2) : on scinde AVANT tout calcul de relance.
+  // Une créance douteuse ne se relance pas par e-mail (dossier suivi en direct :
+  // plan amiable, recouvrement) — mais elle ne doit pas disparaître de l'écran
+  // pour autant, sinon l'admin croit son poste clients assaini. D'où le bloc
+  // dédié plus bas, sans aucun bouton d'envoi.
+  const facturesDouteuses = factures.filter(f => f.douteux)
+  const facturesRelancables = factures.filter(f => !f.douteux)
+
   // Filtre principal : facture vraiment en retard (du a date > 0). Toggle pour voir aussi les autres.
-  const facturesEnRetard = factures.filter(f => (f.duAdate?.duAdate || 0) > 0)
-  const facturesAffichees = showAll ? factures : facturesEnRetard
+  const facturesEnRetard = facturesRelancables.filter(f => (f.duAdate?.duAdate || 0) > 0)
+  const facturesAffichees = showAll ? facturesRelancables : facturesEnRetard
   const totalDuAdate = facturesEnRetard.reduce((s, f) => s + (f.duAdate?.duAdate || 0), 0)
+  // Inchangé volontairement : le solde annuel reste le reste à recouvrer TOTAL,
+  // créances douteuses comprises. Une créance douteuse reste due — la classer
+  // ailleurs au bilan ne l'efface pas. La part douteuse est simplement isolée
+  // juste en dessous, pour que le chiffre reste lisible.
   const totalSoldeAnnuel = factures.reduce((s, f) => s + f.solde_restant, 0)
+  const totalSoldeDouteux = facturesDouteuses.reduce((s, f) => s + f.solde_restant, 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -162,6 +186,11 @@ export default function RelancesPage() {
           <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase' }}>Solde annuel total</div>
           <div style={{ fontSize: 26, fontWeight: 700, color: '#475569', marginTop: 4 }}>{totalSoldeAnnuel.toLocaleString('fr-FR')} €</div>
           <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>reste à recouvrer sur l&apos;année</div>
+          {facturesDouteuses.length > 0 && (
+            <div style={{ fontSize: 11, color: '#B45309', marginTop: 2 }}>
+              dont {totalSoldeDouteux.toLocaleString('fr-FR')} € en créance douteuse
+            </div>
+          )}
         </div>
       </div>
 
@@ -180,7 +209,12 @@ export default function RelancesPage() {
 
       {facturesAffichees.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          🎉 Aucune famille en retard. Toutes les échéances échues sont couvertes.
+          🎉 Aucune famille à relancer. Toutes les échéances échues sont couvertes.
+          {facturesDouteuses.length > 0 && (
+            <div style={{ marginTop: 6, color: '#B45309' }}>
+              {facturesDouteuses.length} créance{facturesDouteuses.length > 1 ? 's' : ''} douteuse{facturesDouteuses.length > 1 ? 's' : ''} en dehors du circuit de relance — voir le bloc ci-dessous.
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
@@ -246,6 +280,66 @@ export default function RelancesPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ── CRÉANCES DOUTEUSES (xxxx2) ───────────────────────────────────────
+          Ces familles sont retirées de la liste ci-dessus : on ne leur envoie
+          plus de relance automatique ni manuelle depuis cet écran. Elles restent
+          affichées ici, avec leur solde, leur motif et leur ancienneté, pour que
+          l'admin sache qu'elles existent et suive le dossier en direct.
+          Aucun bouton d'envoi ici : c'est le sens même du statut. */}
+      {facturesDouteuses.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #FCA5A5', borderRadius: 12, overflow: 'hidden' }}>
+          <button onClick={() => setShowDouteuses(v => !v)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#FEF2F2', border: 'none', borderBottom: showDouteuses ? '1px solid #FECACA' : 'none', padding: '12px 16px', cursor: 'pointer', textAlign: 'left' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#991B1B' }}>
+              ⚠️ Créances douteuses ({facturesDouteuses.length}) — {totalSoldeDouteux.toLocaleString('fr-FR')} €
+            </span>
+            <span style={{ fontSize: 11, color: '#B91C1C', fontWeight: 600 }}>
+              {showDouteuses ? 'Masquer ▲' : 'Afficher ▼'}
+            </span>
+          </button>
+          {showDouteuses && (
+            <>
+              <div style={{ padding: '10px 16px', fontSize: 12, color: '#7F1D1D', background: '#FFF5F5' }}>
+                Ces familles sont <strong>exclues des relances</strong> (automatiques et manuelles) : le dossier
+                se traite en direct — plan amiable, échéancier négocié, recouvrement. Le statut se retire
+                depuis la fiche famille, il est réversible.
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                      {['Facture', 'Famille', 'Solde', 'Douteuse depuis', 'Motif'].map(h => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Solde' ? 'right' : 'left', fontWeight: 600, color: '#475569', fontSize: 11, textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facturesDouteuses.map(f => (
+                      <tr key={f.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                        <td style={{ padding: '12px', fontWeight: 600, color: '#1E293B' }}>{f.numero}</td>
+                        <td style={{ padding: '12px', color: '#475569' }}>
+                          <a href={`/${ecole.slug}/familles/${f.famille_id}`} style={{ fontWeight: 600, color: '#1E293B', textDecoration: 'none' }}>{f.famille_nom}</a>
+                          <div style={{ fontSize: 11, color: '#94A3B8' }}>{f.parent_prenom} {f.parent_nom}</div>
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#B91C1C' }}>
+                          {f.solde_restant.toLocaleString('fr-FR')} €
+                        </td>
+                        <td style={{ padding: '12px', color: '#475569', fontSize: 12 }}>
+                          {f.douteux_depuis ? new Date(f.douteux_depuis).toLocaleDateString('fr-FR') : <span style={{ color: '#94A3B8' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '12px', color: '#475569', fontSize: 12 }}>
+                          {f.douteux_motif || <span style={{ color: '#94A3B8' }}>—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 
