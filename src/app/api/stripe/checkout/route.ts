@@ -40,13 +40,25 @@ export async function POST(req: NextRequest) {
     }
 
     // Facture + solde
-    const { data: facture } = await supabaseAdmin
+    // FIX 05/08 : factures_solde n'a PAS de colonne ecole_id -> la demander faisait
+    // planter la requete PostgREST et l'API repondait "Facture introuvable" pour TOUT
+    // le monde. On lit la facture sans ecole_id, puis l'ecole via la famille.
+    const { data: facture, error: factErr } = await supabaseAdmin
       .from('factures_solde')
-      .select('id, numero, famille_id, ecole_id, total_facture, total_regle, solde_restant, statut')
+      .select('id, numero, famille_id, total_facture, total_regle, solde_restant, statut')
       .eq('id', factureId)
       .maybeSingle()
 
+    if (factErr) {
+      console.error('[stripe checkout] lecture factures_solde failed:', factErr.message)
+      return NextResponse.json({ error: 'Erreur lecture facture' }, { status: 500 })
+    }
     if (!facture) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+
+    const { data: famEcole } = await supabaseAdmin
+      .from('familles').select('ecole_id').eq('id', facture.famille_id).single()
+    const ecoleId = famEcole?.ecole_id
+    if (!ecoleId) return NextResponse.json({ error: 'École de la facture introuvable' }, { status: 500 })
     if (facture.famille_id !== profile.famille_id) {
       return NextResponse.json({ error: 'Facture non rattachée à votre famille' }, { status: 403 })
     }
@@ -65,7 +77,7 @@ export async function POST(req: NextRequest) {
     if (montant < 50) return NextResponse.json({ error: 'Montant minimum 0,50 €' }, { status: 400 })
 
     // Récupère la config Stripe de l'école (BDD chiffrée → déchiffrée par getIntegration)
-    const integration = await getIntegration(facture.ecole_id, 'stripe')
+    const integration = await getIntegration(ecoleId, 'stripe')
     if (!integration) {
       return NextResponse.json({ error: 'Le paiement en ligne Stripe n\'est pas activé pour cette école' }, { status: 400 })
     }
@@ -77,7 +89,7 @@ export async function POST(req: NextRequest) {
     const { data: ecole } = await supabaseAdmin
       .from('ecoles')
       .select('nom, slug')
-      .eq('id', facture.ecole_id)
+      .eq('id', ecoleId)
       .single()
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
@@ -94,7 +106,7 @@ export async function POST(req: NextRequest) {
       successUrl,
       cancelUrl,
       metadata: {
-        ecole_id: facture.ecole_id,
+        ecole_id: ecoleId,
         ecole_slug: ecole?.slug || '',
         famille_id: profile.famille_id,
         profile_id: profile.id,
@@ -102,7 +114,7 @@ export async function POST(req: NextRequest) {
     })
 
     await supabaseAdmin.from('paiements_en_ligne').insert({
-      ecole_id: facture.ecole_id,
+      ecole_id: ecoleId,
       facture_id: facture.id,
       famille_id: profile.famille_id,
       profile_id: profile.id,

@@ -31,12 +31,17 @@ export async function POST(req: NextRequest) {
       .from('profiles').select('id, famille_id, nom').eq('id', user.id).single()
     if (!profile?.famille_id) return NextResponse.json({ error: 'Famille introuvable' }, { status: 403 })
 
+    // FIX 05/08 : factures_solde n'a pas de colonne ecole_id (requete qui plantait
+    // -> "Facture introuvable" systematique). L'ecole se lit via la famille.
     const { data: facture } = await sb
       .from('factures_solde')
-      .select('id, numero, famille_id, ecole_id, solde_restant, statut')
+      .select('id, numero, famille_id, solde_restant, statut')
       .eq('id', factureId)
       .maybeSingle()
     if (!facture) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+    const { data: famEcole } = await sb.from('familles').select('ecole_id').eq('id', facture.famille_id).single()
+    const ecoleId = famEcole?.ecole_id
+    if (!ecoleId) return NextResponse.json({ error: 'École de la facture introuvable' }, { status: 500 })
     if (facture.famille_id !== profile.famille_id) {
       return NextResponse.json({ error: 'Facture non rattachée à votre famille' }, { status: 403 })
     }
@@ -51,7 +56,7 @@ export async function POST(req: NextRequest) {
       ? Math.min(Math.round(montantCentimes), Math.round(solde * 100))
       : Math.round(solde * 100)
 
-    const integration = await getIntegration(facture.ecole_id, 'gocardless')
+    const integration = await getIntegration(ecoleId, 'gocardless')
     if (!integration) {
       return NextResponse.json({ error: 'GoCardless non activé pour cette école' }, { status: 400 })
     }
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Access Token GoCardless manquant' }, { status: 400 })
     }
 
-    const { data: ecole } = await sb.from('ecoles').select('nom').eq('id', facture.ecole_id).single()
+    const { data: ecole } = await sb.from('ecoles').select('nom').eq('id', ecoleId).single()
     const { data: famille } = await sb.from('familles').select('nom').eq('id', profile.famille_id).single()
 
     const flow = await createBillingRequestFlow({
@@ -73,14 +78,14 @@ export async function POST(req: NextRequest) {
       email: user.email || '',
       nomFamille: famille?.nom || profile.nom || '',
       metadata: {
-        ecole_id: facture.ecole_id,
+        ecole_id: ecoleId,
         famille_id: profile.famille_id,
         profile_id: profile.id,
       },
     })
 
     await sb.from('paiements_en_ligne').insert({
-      ecole_id: facture.ecole_id,
+      ecole_id: ecoleId,
       facture_id: facture.id,
       famille_id: profile.famille_id,
       profile_id: profile.id,

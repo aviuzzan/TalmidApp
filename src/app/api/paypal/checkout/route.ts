@@ -47,11 +47,16 @@ export async function POST(req: NextRequest) {
       .from('profiles').select('id, famille_id').eq('id', user.id).single()
     if (!profile?.famille_id) return NextResponse.json({ error: 'Famille introuvable' }, { status: 403 })
 
+    // FIX 05/08 : factures_solde n'a pas de colonne ecole_id (requete qui plantait
+    // -> "Facture introuvable" systematique). L'ecole se lit via la famille.
     const { data: facture } = await supabaseAdmin
       .from('factures_solde')
-      .select('id, numero, famille_id, ecole_id, solde_restant, statut')
+      .select('id, numero, famille_id, solde_restant, statut')
       .eq('id', factureId).maybeSingle()
     if (!facture) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+    const { data: famEcole } = await supabaseAdmin.from('familles').select('ecole_id').eq('id', facture.famille_id).single()
+    const ecoleId = famEcole?.ecole_id
+    if (!ecoleId) return NextResponse.json({ error: 'École de la facture introuvable' }, { status: 500 })
     if (facture.famille_id !== profile.famille_id) {
       return NextResponse.json({ error: 'Facture non rattachée à votre famille' }, { status: 403 })
     }
@@ -67,7 +72,7 @@ export async function POST(req: NextRequest) {
       : Math.round(solde * 100)
     const montant = (montantC / 100).toFixed(2)
 
-    const integration = await getIntegration(facture.ecole_id, 'paypal')
+    const integration = await getIntegration(ecoleId, 'paypal')
     if (!integration) {
       return NextResponse.json({ error: "Le paiement PayPal n'est pas activé pour cette école" }, { status: 400 })
     }
@@ -81,7 +86,7 @@ export async function POST(req: NextRequest) {
     const accessToken = await getToken(base, clientId, secret)
 
     const { data: ecole } = await supabaseAdmin
-      .from('ecoles').select('nom, slug').eq('id', facture.ecole_id).single()
+      .from('ecoles').select('nom, slug').eq('id', ecoleId).single()
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
 
     const orderRes = await fetch(base + '/v2/checkout/orders', {
@@ -110,7 +115,7 @@ export async function POST(req: NextRequest) {
     if (!approve) return NextResponse.json({ error: 'Lien de paiement PayPal introuvable' }, { status: 502 })
 
     await supabaseAdmin.from('paiements_en_ligne').insert({
-      ecole_id: facture.ecole_id,
+      ecole_id: ecoleId,
       facture_id: facture.id,
       famille_id: profile.famille_id,
       profile_id: profile.id,
