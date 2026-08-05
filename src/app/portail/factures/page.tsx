@@ -86,7 +86,10 @@ export default function PortailFacturesPage() {
           supabase.from('facture_lignes').select('*, enfants(prenom, nom)').eq('facture_id', fact.id),
           supabase.from('reglements').select('*').eq('facture_id', fact.id).order('date_reglement', { ascending: false }),
           supabase.from('avoirs_imputations').select('*, avoirs(numero, motif)').eq('facture_id', fact.id),
-          supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', fact.ecole_id).in('provider', ['stripe', 'gocardless', 'paypal']),
+          // FIX 05/08 : factures_solde n'a PAS de colonne ecole_id -> fact.ecole_id etait
+          // undefined et la requete ne renvoyait jamais rien : le bouton "Payer par carte"
+          // ne pouvait apparaitre pour PERSONNE meme avec Stripe actif. On passe par le profil.
+          supabase.from('parametres_integrations_public').select('provider, actif').eq('ecole_id', profile.ecole_id).in('provider', ['stripe', 'gocardless', 'paypal']),
           // Echeances : on masque les cheques en attente_reception (l'admin n'a pas encore confirme reception)
           supabase.from('cheques_prevus').select('*').eq('facture_id', fact.id).neq('statut', 'attente_reception').order('date_echeance', { ascending: true }),
         ])

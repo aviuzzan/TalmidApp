@@ -71,6 +71,10 @@ export default function FamillesPage() {
     }
 
     const [{ data: fam }, { data: mds }, { data: trs }] = await Promise.all([
+      // `select('*')` rapporte déjà `douteux` (xxxx2), exploité par la pastille
+      // rouge de la colonne « Famille ». On garde l'étoile : cet écran et sa
+      // modale d'édition rapide lisent une trentaine de colonnes de `familles`,
+      // les énumérer ici reviendrait à en perdre au premier oubli.
       supabase.from('familles').select('*').eq('ecole_id', ecole.id).order('date_creation', { ascending: false }),
       supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
       supabase.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecole.id).order('ordre'),
@@ -259,7 +263,19 @@ export default function FamillesPage() {
                 onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ padding: '13px 16px', fontFamily: 'monospace', fontSize: 12, color: '#94A3B8' }}>{f.numero}</td>
-                <td style={{ padding: '13px 16px', fontWeight: 600, color: '#1E293B' }}>{f.nom}</td>
+                <td style={{ padding: '13px 16px', fontWeight: 600, color: '#1E293B' }}>
+                  {f.nom}
+                  {/* CRÉANCE DOUTEUSE (xxxx2) : pastille discrète — le détail
+                      (depuis quand, motif) est sur la fiche famille. Ici il
+                      s'agit seulement de repérer le dossier dans la liste. */}
+                  {f.douteux && (
+                    <span
+                      title={`Créance douteuse${f.douteux_depuis ? ' depuis le ' + new Date(f.douteux_depuis).toLocaleDateString('fr-FR') : ''}${f.douteux_motif ? ' — Motif : ' + f.douteux_motif : ''}`}
+                      style={{ marginLeft: 8, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: 6, padding: '1px 7px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      Douteux
+                    </span>
+                  )}
+                </td>
                 <td style={{ padding: '13px 16px' }}>
                   {(() => {
                     const t = tranchesList.find((x: any) => x.id === f.tranche_id)

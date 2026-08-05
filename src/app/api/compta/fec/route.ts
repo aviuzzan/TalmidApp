@@ -38,6 +38,17 @@
  * RÈGLE STRUCTURANTE : on ne fabrique JAMAIS un numéro de compte. S'il manque
  * une imputation, on refuse le fichier avec un message précis. Un faux numéro
  * dans un fichier réglementaire est pire que pas de fichier du tout.
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ * xxxx2 — CRÉANCES DOUTEUSES (4161)
+ * ──────────────────────────────────────────────────────────────────────────
+ * Une famille marquée `familles.douteux` voit sa créance présentée sur le
+ * compte de la clé `creance_douteuse` (4161) au lieu de la clé `client` (411),
+ * dans les TROIS journaux qui la touchent : débit VE, crédit BQ, crédit OD des
+ * avoirs imputés. Compte auxiliaire inchangé (même tiers), montants inchangés.
+ * La bascule N'EST PAS datée par facture : le statut courant est appliqué à
+ * tout l'exercice exporté — simplification assumée, documentée sur la fonction
+ * `compteCreance` et signalée dans l'en-tête X-FEC-Avertissements.
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
