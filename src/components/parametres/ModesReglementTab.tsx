@@ -115,9 +115,17 @@ export default function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
     if (editingId !== m.id) return null
     const type = m.type
     const showOrdre = type === 'cheque'
-    const showIban = type !== 'cheque' && type !== 'sepa' // virement, espèces n'en ont pas besoin mais on laisse
+    // FIX 05/08 : stripe et gocardless n'ont rien a faire avec un IBAN — leurs cles
+    // vivent dans Parametres > Integrations. On ne montre que les instructions au parent.
+    const isIntegration = type === 'stripe' || type === 'gocardless'
+    const showIban = !isIntegration && type !== 'cheque' && type !== 'sepa' // virement, espèces n'en ont pas besoin mais on laisse
     return (
       <div style={{ marginTop: 12, padding: 14, background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {isIntegration && (
+          <div style={{ fontSize: 12, color: '#64748B', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '8px 12px' }}>
+            Les clés et le paramétrage technique se gèrent dans <strong>Paramètres → Intégrations</strong>. Ici, seules les instructions affichées au parent sont configurables.
+          </div>
+        )}
         {showOrdre && (
           <div>
             <label style={lblSty}>À l'ordre de</label>
@@ -175,7 +183,11 @@ export default function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
     if (c.ordre_cheque) bits.push(`ordre : ${c.ordre_cheque}`)
     if (c.iban) bits.push(`IBAN : ${c.iban.slice(0, 8)}…`)
     if (c.conditions) bits.push('instructions ✓')
-    return bits.length === 0 ? '⚠️ non configuré' : bits.join(' · ')
+    if (bits.length === 0) {
+      // stripe/gocardless : la config vit dans Intégrations, rien d'alarmant ici
+      return (m.type === 'stripe' || m.type === 'gocardless') ? 'géré via Paramètres → Intégrations' : '⚠️ non configuré'
+    }
+    return bits.join(' · ')
   }
 
   return (
