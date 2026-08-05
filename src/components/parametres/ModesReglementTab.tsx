@@ -33,10 +33,17 @@ export default function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editConfig, setEditConfig] = useState<ModeConfig>({})
+  // FIX 05/08 : "Bientot" etait code en dur sur GoCardless et Carte bancaire alors
+  // que les integrations existent. Le badge devient dynamique : le mode est activable
+  // des que l'integration correspondante est active dans Parametres > Integrations.
+  const [integrationsActives, setIntegrationsActives] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     createClient().from('modes_reglement_ecole').select('*').eq('ecole_id', ecoleId).order('ordre').then(({ data }) => {
       setModes(data ?? [])
+    })
+    createClient().from('parametres_integrations_public').select('provider, actif').eq('ecole_id', ecoleId).then(({ data }) => {
+      setIntegrationsActives(new Set((data ?? []).filter((i: any) => i.actif).map((i: any) => i.provider)))
     })
   }, [ecoleId])
 
@@ -179,26 +186,29 @@ export default function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {TYPES_SYSTEME.map(t => {
             const existing = modes.find(m => m.type === t.value)
+            // Le mode reste grise tant que l'integration correspondante n'est pas
+            // active dans Parametres > Integrations ; des qu'elle l'est, il devient activable.
+            const comingSoon = !!t.comingSoon && !integrationsActives.has(t.value)
             return (
-              <div key={t.value} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 18px', opacity: t.comingSoon ? 0.6 : 1 }}>
+              <div key={t.value} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 18px', opacity: comingSoon ? 0.6 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ fontSize: 18 }}>{t.icon}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', display: 'flex', alignItems: 'center', gap: 8 }}>
                       {t.label}
-                      {t.comingSoon && <span style={{ fontSize: 10, background: '#FEF3C7', color: '#D97706', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Bientôt</span>}
+                      {comingSoon && <span style={{ fontSize: 10, background: '#FEF3C7', color: '#D97706', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Intégration requise</span>}
                     </div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
-                      {existing ? configResume(existing) : t.desc}
+                      {existing ? configResume(existing) : (comingSoon ? `${t.desc} — activez d'abord l'intégration dans Paramètres → Intégrations` : t.desc)}
                     </div>
                   </div>
-                  {!t.comingSoon && existing && (
+                  {!comingSoon && existing && (
                     <button onClick={() => ouvrirConfig(existing)}
                       style={{ fontSize: 12, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 500 }}>
                       ⚙ Configurer
                     </button>
                   )}
-                  {!t.comingSoon && (existing ? (
+                  {!comingSoon && (existing ? (
                     <button onClick={() => toggle(existing.id, existing.actif)} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', background: existing.actif ? '#2563EB' : '#CBD5E1', position: 'relative', transition: 'all 0.2s' }}>
                       <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: existing.actif ? 23 : 3, transition: 'all 0.2s' }} />
                     </button>
