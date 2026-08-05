@@ -91,8 +91,10 @@ export async function POST(req: NextRequest) {
           if (dejaLa?.id) {
             reglementId = dejaLa.id
           } else {
+            // FIX 05/08 : la table reglements n'a PAS de colonne ecole_id (l'ecole se
+            // deduit de famille_id). L'insert echouait en 42703 -> webhook en 500,
+            // paiement encaisse chez Stripe mais jamais enregistre dans TalmidApp.
             const { data: regl, error: reglErr } = await supabaseAdmin.from('reglements').insert({
-              ecole_id: ecoleId,
               facture_id: factureId,
               famille_id: pe?.famille_id || meta.famille_id || null,
               montant: montantEuros,

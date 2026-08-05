@@ -73,8 +73,8 @@ export default function FactureDetailPage() {
     if (!isFinite(montant) || montant <= 0) { toast.error('Montant invalide'); return }
     setSaving(true)
     const s = createClient()
+    // FIX 05/08 : reglements n'a pas de colonne ecole_id (l'insert echouait en 42703)
     const { error } = await s.from('reglements').insert({
-      ecole_id: ecole.id,
       facture_id: factureId,
       famille_id: facture.famille_id,
       montant,

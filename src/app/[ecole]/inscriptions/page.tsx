@@ -948,8 +948,8 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
 
     // 3) Créer le règlement si pas de doublon
     if (!reglementExistant) {
+      // FIX 05/08 : reglements n'a pas de colonne ecole_id (l'insert echouait en 42703)
       const { error: errIns } = await s.from('reglements').insert({
-        ecole_id: ecoleId,
         facture_id: facture.id,
         famille_id: ech.famille_id,
         montant: Number(ech.montant) || 0,

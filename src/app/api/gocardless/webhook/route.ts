@@ -126,8 +126,8 @@ export async function POST(req: NextRequest) {
             if (dejaLa?.id) {
               reglementId = dejaLa.id
             } else {
+              // FIX 05/08 : reglements n'a pas de colonne ecole_id (42703 -> webhook en echec)
               const { data: regl, error: reglErr } = await sb.from('reglements').insert({
-                ecole_id: pe.ecole_id,
                 facture_id: pe.facture_id,
                 famille_id: pe.famille_id,
                 montant: montantEuros,
