@@ -52,6 +52,63 @@ export async function POST(req: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object
         const sessionId = session.id as string
+
+        // yyyy3 : session en mode "setup" = enregistrement de carte pour le
+        // prélèvement automatique (mandat), PAS un paiement. On enregistre le
+        // mandat depuis la vérité Stripe (setup_intent -> payment_method).
+        if (session.mode === 'setup') {
+          const meta = session.metadata || {}
+          const familleId = meta.famille_id
+          const ecoleIdSetup = meta.ecole_id || ecole.id
+          if (!familleId) {
+            console.error('[stripe webhook] setup sans famille_id en metadata')
+            return NextResponse.json({ received: true, warning: 'setup sans famille_id' })
+          }
+          const integ = await getIntegration(ecoleIdSetup, 'stripe')
+          const sk = integ?.secrets?.secret_key
+          if (!sk) return NextResponse.json({ received: false, error: 'secret_key manquante' }, { status: 500 })
+
+          const { retrieveSetupIntent, retrievePaymentMethod } = await import('@/lib/stripe')
+          const si = await retrieveSetupIntent(sk, session.setup_intent as string)
+          const pmId = si?.payment_method
+          if (!pmId) return NextResponse.json({ received: false, error: 'payment_method absent du setup_intent' }, { status: 500 })
+          const pm = await retrievePaymentMethod(sk, pmId)
+
+          const { error: upErr } = await supabaseAdmin.from('mandats_cb').upsert({
+            ecole_id: ecoleIdSetup,
+            famille_id: familleId,
+            stripe_customer_id: (session.customer as string) || si.customer,
+            stripe_payment_method_id: pmId,
+            carte_marque: pm?.card?.brand || null,
+            carte_last4: pm?.card?.last4 || null,
+            carte_exp_mois: pm?.card?.exp_month || null,
+            carte_exp_annee: pm?.card?.exp_year || null,
+            statut: 'actif',
+            echecs_consecutifs: 0,
+            derniere_erreur: null,
+            active_par: meta.profile_id || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'ecole_id,famille_id' })
+          if (upErr) {
+            console.error('[stripe webhook] upsert mandat failed:', upErr.message)
+            return NextResponse.json({ received: false, error: 'upsert mandat failed' }, { status: 500 })
+          }
+
+          // Bascule les échéances FUTURES non réglées de la famille en mode CB —
+          // SAUF les chèques (des chèques physiques peuvent déjà être entre les
+          // mains de l'école : les prélever en plus = double encaissement).
+          const { error: swErr } = await supabaseAdmin.from('cheques_prevus')
+            .update({ mode_paiement: 'stripe' })
+            .eq('famille_id', familleId)
+            .eq('statut', 'prevu')
+            .gte('date_echeance', new Date().toISOString().slice(0, 10))
+            // NULL != 'cheque' est NULL en SQL : .neq exclurait les modes non renseignés
+            .or('mode_paiement.is.null,mode_paiement.neq.cheque')
+            .is('report_solde_id', null)
+          if (swErr) console.error('[stripe webhook] bascule echeances mandat:', swErr.message)
+
+          return NextResponse.json({ received: true, mandat: true })
+        }
         const paymentIntentId = session.payment_intent as string | null
         const amountTotal = Number(session.amount_total) || 0
         const meta = session.metadata || {}

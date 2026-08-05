@@ -599,6 +599,8 @@ export default function FamilleDetailPage() {
               {famille.douteux_motif ? <> · Motif : <strong>{famille.douteux_motif}</strong></> : null}
             </div>
           )}
+          {/* yyyy3 : statut du prélèvement automatique CB (mandat Stripe) */}
+          {accesFinancesProfile && <MandatCbBloc familleId={id} />}
         </div>
         {canAdministratif && exercicesDispo.length > 0 && (
           <BoutonReinscription familleId={id} ecoleSlug={ecole.slug} exercicesDisponibles={exercicesDispo} />
@@ -1190,6 +1192,77 @@ export default function FamilleDetailPage() {
 }
 
 // ── Menu Actions compact (dropdown) ──
+/**
+ * yyyy3 — Bloc compact "Prélèvement CB automatique" sur la fiche famille.
+ * Affiche le statut du mandat (carte enregistrée par le parent) et permet :
+ * inviter la famille par email, suspendre / réactiver le mandat.
+ */
+function MandatCbBloc({ familleId }: { familleId: string }) {
+  const [mandat, setMandat] = useState<any | undefined>(undefined) // undefined = chargement
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const charger = useCallback(async () => {
+    const s = createClient()
+    const { data } = await s.from('mandats_cb')
+      .select('statut, carte_marque, carte_last4, derniere_erreur, echecs_consecutifs')
+      .eq('famille_id', familleId).maybeSingle()
+    setMandat(data ?? null)
+  }, [familleId])
+  useEffect(() => { charger() }, [charger])
+
+  async function action(a: 'inviter' | 'suspendre' | 'reactiver') {
+    setBusy(true); setMsg('')
+    try {
+      const s = createClient()
+      const { data: { session } } = await s.auth.getSession()
+      if (!session) return
+      const res = await fetch('/api/admin/mandat-cb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ familleId, action: a }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setMsg('⚠️ ' + (data.error || 'Erreur')); return }
+      setMsg(a === 'inviter' ? '✓ Invitation envoyée' : '✓ Fait')
+      await charger()
+    } finally {
+      setBusy(false)
+      setTimeout(() => setMsg(''), 5000)
+    }
+  }
+
+  if (mandat === undefined) return null
+  const btn: React.CSSProperties = { border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }
+  return (
+    <div style={{ fontSize: 11, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ fontWeight: 700, color: '#475569' }}>🔁 Prélèvement CB :</span>
+      {!mandat && <>
+        <span style={{ color: '#94A3B8' }}>non activé</span>
+        <button style={{ ...btn, background: '#EFF6FF', color: '#1E40AF' }} disabled={busy} onClick={() => action('inviter')}>✉ Inviter la famille</button>
+      </>}
+      {mandat?.statut === 'actif' && <>
+        <span style={{ color: '#065F46', background: '#ECFDF5', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
+          actif · {mandat.carte_marque || 'carte'} •••• {mandat.carte_last4}
+        </span>
+        <button style={{ ...btn, background: '#FEF2F2', color: '#991B1B' }} disabled={busy} onClick={() => action('suspendre')}>Suspendre</button>
+      </>}
+      {mandat?.statut === 'suspendu' && <>
+        <span style={{ color: '#991B1B', background: '#FEF2F2', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
+          suspendu{mandat.derniere_erreur ? ` · ${mandat.derniere_erreur}` : ''}
+        </span>
+        <button style={{ ...btn, background: '#ECFDF5', color: '#065F46' }} disabled={busy} onClick={() => action('reactiver')}>Réactiver</button>
+        <button style={{ ...btn, background: '#EFF6FF', color: '#1E40AF' }} disabled={busy} onClick={() => action('inviter')}>✉ Inviter à mettre à jour la carte</button>
+      </>}
+      {mandat?.statut === 'revoque' && <>
+        <span style={{ color: '#94A3B8' }}>révoqué par la famille</span>
+        <button style={{ ...btn, background: '#EFF6FF', color: '#1E40AF' }} disabled={busy} onClick={() => action('inviter')}>✉ Ré-inviter</button>
+      </>}
+      {msg && <span style={{ color: msg.startsWith('✓') ? '#065F46' : '#991B1B' }}>{msg}</span>}
+    </div>
+  )
+}
+
 function ActionsMenu({ items, onNav }: { items: { label: string; href: string }[]; onNav: (href: string) => void }) {
   const [open, setOpen] = useState(false)
   return (

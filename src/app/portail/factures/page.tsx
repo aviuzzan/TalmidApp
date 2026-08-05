@@ -36,6 +36,9 @@ export default function PortailFacturesPage() {
   const [gocardlessActif, setGocardlessActif] = useState(false)
   const [paypalActif, setPaypalActif] = useState(false)
   const [paying, setPaying] = useState(false)
+  // yyyy3 : mandat de prélèvement automatique par carte
+  const [mandatCb, setMandatCb] = useState<any>(null)
+  const [mandatBusy, setMandatBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setErreur(false)
@@ -49,6 +52,14 @@ export default function PortailFacturesPage() {
       if (!profile?.famille_id) return
 
       // Avoirs : tous exercices confondus (un avoir peut etre emis sur N et utilise sur N+1)
+      // Mandat de prélèvement automatique CB (RLS : le parent lit le sien)
+      const { data: mnd } = await supabase
+        .from('mandats_cb')
+        .select('statut, carte_marque, carte_last4, carte_exp_mois, carte_exp_annee')
+        .eq('famille_id', profile.famille_id)
+        .maybeSingle()
+      setMandatCb(mnd ?? null)
+
       const { data: avs } = await supabase
         .from('avoirs_solde').select('*')
         .eq('famille_id', profile.famille_id)
@@ -141,6 +152,27 @@ export default function PortailFacturesPage() {
     } catch (e: any) {
       alert(e?.message || 'Erreur paiement')
       setPaying(false)
+    }
+  }
+
+  async function gererMandat(action: 'activer' | 'revoquer') {
+    if (action === 'revoquer' && !confirm('Désactiver le prélèvement automatique ? Vous devrez régler vos échéances manuellement.')) return
+    setMandatBusy(true)
+    try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { alert('Session expirée'); return }
+      const res = await fetch('/api/stripe/mandat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'Erreur'); return }
+      if (action === 'activer' && data.url) { window.location.href = data.url; return }
+      await load()
+    } finally {
+      setMandatBusy(false)
     }
   }
 
@@ -391,6 +423,52 @@ export default function PortailFacturesPage() {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+          {/* yyyy3 : prélèvement automatique par carte (mandat) */}
+          {!parent.estSeparee && stripeActif && (
+            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>🔁 Prélèvement automatique par carte</div>
+              {mandatCb?.statut === 'actif' ? (
+                <>
+                  <div style={{ fontSize: 13, color: '#065F46', background: '#ECFDF5', borderRadius: 8, padding: '8px 12px' }}>
+                    ✓ Activé — carte {mandatCb.carte_marque || ''} •••• {mandatCb.carte_last4}
+                    {mandatCb.carte_exp_mois ? ` (exp. ${String(mandatCb.carte_exp_mois).padStart(2, '0')}/${mandatCb.carte_exp_annee})` : ''}.
+                    Vos échéances sont prélevées automatiquement à leur date.
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button onClick={() => gererMandat('activer')} disabled={mandatBusy}
+                      style={{ background: '#fff', color: '#1E40AF', border: '1px solid #1E40AF', borderRadius: 8, padding: '9px 16px', minHeight: 40, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      Changer de carte
+                    </button>
+                    <button onClick={() => gererMandat('revoquer')} disabled={mandatBusy}
+                      style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 8, padding: '9px 16px', minHeight: 40, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      Désactiver
+                    </button>
+                  </div>
+                </>
+              ) : mandatCb?.statut === 'suspendu' ? (
+                <>
+                  <div style={{ fontSize: 13, color: '#991B1B', background: '#FEF2F2', borderRadius: 8, padding: '8px 12px' }}>
+                    ⚠️ Suspendu après plusieurs échecs de prélèvement{mandatCb.derniere_erreur ? ` (${mandatCb.derniere_erreur})` : ''}. Mettez à jour votre carte pour le réactiver.
+                  </div>
+                  <button onClick={() => gererMandat('activer')} disabled={mandatBusy} className="btn-primary"
+                    style={{ minHeight: 44, fontSize: 13, fontWeight: 700, alignSelf: 'flex-start' }}>
+                    {mandatBusy ? 'Redirection…' : 'Mettre à jour ma carte'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+                    Enregistrez votre carte une seule fois (page sécurisée Stripe) : chaque mensualité de votre échéancier
+                    sera ensuite prélevée automatiquement à sa date. Plus rien à penser, ni chèques ni virements.
+                  </div>
+                  <button onClick={() => gererMandat('activer')} disabled={mandatBusy} className="btn-primary"
+                    style={{ minHeight: 44, fontSize: 13, fontWeight: 700, alignSelf: 'flex-start' }}>
+                    {mandatBusy ? 'Redirection…' : 'Activer le prélèvement automatique'}
+                  </button>
+                </>
+              )}
             </div>
           )}
           {facture.statut === 'partiel' && Number(facture.solde_restant) > 0 && (

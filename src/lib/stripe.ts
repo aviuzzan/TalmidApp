@@ -89,6 +89,102 @@ export async function retrieveCheckoutSession(secretKey: string, sessionId: stri
   return stripeFetch(secretKey, `/checkout/sessions/${sessionId}`)
 }
 
+// ------------------------------------------------------------------
+// yyyy3 — Prelevement automatique par carte (mandat + off-session)
+// ------------------------------------------------------------------
+
+/** Cree un customer Stripe pour une famille (sur le compte Stripe de l'ecole). */
+export async function createCustomer(secretKey: string, p: { email: string; name: string; metadata?: Record<string, string> }): Promise<{ id: string }> {
+  const body = encodeForm({ email: p.email, name: p.name, metadata: p.metadata || {} })
+  const c = await stripeFetch(secretKey, '/customers', { method: 'POST', body })
+  return { id: c.id }
+}
+
+/**
+ * Session Checkout en mode "setup" : le parent enregistre sa carte pour usage
+ * futur hors session (prelevements automatiques). Aucun paiement immediat.
+ */
+export async function createSetupCheckoutSession(p: {
+  secretKey: string
+  customerId: string
+  successUrl: string
+  cancelUrl: string
+  metadata?: Record<string, string>
+}): Promise<{ id: string; url: string }> {
+  const body = encodeForm({
+    mode: 'setup',
+    payment_method_types: ['card'],
+    customer: p.customerId,
+    success_url: p.successUrl,
+    cancel_url: p.cancelUrl,
+    setup_intent_data: { metadata: p.metadata || {} },
+    metadata: p.metadata || {},
+  })
+  const session = await stripeFetch(p.secretKey, '/checkout/sessions', { method: 'POST', body })
+  return { id: session.id, url: session.url }
+}
+
+export async function retrieveSetupIntent(secretKey: string, setupIntentId: string): Promise<any> {
+  return stripeFetch(secretKey, `/setup_intents/${setupIntentId}`)
+}
+
+export async function retrievePaymentMethod(secretKey: string, paymentMethodId: string): Promise<any> {
+  return stripeFetch(secretKey, `/payment_methods/${paymentMethodId}`)
+}
+
+export async function detachPaymentMethod(secretKey: string, paymentMethodId: string): Promise<any> {
+  return stripeFetch(secretKey, `/payment_methods/${paymentMethodId}/detach`, { method: 'POST', body: '' })
+}
+
+/**
+ * Prelevement off-session sur une carte enregistree (mandat).
+ * confirm:true + off_session:true — Stripe repond de maniere synchrone :
+ * soit succeeded, soit une erreur (carte refusee, authentification requise...).
+ * La cle d'idempotence garantit qu'un rejeu de cron ne debite jamais deux fois.
+ */
+export async function createOffSessionPayment(p: {
+  secretKey: string
+  customerId: string
+  paymentMethodId: string
+  montantCentimes: number
+  description: string
+  idempotencyKey: string
+  metadata?: Record<string, string>
+}): Promise<{ ok: true; id: string; status: string } | { ok: false; error: string; code?: string; paymentIntentId?: string }> {
+  const body = encodeForm({
+    amount: p.montantCentimes,
+    currency: 'eur',
+    customer: p.customerId,
+    payment_method: p.paymentMethodId,
+    off_session: 'true',
+    confirm: 'true',
+    description: p.description,
+    metadata: p.metadata || {},
+  })
+  const res = await fetch(`${STRIPE_API}/payment_intents`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${p.secretKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Idempotency-Key': p.idempotencyKey,
+    },
+    body,
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: data?.error?.message || `Stripe ${res.status}`,
+      code: data?.error?.code || data?.error?.decline_code,
+      paymentIntentId: data?.error?.payment_intent?.id,
+    }
+  }
+  if (data.status !== 'succeeded') {
+    return { ok: false, error: `Statut inattendu : ${data.status}`, code: data.status, paymentIntentId: data.id }
+  }
+  return { ok: true, id: data.id, status: data.status }
+}
+
 /**
  * Vérifie la signature d'un webhook Stripe (ré-implémentation minimale).
  * https://stripe.com/docs/webhooks/signatures
