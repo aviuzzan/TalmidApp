@@ -56,6 +56,8 @@ export default function FamilleDetailPage() {
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
   const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
+  // eeee1 (audit module 4, P1-1) : liste restreinte pour la reinscription 1 clic
+  const [exercicesReinscr, setExercicesReinscr] = useState<{ id: string; code: string; libelle?: string }[]>([])
   const [nPlus1, setNPlus1] = useState<{ exercice: { id: string; code: string; libelle?: string }; contrat: any | null; nbScolarites: number } | null>(null)
   const [tranches, setTranches] = useState<{ id: string; code: string; libelle: string }[]>([])
 
@@ -140,9 +142,19 @@ export default function FamilleDetailPage() {
     setFamille(fam); setEnfants(enf ?? []); setClasses(cls ?? [])
     setTransports(trp ?? []); setModesPaiement(modes ?? []); setTarifs(tar ?? [])
 
-    const { data: exs } = await supabase.from('exercices').select('id, code, libelle').eq('ecole_id', ecole.id).order('code', { ascending: false })
-    const exList = (exs ?? []) as { id: string; code: string; libelle?: string }[]
+    const { data: exs } = await supabase.from('exercices').select('id, code, libelle, statut').eq('ecole_id', ecole.id).order('code', { ascending: false })
+    const exList = (exs ?? []) as { id: string; code: string; libelle?: string; statut?: string }[]
     setExercicesDispo(exList)
+
+    // eeee1 (audit module 4, P1-1) : la reinscription 1 clic proposait des annees
+    // deja contractees par la famille (TESTAUDIT se voyait offrir 2026-2027 dont
+    // le contrat etait valide). On ne propose que les exercices non clotures et
+    // SANS contrat actif (statut != annule) pour cette famille ; s'il n'en reste
+    // aucun, le bouton n'est pas affiche.
+    const { data: contratsFam } = await supabase.from('contrats_scolarisation')
+      .select('exercice_id, annee_scolaire, statut').eq('famille_id', id).neq('statut', 'annule')
+    const dejaContractees = new Set((contratsFam ?? []).flatMap((c: any) => [c.exercice_id, c.annee_scolaire].filter(Boolean)))
+    setExercicesReinscr(exList.filter(ex => ex.statut !== 'cloture' && !dejaContractees.has(ex.id) && !dejaContractees.has(ex.code)))
 
     const { data: tr } = await supabase.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecole.id).order('ordre')
     setTranches((tr ?? []) as { id: string; code: string; libelle: string }[])
@@ -602,8 +614,8 @@ export default function FamilleDetailPage() {
           {/* yyyy3 : statut du prélèvement automatique CB (mandat Stripe) */}
           {accesFinancesProfile && <MandatCbBloc familleId={id} />}
         </div>
-        {canAdministratif && exercicesDispo.length > 0 && (
-          <BoutonReinscription familleId={id} ecoleSlug={ecole.slug} exercicesDisponibles={exercicesDispo} />
+        {canAdministratif && exercicesReinscr.length > 0 && (
+          <BoutonReinscription familleId={id} ecoleSlug={ecole.slug} exercicesDisponibles={exercicesReinscr} />
         )}
         <ActionsMenu items={[
           { label: '📁 Documents',         href: `/${ecole.slug}/familles/${id}/documents` },

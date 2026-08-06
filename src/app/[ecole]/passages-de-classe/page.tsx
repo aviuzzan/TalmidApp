@@ -266,6 +266,13 @@ export default function PassagesDeClassePage() {
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
           Chargement des élèves…
         </div>
+      ) : !cibleExId ? (
+        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+          {/* eeee1 (audit module 4) : la liste ne se charge qu'avec une annee CIBLE choisie.
+              L'ancien message « Aucun eleve inscrit dans l'annee source » etait faux et
+              trompeur tant que la cible n'etait pas selectionnee. */}
+          Choisissez une <strong>année cible</strong> pour préparer la montée pédagogique.
+        </div>
       ) : (!memeExercice && groupes.length === 0) ? (
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
           Aucun élève inscrit dans l’année source.
