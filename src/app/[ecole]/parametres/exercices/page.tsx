@@ -6,7 +6,6 @@ import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
 import {
-import { appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
   Exercice,
   statutLabel,
   statutColor,
@@ -15,6 +14,7 @@ import { appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
   cloturerExercice,
   rouvrirExercice,
 } from '@/lib/exercice'
+import { appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 export default function ExercicesPage() {
   const router = useRouter()
