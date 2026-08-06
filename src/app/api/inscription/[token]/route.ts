@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { cleInterne } from '@/lib/internal-auth'
 
 /**
  * API publique de la demande d'inscription (acces par token, sans compte).
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         await fetch(`${baseUrl}/api/notify-admin`, {
           method: 'POST',
           // FIX secu 27/07 : appel serveur→serveur — clé interne pour l'auth de notify-admin
-          headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.SUPABASE_SERVICE_ROLE_KEY! },
+          headers: { 'Content-Type': 'application/json', 'x-internal-key': cleInterne() },
           body: JSON.stringify({
             ecole_id: dem.ecole_id,
             type: 'demande_inscription',

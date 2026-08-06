@@ -103,6 +103,18 @@ export default function ParametresPage() {
   const anneeActive = useAnneeScolaireActive()
   const [annee, setAnnee] = useState(anneeActive)
   const choixManuel = useRef(false)
+  // cccc4 (M10) : `ecole?.id` est une dependance obligatoire. Sans elle, une
+  // navigation interne entre /{ecoleA}/parametres et /{ecoleB}/parametres sans
+  // demontage React (l'App Router sait le faire quand seul le segment dynamique
+  // change) reporterait le choix manuel de l'ecole A sur l'ecole B — exactement
+  // l'incident de surfacturation decrit ci-dessus. Aujourd'hui EspaceSwitcher
+  // fait un rechargement complet, donc le chemin n'existe pas : c'est un
+  // garde-fou, pas un correctif de bug actif.
+  useEffect(() => {
+    choixManuel.current = false
+    setAnnee(anneeActive)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ecole?.id])
   useEffect(() => {
     if (!choixManuel.current) setAnnee(anneeActive)
   }, [anneeActive])

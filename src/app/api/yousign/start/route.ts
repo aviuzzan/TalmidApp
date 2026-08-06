@@ -36,6 +36,30 @@ export async function POST(req: NextRequest) {
     if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
+    // FIX secu cccc4 (C6) : le test de role manquait. Tout compte de l'ecole,
+    // parent compris, pouvait lancer une signature electronique juridiquement
+    // engageante sur le contrat d'une AUTRE famille, en se designant signataire
+    // (signerEmail / contratId / documentId venaient du body sans controle).
+    if (!['admin', 'super_admin'].includes(caller?.role || '')) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu cccc4 (C6, suite) : IDOR. On verifie que le document vise
+    // appartient bien a l'ecole passee en parametre.
+    if (contratId) {
+      const { data: c } = await sb.from('contrats_scolarisation')
+        .select('id, ecole_id').eq('id', contratId).maybeSingle()
+      if (!c) return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
+      if (c.ecole_id !== ecoleId) {
+        return NextResponse.json({ error: 'Contrat hors de cette école' }, { status: 403 })
+      }
+    }
+    if (documentId) {
+      const { data: d } = await sb.from('documents_famille')
+        .select('id, ecole_id').eq('id', documentId).maybeSingle()
+      if (d && d.ecole_id !== ecoleId) {
+        return NextResponse.json({ error: 'Document hors de cette école' }, { status: 403 })
+      }
+    }
 
     const integration = await getIntegration(ecoleId, 'yousign')
     if (!integration) return NextResponse.json({ error: 'YouSign non activé' }, { status: 400 })

@@ -32,11 +32,26 @@ export async function POST(req: NextRequest) {
     const { orderId } = await req.json()
     if (!orderId) return NextResponse.json({ error: 'orderId requis' }, { status: 400 })
 
+    // FIX secu cccc4 (C6) : la route n'avait AUCUNE authentification. Toute
+    // personne connaissant un orderId (il circule dans l'URL de retour PayPal,
+    // donc dans l'historique du navigateur, les logs proxy et le Referer)
+    // pouvait declencher la capture et l'ecriture d'un reglement en base.
+    // On aligne le contrat sur /api/paypal/checkout : Bearer token obligatoire
+    // + verification que la commande appartient bien a la famille appelante.
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+    if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+    if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles').select('id, role, ecole_id, famille_id').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Profil introuvable' }, { status: 403 })
 
     // Retrouve le paiement créé à l'étape checkout
     const { data: paiement, error: paiementErr } = await supabaseAdmin
@@ -51,6 +66,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lecture du paiement impossible : ' + paiementErr.message }, { status: 500 })
     }
     if (!paiement) return NextResponse.json({ error: 'Paiement introuvable' }, { status: 404 })
+
+    // FIX secu cccc4 (C6) : etancheite. Le parent ne capture que SA commande ;
+    // un compte staff ne capture que dans SON ecole. Meme message d'erreur que
+    // « introuvable » n'apporterait rien ici : le 403 est explicite cote UI.
+    const estStaffDeLEcole =
+      profile.role === 'super_admin' ||
+      (['admin', 'agent'].includes(profile.role || '') && profile.ecole_id === paiement.ecole_id)
+    const estSaFamille = !!profile.famille_id && profile.famille_id === paiement.famille_id
+    if (!estStaffDeLEcole && !estSaFamille) {
+      return NextResponse.json({ error: 'Paiement non rattaché à votre famille' }, { status: 403 })
+    }
+
     // FIX audit 24/07/2026 pt 13 : la garde comparait 'paid' alors que le statut
     // ecrit est 'succeeded' -> garde inoperante, double capture possible
     if (paiement.statut === 'succeeded' || paiement.statut === 'paid') {

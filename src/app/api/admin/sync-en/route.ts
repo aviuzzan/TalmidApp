@@ -31,6 +31,14 @@ export async function POST(req: NextRequest) {
     if (!['admin', 'super_admin'].includes(caller?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
+    // FIX secu cccc4 (C6) : le controle tenant manquait. `ecoleId` venait du body
+    // et partait tel quel dans .eq('ecole_id', ecoleId) : un admin de l'ecole A
+    // exportait nom, prenom, date de naissance, adresse et INE des eleves de
+    // l'ecole B, plus les coordonnees de leurs parents. Meme motif que les
+    // autres routes /api/admin/*.
+    if (caller?.role !== 'super_admin' && caller?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
 
     if (direction === 'export') {
       // Charge les enfants ciblés (classe ou tous)

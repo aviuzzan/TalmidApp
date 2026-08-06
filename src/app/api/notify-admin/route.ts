@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { estAppelInterne } from '@/lib/internal-auth'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
 
 /**
@@ -53,8 +54,7 @@ export async function POST(req: NextRequest) {
     // FIX secu 27/07 : route auparavant sans auth — accepté si
     // (a) appel serveur→serveur avec x-internal-key, ou
     // (b) user authentifié appartenant à l'école ciblée (un parent peut notifier ses admins)
-    const internalKey = req.headers.get('x-internal-key')
-    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    const isInternal = estAppelInterne(req)
     if (!isInternal) {
       const token = req.headers.get('Authorization')?.replace('Bearer ', '')
       if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })

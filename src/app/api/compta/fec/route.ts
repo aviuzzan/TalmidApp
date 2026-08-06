@@ -52,7 +52,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { chargerParLots } from '@/lib/pagination'
+import { chargerParLots, decouperEnTranches } from '@/lib/pagination'
 import { chargerImputations, type CleImputation } from '@/lib/comptabilite'
 
 function formatDate(d: string): string {
@@ -251,8 +251,14 @@ export async function GET(req: NextRequest) {
     // service_role, donc aucune RLS ne limite le volume. On pagine desormais par
     // lots de 1000 avec un tri DETERMINISTE (date + `id` unique en departage :
     // sans cle unique en fin de tri, deux lots peuvent se recouvrir ou sauter des
-    // ecritures). Le tri par date rend en prime la numerotation `EcritureNum`
-    // chronologique et stable d'un export a l'autre.
+    // ecritures) et STABLE d'un export a l'autre.
+    // cccc4 (M8) — precision : ce tri ne rend PAS `EcritureNum` chronologique.
+    // `ecritureNum` est un compteur global incremente dans l'ordre du code :
+    // toutes les factures, puis tous les reglements, puis tous les avoirs. Un
+    // reglement de septembre peut donc porter un numero superieur a une facture
+    // d'octobre. C'est conforme (numerotation globale croissante et unique,
+    // BOI-CF-IOR-60-40), mais l'ancien commentaire promettait une propriete
+    // chronologique qui n'est pas garantie.
     // Sur un export reglementaire, une lecture partielle NE DOIT PAS produire de
     // fichier : toute erreur ou troncature renvoie une 500 explicite.
     //
@@ -343,6 +349,49 @@ export async function GET(req: NextRequest) {
     const factures = resFactures.rows as any[]
     const reglements = resReglements.rows as any[]
     const avoirs = resAvoirs.rows as any[]
+
+    // ────────────────────────────────────────────────────────────────────
+    // FIX secu/compta cccc4 (G4) : la part IMPUTEE d'un avoir se lisait dans
+    // `avoirs.montant_utilise`, colonne qui n'est JAMAIS ecrite (ni par l'UI
+    // d'imputation, ni par l'imputation automatique, ni par aucune fonction
+    // Postgres). La verite est dans `avoirs_imputations`. Sur un avoir
+    // partiellement impute (statut 'partiellement_utilise'), le repli
+    // `statut === 'utilise'` ne s'appliquait pas : impute valait 0, le FEC
+    // creditait 0 EUR au 411/4161 et la totalite au 4197, alors qu'une partie
+    // avait deja reduit la dette. Le fichier restait equilibre (le debit vaut
+    // toujours le montant total), donc le garde-fou d'equilibre ne voyait rien :
+    // c'etait une erreur de REPARTITION entre comptes, silencieuse.
+    const imputeParAvoir = new Map<string, number>()
+    if (avoirs.length > 0) {
+      const idsAvoirs = avoirs.map(a => String(a.id)).filter(Boolean)
+      // `.in(...)` passe par l'URL : on decoupe pour ne pas la faire exploser.
+      for (const tranche of decouperEnTranches(idsAvoirs)) {
+        const resImputations = await chargerParLots((from, to) => supa
+          .from('avoirs_imputations')
+          .select('avoir_id, montant')
+          .in('avoir_id', tranche)
+          .order('avoir_id', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to))
+        if (resImputations.error) {
+          return NextResponse.json(
+            { error: `Lecture avoirs_imputations en echec, export FEC interrompu (la repartition 411/4197 des avoirs serait fausse) : ${resImputations.error}` },
+            { status: 500 },
+          )
+        }
+        if (resImputations.tronque) {
+          return NextResponse.json(
+            { error: 'Volume avoirs_imputations superieur au garde-fou de pagination : export FEC interrompu. Restreindre la periode demandee.' },
+            { status: 500 },
+          )
+        }
+        for (const imp of resImputations.rows as any[]) {
+          const k = String(imp?.avoir_id || '')
+          if (!k) continue
+          imputeParAvoir.set(k, (imputeParAvoir.get(k) || 0) + enCentimes(imp?.montant))
+        }
+      }
+    }
 
     /** id de compte -> { code, libelle }. */
     const comptesParId = new Map<string, CompteFec>()
@@ -608,13 +657,15 @@ export async function GET(req: NextRequest) {
       const m = enCentimes(a.montant)
       if (m === 0) continue
 
-      // `statut` sert de garde-fou sur les lignes anciennes : un avoir marqué
-      // 'utilise' dont `montant_utilise` serait resté à NULL est intégralement
-      // imputé, et son montant doit créditer le client — pas le compte
-      // d'attente. Sans ce repli, une donnée héritée reproduirait exactement le
-      // bug qu'on corrige ici.
+      // cccc4 (G4) : la part imputée vient de la somme réelle des lignes de
+      // `avoirs_imputations`. `montant_utilise` n'est conservé qu'en repli pour
+      // d'éventuelles lignes historiques antérieures à la table d'imputations,
+      // et `statut = 'utilise'` reste le dernier filet : un avoir marqué
+      // totalement utilisé sans aucune trace d'imputation est intégralement
+      // imputé, et son montant doit créditer le client — pas le compte d'attente.
       const statutAvoir = String(a.statut || '').toLowerCase()
-      const utiliseBrut = enCentimes(a.montant_utilise)
+      const imputeReel = imputeParAvoir.get(String(a.id)) || 0
+      const utiliseBrut = imputeReel > 0 ? imputeReel : enCentimes(a.montant_utilise)
       const impute = statutAvoir === 'utilise' && utiliseBrut <= 0
         ? m
         : Math.min(Math.max(utiliseBrut, 0), m)

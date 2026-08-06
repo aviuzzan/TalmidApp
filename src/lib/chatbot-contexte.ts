@@ -218,7 +218,10 @@ async function contexteAdmin(
     { data: ecoleData },
   ] = await Promise.all([
     supabase.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecoleId),
-    supabase.from('enfants').select('*', { count: 'exact', head: true }),
+    // FIX secu cccc4 (G7) : le filtre ecole manquait. Le client est service_role
+    // (RLS contournee par conception), donc rien ne rattrapait l'oubli : Levy
+    // repondait a l'admin de l'ecole A avec les effectifs des 2 ecoles cumules.
+    supabase.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecoleId),
     supabase.from('classes').select('id, nom, niveau, capacite').eq('ecole_id', ecoleId).order('ordre'),
     supabase.from('ecoles').select('nom, adresse, telephone, email, siren, code_uai').eq('id', ecoleId).single(),
   ])
@@ -250,9 +253,11 @@ async function contexteAdmin(
   // ====================================================================
   // ENFANTS PAR CLASSE
   // ====================================================================
+  // FIX secu cccc4 (G7) : idem, la repartition par classe melangeait les 2 ecoles.
   const { data: enfantsParClasse } = await supabase
     .from('enfants')
     .select('classe_nom, statut')
+    .eq('ecole_id', ecoleId)
     .order('classe_nom')
 
   if (enfantsParClasse && enfantsParClasse.length > 0) {
@@ -307,10 +312,20 @@ async function contexteAdmin(
   // BLOC FINANCIER (uniquement si acces finances)
   // ====================================================================
   if (accesFinances) {
-    const { data: factures } = await supabase
-      .from('factures_solde')
-      .select('total_facture, total_regle, solde_restant, statut')
-      .neq('statut', 'annule')
+    // FIX secu cccc4 (G7, suite) : « Finances globales ecole » cumulait en
+    // realite les 2 ecoles. `factures_solde` n'a pas de colonne ecole_id : on
+    // restreint via les familles de l'ecole. Le client est service_role, donc
+    // aucune RLS ne rattrape l'oubli.
+    const { data: famillesEcole } = await supabase
+      .from('familles').select('id').eq('ecole_id', ecoleId)
+    const idsFamillesEcole = (famillesEcole || []).map((f: any) => f.id)
+    const { data: factures } = idsFamillesEcole.length > 0
+      ? await supabase
+          .from('factures_solde')
+          .select('total_facture, total_regle, solde_restant, statut')
+          .in('famille_id', idsFamillesEcole)
+          .neq('statut', 'annule')
+      : { data: [] as any[] }
 
     if (factures && factures.length > 0) {
       const totalFacture = factures.reduce((s: number, f: any) => s + Number(f.total_facture || 0), 0)

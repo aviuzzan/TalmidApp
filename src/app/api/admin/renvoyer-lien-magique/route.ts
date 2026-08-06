@@ -26,9 +26,33 @@ export async function POST(req: NextRequest) {
     const { data: { user: caller } } = await supabaseAdmin.auth.getUser(token)
     if (!caller) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     const { data: callerProfile } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', caller.id).single()
+      .from('profiles').select('role, ecole_id').eq('id', caller.id).single()
     if (!['admin', 'super_admin'].includes(callerProfile?.role)) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+    // FIX secu cccc4 (G8) : le controle tenant manquait. `ecoleId`, `familleId`
+    // et `email` venaient du body : un admin pouvait declencher un lien de
+    // recuperation vers n'importe quel compte de la plateforme, avec le template
+    // d'une ecole qu'il ne gere pas, et enumerer les comptes (404 si inconnu).
+    // Meme controle que la route soeur envoyer-lien-inscription.
+    if (callerProfile?.role !== 'super_admin' && callerProfile?.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
+    }
+    // La famille visee doit appartenir a l'ecole annoncee, et l'email doit etre
+    // celui d'un compte rattache a cette famille.
+    const { data: familleCible } = await supabaseAdmin
+      .from('familles').select('id, ecole_id, email').eq('id', familleId).maybeSingle()
+    if (!familleCible || familleCible.ecole_id !== ecoleId) {
+      return NextResponse.json({ error: 'Famille introuvable dans cette école' }, { status: 404 })
+    }
+    const { data: profilsFamille } = await supabaseAdmin
+      .from('profiles').select('email').eq('famille_id', familleId)
+    const emailsFamille = [
+      ...(profilsFamille || []).map(p => p.email),
+      familleCible.email,
+    ].map(e => (e || '').toLowerCase().trim()).filter(Boolean)
+    if (!emailsFamille.includes((email || '').toLowerCase().trim())) {
+      return NextResponse.json({ error: 'Cet email n\'est pas rattaché à cette famille' }, { status: 403 })
     }
 
     // Vérifier que ce parent existe bien

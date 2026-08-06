@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { estAppelInterne } from '@/lib/internal-auth'
 import { sendEmail, isEmailConfigured } from '@/lib/email'
 
 /**
@@ -29,8 +30,7 @@ export async function POST(req: NextRequest) {
     // (a) appel serveur→serveur avec x-internal-key, ou
     // (b) user authentifié dont le profil appartient à l'école du thread (vérifié après chargement du thread)
     let callerProfile: any = null
-    const internalKey = req.headers.get('x-internal-key')
-    const isInternal = !!internalKey && internalKey === process.env.SUPABASE_SERVICE_ROLE_KEY
+    const isInternal = estAppelInterne(req)
     if (!isInternal) {
       const token = req.headers.get('Authorization')?.replace('Bearer ', '')
       if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })

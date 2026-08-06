@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useI18n } from '@/lib/i18n'
+import { createClient } from '@/lib/supabase'
 
 export default function PaiementSuccessPage() {
   const { t } = useI18n()
@@ -19,9 +20,21 @@ export default function PaiementSuccessPage() {
     if (provider === 'paypal' && paypalToken) {
       ;(async () => {
         try {
+          // FIX secu cccc4 (C6) : /api/paypal/capture exige desormais le jeton
+          // de la session. Sans lui, n'importe qui connaissant l'orderId (il est
+          // dans l'URL de retour PayPal) pouvait declencher la capture.
+          const { data: { session } } = await createClient().auth.getSession()
+          if (!session) {
+            setStatut('erreur')
+            setErreur(t('portail.paiement.success.error_fallback'))
+            return
+          }
           const res = await fetch('/api/paypal/capture', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + session.access_token,
+            },
             body: JSON.stringify({ orderId: paypalToken }),
           })
           const data = await res.json()

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const { data: { user: caller } } = await sb.auth.getUser(authToken)
     if (!caller) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     const { data: callerProfile } = await sb
-      .from('profiles').select('role, ecole_id, famille_id').eq('id', caller.id).single()
+      .from('profiles').select('role, ecole_id, famille_id, acces_finances').eq('id', caller.id).single()
 
     // Charger la famille
     const { data: famille } = await sb
@@ -57,6 +57,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Accès refusé à cette école' }, { status: 403 })
     }
 
+    // FIX secu cccc4 (G2) : le verrou finances etait ignore ici. Un compte staff
+    // prive d'acces finances recuperait factures, lignes, reglements et cheques
+    // d'une famille par un simple POST, sans passer par l'UI. Le parent, lui,
+    // a toujours droit a ses propres donnees financieres (RGPD art. 20).
+    const accesFinances = isOwnParent
+      || callerProfile?.role === 'super_admin'
+      || callerProfile?.acces_finances !== false
+
     // Charger les données liées
     const [
       { data: enfants },
@@ -71,16 +79,16 @@ export async function POST(req: NextRequest) {
       { data: ecole },
     ] = await Promise.all([
       sb.from('enfants').select('*').eq('famille_id', familleId),
-      sb.from('factures').select('*').eq('famille_id', familleId),
-      sb.from('facture_lignes').select('*, factures!inner(famille_id)').eq('factures.famille_id', familleId),
-      sb.from('reglements').select('*').eq('famille_id', familleId),
-      sb.from('cheques').select('*').eq('famille_id', familleId),
+      accesFinances ? sb.from('factures').select('*').eq('famille_id', familleId) : { data: [] },
+      accesFinances ? sb.from('facture_lignes').select('*, factures!inner(famille_id)').eq('factures.famille_id', familleId) : { data: [] },
+      accesFinances ? sb.from('reglements').select('*').eq('famille_id', familleId) : { data: [] },
+      accesFinances ? sb.from('cheques').select('*').eq('famille_id', familleId) : { data: [] },
       sb.from('documents_famille').select('*').eq('famille_id', familleId),
       sb.from('scolarites').select('*').eq('famille_id', familleId),
       sb.from('inscriptions_pedagogiques').select('*').eq('famille_id', familleId),
       sb.from('contrats_scolarisation').select('*').eq('famille_id', familleId),
       sb.from('ecoles').select('id, nom, adresse, email_contact, telephone').eq('id', famille.ecole_id).single(),
-    ])
+    ]) as any[]
 
     const now = new Date().toISOString()
     const exportObj = {
