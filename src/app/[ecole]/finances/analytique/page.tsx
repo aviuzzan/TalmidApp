@@ -172,11 +172,14 @@ export default function AnalytiquePage() {
         .range(debut, fin)),
       chargerParLots<any>((debut, fin) => s
         .from('tarifs_secteur')
-        .select('id, nom_poste')
+        .select('id, nom_poste, secteur_id')
         .eq('ecole_id', ecole.id)
         .order('id', { ascending: true })
         .range(debut, fin)),
     ])
+    // AUDIT P2 (06/08/2026) — « postes homonymes » : libellés des secteurs pour
+    // distinguer les postes tarifaires qui portent le même nom (voir plus bas).
+    const { data: secteursData } = await s.from('secteurs').select('id, nom').eq('ecole_id', ecole.id)
 
     // Une erreur RLS ne lève pas d'exception sur ce projet : on teste
     // `error` explicitement, sinon la page afficherait 0 € en silence.
@@ -211,10 +214,26 @@ export default function AnalytiquePage() {
       activites[String(sec.id)] = String(label)
     }
 
+    // AUDIT P2 (06/08/2026) — « postes homonymes » : la vue « par poste » agrège
+    // par tarif_id mais n'affichait que nom_poste. Or plusieurs tarifs portent
+    // légitimement le même nom (un « Frais de scolarité » par secteur : Maternelle,
+    // Primaire, Collège…) → l'écran alignait des lignes strictement identiques,
+    // impossibles à distinguer. Quand un nom de poste est porté par plusieurs
+    // tarifs, on suffixe le secteur : « Frais de scolarité — Primaire ».
+    const secteurNoms: Record<string, string> = {}
+    for (const sec of secteursData ?? []) secteurNoms[String(sec.id)] = String(sec.nom || '')
+    const occurrencesNom: Record<string, number> = {}
+    for (const t of resTarifs.rows as any[]) {
+      if (!t?.id) continue
+      const nom = String(t.nom_poste || t.id)
+      occurrencesNom[nom] = (occurrencesNom[nom] || 0) + 1
+    }
     const postes: Record<string, string> = {}
     for (const t of resTarifs.rows as any[]) {
       if (!t?.id) continue
-      postes[String(t.id)] = String(t.nom_poste || t.id)
+      const nom = String(t.nom_poste || t.id)
+      const secteur = t.secteur_id ? secteurNoms[String(t.secteur_id)] : ''
+      postes[String(t.id)] = occurrencesNom[nom] > 1 && secteur ? `${nom} — ${secteur}` : nom
     }
 
     setLignes((resLignes.rows as any[]).map(l => ({

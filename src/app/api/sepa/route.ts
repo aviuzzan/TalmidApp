@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser(token)
     if (!user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
 
-    const { ecoleId, dateEncaissement, anneeScolaire } = await req.json()
+    const { ecoleId, dateEncaissement, anneeScolaire, dateStr: dateStrBody } = await req.json()
 
     // Vérifier que l'appelant est admin
     // FIX secu 27/07 : le select inclut ecole_id pour le check tenant
@@ -35,11 +35,23 @@ export async function POST(req: NextRequest) {
     const { data: ecole } = await supabase.from('ecoles').select('nom, ics_sepa, nom_creancier, iban_ecole, bic_ecole').eq('id', ecoleId).single()
     if (!ecole) return NextResponse.json({ error: 'École introuvable' }, { status: 404 })
 
-    // Récupérer tous les chèques SEPA pour cette date
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = String(today.getMonth() + 1).padStart(2, '0')
-    const dateStr = `${year}-${month}-${String(dateEncaissement).padStart(2, '0')}`
+    // Récupérer tous les chèques SEPA pour cette date.
+    //
+    // AUDIT P1 (06/08/2026) : cette route reconstruisait la date à partir du MOIS
+    // COURANT du serveur + le jour reçu, en ignorant le `dateStr` que l'écran
+    // envoyait déjà. Exporter un mois futur (ou passé) depuis l'écran générait donc
+    // le fichier du mois courant — mauvaises échéances marquées « exporté », fichier
+    // bancaire faux. La date exacte choisie à l'écran est désormais la référence.
+    let dateStr: string
+    if (typeof dateStrBody === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStrBody)) {
+      dateStr = dateStrBody
+    } else if (dateEncaissement != null) {
+      // Compat ancien client : jour seul → mois courant (comportement historique).
+      const today = new Date()
+      dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(dateEncaissement).padStart(2, '0')}`
+    } else {
+      return NextResponse.json({ error: 'Date de prélèvement manquante ou invalide' }, { status: 400 })
+    }
 
     const { data: cheques, error: chequesErr } = await supabase
       .from('cheques_prevus')

@@ -5,6 +5,13 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { chargerParLots } from '@/lib/pagination'
+// AUDIT P1 (06/08/2026) — sur-encaissement : le bordereau ignorait les règlements
+// déjà saisis (une famille ayant déjà payé par CB/virement restait proposée au dépôt
+// sans le moindre signal) et « Marquer déposé(s) » ne créait AUCUN règlement, donc
+// l'argent déposé en banque restait invisible des factures → relances à tort puis
+// double encaissement. Corrigé : reste dû affiché par chèque + dépôt via la brique
+// partagée lib/encaissement (règlement idempotent + statut).
+import { encaisserEcheance, soldesParFamille, calculerDepassement, bilanEncaissements, type SoldeFamille } from '@/lib/encaissement'
 
 type Cheque = {
   id: string
@@ -42,6 +49,8 @@ export default function BordereauPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [erreurChargement, setErreurChargement] = useState('')
+  const [soldes, setSoldes] = useState<Map<string, SoldeFamille>>(new Map())
+  const [deposeEnCours, setDeposeEnCours] = useState(false)
   // Exercice piloté par le sélecteur global (même source que /finances).
   const annee = useAnneeScolaireActive()
   const { loading: exerciceLoading } = useExercice()
@@ -95,6 +104,10 @@ export default function BordereauPage() {
     const lignes = ([...surContrat.rows, ...horsContrat.rows] as any[]).sort((a: any, b: any) =>
       String(a.date_echeance ?? '').localeCompare(String(b.date_echeance ?? '')))
     setCheques(lignes as any)
+    // AUDIT P1 : reste dû réel des familles listées (règlements + avoirs déduits)
+    // pour signaler les chèques d'une famille déjà soldée AVANT le dépôt.
+    const { soldes: sMap } = await soldesParFamille(s, lignes.map((c: any) => c.famille_id).filter(Boolean))
+    setSoldes(sMap)
     setLoading(false)
   }
 
@@ -113,22 +126,26 @@ export default function BordereauPage() {
   const fmt = (n: number) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
 
   const marquerDepose = async () => {
-    if (selectedCheques.length === 0) return
-    if (!confirm(`Marquer ${selectedCheques.length} chèque(s) comme déposé(s) ? (statut → encaisse)`)) return
-    const today = new Date().toISOString().split('T')[0]
-    // FIX audit 29/07/2026 : l'update de masse ne vérifiait PAS `error`. En cas d'échec
-    // (RLS, réseau, contrainte) l'écran se rechargeait sans rien dire et laissait croire
-    // que les chèques étaient déposés. On remonte désormais l'erreur et on garde la
-    // sélection intacte pour permettre une nouvelle tentative.
-    const { error } = await createClient()
-      .from('cheques_prevus')
-      .update({ statut: 'encaisse', encaisse_le: today })
-      .in('id', selectedCheques.map(c => c.id))
-    if (error) {
-      setErreurChargement(`Échec du marquage : aucun chèque n'a été mis à jour (${error.message})`)
-      return
-    }
-    setErreurChargement('')
+    if (selectedCheques.length === 0 || deposeEnCours) return
+    // AUDIT P1 : avertissement chiffré si le dépôt percevrait plus que le reste dû
+    // (règlements déjà saisis ignorés jusqu'ici = mécanisme du sur-encaissement).
+    const { total: depassement, familles: fDep } = calculerDepassement(selectedCheques, soldes)
+    const avert = depassement > 0
+      ? `\n\n⚠️ ATTENTION SUR-ENCAISSEMENT : ${fDep.length} famille(s) ont déjà des règlements saisis — ce dépôt percevrait ${fmt(depassement)} AU-DELÀ du reste dû. Vérifiez les lignes marquées en rouge avant de continuer.`
+      : ''
+    if (!confirm(`Marquer ${selectedCheques.length} chèque(s) comme déposé(s) ? Un règlement sera enregistré sur la facture de chaque chèque.${avert}`)) return
+    // FIX audit 29/07/2026 (conservé) : chaque étape est vérifiée et remontée — jamais
+    // d'écran qui laisse croire au dépôt réussi sur un échec silencieux.
+    // AUDIT P1 : le dépôt passe par la brique partagée : règlement créé (idempotent
+    // par référence, un re-clic ne double jamais) PUIS statut encaissé.
+    setDeposeEnCours(true)
+    const s = createClient()
+    const resultats = []
+    for (const c of selectedCheques) resultats.push(await encaisserEcheance(s, c as any))
+    setDeposeEnCours(false)
+    const echecs = resultats.filter(r => !r.ok)
+    setErreurChargement(echecs.length ? `Dépôt partiel — ${echecs.length} échec(s) : ${echecs[0].erreur}` : '')
+    alert(bilanEncaissements(resultats))
     setSelected(new Set())
     await load()
   }
@@ -159,9 +176,9 @@ export default function BordereauPage() {
             🖨 Imprimer
           </button>
           {selectedCheques.length > 0 && (
-            <button onClick={marquerDepose}
-              style={{ background: '#10B981', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-              ✓ Marquer déposé(s)
+            <button onClick={marquerDepose} disabled={deposeEnCours}
+              style={{ background: deposeEnCours ? '#94A3B8' : '#10B981', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 14px', cursor: deposeEnCours ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>
+              {deposeEnCours ? '⏳ Dépôt…' : '✓ Marquer déposé(s)'}
             </button>
           )}
         </div>
@@ -224,7 +241,7 @@ export default function BordereauPage() {
                 <th style={{ padding: '10px 12px', width: 40 }}>
                   <input type="checkbox" checked={selected.size === cheques.length && cheques.length > 0} onChange={toggleAll} />
                 </th>
-                {['N° chèque', 'Émetteur (Famille)', 'Montant', 'Échéance', 'Statut', 'Note'].map(h => (
+                {['N° chèque', 'Émetteur (Famille)', 'Montant', 'Reste dû famille', 'Échéance', 'Statut', 'Note'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '10px 12px', fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -246,10 +263,23 @@ export default function BordereauPage() {
                       <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'monospace' }}>{c.familles?.numero || '—'}</div>
                     </td>
                     <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700 }}>{fmt(c.montant)}</td>
+                    {/* AUDIT P1 : le reste dû réel de la famille face au chèque — rouge si
+                        la famille est déjà soldée ou si le chèque dépasse ce qu'elle doit. */}
+                    <td style={{ padding: '10px 12px', fontSize: 12 }}>
+                      {(() => {
+                        const sf = soldes.get(c.famille_id)
+                        if (!sf) return <span style={{ color: '#94A3B8' }}>—</span>
+                        const resteDu = Math.max(0, sf.soldeRestant)
+                        if (resteDu <= 0.009) return <span style={{ fontSize: 10, fontWeight: 700, color: '#DC2626', background: 'rgba(239,68,68,0.1)', padding: '3px 8px', borderRadius: 10 }}>⚠ Famille soldée</span>
+                        if (Number(c.montant) > resteDu + 0.009) return <span style={{ fontSize: 11, fontWeight: 700, color: '#DC2626' }}>{fmt(resteDu)} ⚠ chèque supérieur</span>
+                        return <span style={{ color: '#475569' }}>{fmt(resteDu)}</span>
+                      })()}
+                    </td>
                     <td style={{ padding: '10px 12px', fontSize: 12, color: '#475569' }}>{c.date_echeance ? new Date(c.date_echeance).toLocaleDateString('fr-FR') : '—'}</td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: c.statut === 'prevu' ? '#475569' : '#065F46', background: c.statut === 'prevu' ? '#F1F5F9' : '#ECFDF5', padding: '3px 8px', borderRadius: 10 }}>
-                        {c.statut === 'prevu' ? 'À encaisser' : c.statut === 'encaisse' ? 'Encaissé' : c.statut === 'rejete' ? 'Rejeté' : (c.statut.charAt(0).toUpperCase() + c.statut.slice(1))}
+                        {/* AUDIT P2 : plus de statut brut « Attente_reception » — libellés humains partout. */}
+                        {({ prevu: 'À encaisser', encaisse: 'Encaissé', rejete: 'Rejeté', attente_reception: 'À recevoir', restitue: 'Restitué', annule: 'Annulé' } as Record<string, string>)[c.statut] || c.statut}
                       </span>
                     </td>
                     <td style={{ padding: '10px 12px', fontSize: 11, color: '#64748B', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.note || ''}>{c.note || '—'}</td>

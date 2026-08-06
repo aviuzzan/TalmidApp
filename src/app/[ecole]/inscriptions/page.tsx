@@ -7,6 +7,7 @@ import { formatStatut } from '@/lib/inscriptions'
 import { getExerciceInscription } from '@/lib/annee-inscription'
 import { labelModePaiement } from '@/lib/statuts'
 import { creerFactureDepuisContrat } from '@/lib/facture-contrat'
+import { encaisserEcheance } from '@/lib/encaissement'
 import { logAction } from '@/lib/audit-log'
 import { chargerParLots } from '@/lib/pagination'
 import { useI18n } from '@/lib/i18n'
@@ -907,83 +908,23 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
    * Recalcul du statut facture : géré par la vue `factures_solde` (idéalement par un
    * trigger reglement_after_insert). Au cas où il n'existe pas, on recalcule ici.
    */
+  // AUDIT P1 (06/08/2026) : la logique (résolution facture → règlement idempotent →
+  // statut) vit désormais dans lib/encaissement (encaisserEcheance), partagée avec la
+  // fiche famille et le bordereau — trois écrans, UN seul circuit d'encaissement.
+  // Les règles historiques de cet écran sont conservées : contrat exigé, facture
+  // exigée (pas d'encaissement « statut seulement » ici), rollback logique.
   async function encaisser(id: string) {
     const ech = allCheques.find(c => c.id === id)
     if (!ech) { toast.error('Échéance introuvable'); return }
     if (!ech.contrat_id) { toast.error('Impossible : aucun contrat rattaché à cette échéance'); return }
     if (!ech.famille_id) { toast.error('Impossible : aucune famille rattachée à cette échéance'); return }
 
-    const s = createClient()
     const today = new Date().toISOString().split('T')[0]
-    const anneeContrat = ech.contrats_scolarisation?.annee_scolaire || annee
-
-    // 1) Trouver la facture liée. Pas de FK directe : on passe par (famille, annee_scolaire).
-    // Si plusieurs factures matchent (rare), on prend la plus récente.
-    const { data: factures, error: errFact } = await s
-      .from('factures')
-      .select('id, montant_total, statut, annee_scolaire, date_emission')
-      .eq('famille_id', ech.famille_id)
-      .eq('annee_scolaire', anneeContrat)
-      .order('date_emission', { ascending: false })
-      .limit(5)
-    if (errFact) { toast.error('Erreur recherche facture : ' + errFact.message); return }
-    const facture = (factures && factures.length > 0) ? factures[0] : null
-    if (!facture) {
-      toast.error("Impossible : aucune facture rattachée au contrat de cette échéance")
-      return
-    }
-
-    // 2) Idempotence : règlement déjà existant pour (facture, mode, reference) ?
-    let reglementExistant: { id: string } | null = null
-    if (ech.numero_cheque) {
-      const { data: dejaLa } = await s
-        .from('reglements')
-        .select('id')
-        .eq('facture_id', facture.id)
-        .eq('mode_paiement', ech.mode_paiement || 'cheque')
-        .eq('reference', ech.numero_cheque)
-        .maybeSingle()
-      reglementExistant = dejaLa || null
-    }
-
-    // 3) Créer le règlement si pas de doublon
-    if (!reglementExistant) {
-      // FIX 05/08 : reglements n'a pas de colonne ecole_id (l'insert echouait en 42703)
-      const { error: errIns } = await s.from('reglements').insert({
-        facture_id: facture.id,
-        famille_id: ech.famille_id,
-        montant: Number(ech.montant) || 0,
-        date_reglement: today,
-        mode_paiement: ech.mode_paiement || 'cheque',
-        reference: ech.numero_cheque || null,
-        notes: `Encaissement échéance contrat #${ech.contrat_id}`,
-      })
-      if (errIns) {
-        // Rollback logique : on ne touche pas au statut de l'échéance.
-        toast.error('Encaissement impossible : ' + errIns.message)
-        return
-      }
-    }
-
-    // 4) Marquer l'échéance encaissée
-    const { error: errEch } = await s
-      .from('cheques_prevus')
-      .update({ statut: 'encaisse', encaisse_le: today })
-      .eq('id', id)
-    if (errEch) {
-      toast.error('Règlement créé mais MAJ échéance échouée : ' + errEch.message)
-      reload()
-      return
-    }
-
-    // 5) Recalcul statut facture (fallback si pas de trigger). On lit factures_solde
-    // (vue calculée) et on met à jour factures.statut en conséquence.
-    // FIX audit 27/07 : plus de recalcul manuel du statut facture ici — le trigger
-    // BDD trg_reglements_statut (recalc_statut_facture) est la source de verite
-    // unique et se declenche a l'insertion du reglement ci-dessus.
+    const r = await encaisserEcheance(createClient(), ech, { anneeFallback: annee, exigerFacture: true })
+    if (!r.ok) { toast.error('Encaissement impossible : ' + r.erreur); if (r.reglementCree) reload(); return }
 
     setAllCheques(p => p.map(c => c.id === id ? { ...c, statut: 'encaisse', encaisse_le: today } : c))
-    toast.success(reglementExistant ? 'Échéance marquée encaissée (règlement déjà existant)' : 'Échéance encaissée et règlement créé')
+    toast.success(r.dejaExistant ? 'Échéance marquée encaissée (règlement déjà existant)' : 'Échéance encaissée et règlement créé')
   }
 
   // Valider la reception physique d'un cheque : il devient alors visible/exploitable

@@ -3,6 +3,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+// AUDIT P1 (06/08/2026) — sur-encaissement : l'échéancier ignorait les règlements
+// déjà saisis, et « Encaisser » ne créait AUCUN règlement (statut seulement).
+// Les encaissements passent désormais par la brique partagée lib/encaissement
+// (même circuit que l'onglet Échéances des inscriptions), et l'écran affiche
+// le reste dû réel de la famille face au total de l'échéancier actif.
+import { encaisserEcheance, soldesParFamille, calculerDepassement, bilanEncaissements, type SoldeFamille } from '@/lib/encaissement'
 
 type Statut = 'attente_reception' | 'prevu' | 'encaisse' | 'rejete' | 'restitue' | 'annule'
 
@@ -62,18 +68,22 @@ export default function ChequesFamillePage() {
     montant_total: '', nb_echeances: '10', date_premiere: '',
     mode_paiement: 'cheque', facture_id: '', statut: 'attente_reception' as Statut,
   })
+  // Solde réel de la famille (factures non annulées, règlements + avoirs déduits).
+  const [solde, setSolde] = useState<SoldeFamille | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     const s = createClient()
-    const [{ data: f }, { data: chk }, { data: fact }] = await Promise.all([
+    const [{ data: f }, { data: chk }, { data: fact }, { soldes }] = await Promise.all([
       s.from('familles').select('nom').eq('id', familleId).single(),
       s.from('cheques_prevus').select('*').eq('famille_id', familleId).order('date_echeance', { ascending: true }),
       s.from('factures').select('id, numero, annee_scolaire').eq('famille_id', familleId).order('date_emission', { ascending: false }),
+      soldesParFamille(createClient(), [familleId]),
     ])
     if (f) setFamilleNom(f.nom || '')
     setCheques(chk || [])
     setFactures(fact || [])
+    setSolde(soldes.get(familleId) ?? null)
     setLoading(false)
   }, [familleId])
 
@@ -134,21 +144,56 @@ export default function ChequesFamillePage() {
     await load()
   }
 
+  // Texte d'alerte sur-encaissement pour un jeu d'échéances à encaisser (ou '' si RAS).
+  function avertissementDepassement(sel: Cheque[]): string {
+    if (!solde) return ''
+    const { total } = calculerDepassement(sel.map(c => ({ famille_id: familleId, montant: c.montant })), new Map([[familleId, solde]]))
+    if (total <= 0) return ''
+    return '\n\n⚠️ ATTENTION SUR-ENCAISSEMENT : la famille ne doit plus que ' + fmt(Math.max(0, solde.soldeRestant)) +
+      ' (règlements déjà saisis déduits). Cet encaissement percevrait ' + fmt(total) + ' AU-DELÀ du dû.'
+  }
+
   async function quickUpdateStatut(id: string, statut: Statut) {
+    // AUDIT P1 : « Encaisser » = créer le règlement (idempotent) + marquer encaissé,
+    // via la brique partagée — plus jamais un simple flip de statut invisible de la facture.
+    if (statut === 'encaisse') {
+      const c = cheques.find(x => x.id === id)
+      if (!c) return
+      const avert = avertissementDepassement([c])
+      if (avert && !confirm('Encaisser cette échéance de ' + fmt(c.montant) + ' ?' + avert)) return
+      setBusy(true)
+      const r = await encaisserEcheance(createClient(), { ...c, famille_id: familleId })
+      setBusy(false)
+      if (!r.ok) { alert('Encaissement impossible : ' + r.erreur); return }
+      if (r.sansFacture) alert('Échéance encaissée, mais AUCUNE facture liée : aucun règlement créé. Saisissez le règlement à la main sur la bonne facture.')
+      await load()
+      return
+    }
     const patch: any = { statut }
-    if (statut === 'encaisse') patch.encaisse_le = new Date().toISOString().split('T')[0]
     await createClient().from('cheques_prevus').update(patch).eq('id', id)
     await load()
   }
 
   async function bulkUpdate(fromStatuts: Statut[], toStatut: Statut, libelle: string) {
-    const ids = cheques.filter(c => fromStatuts.includes(c.statut)).map(c => c.id)
-    if (ids.length === 0) { alert('Aucune echeance concernee.'); return }
-    if (!confirm(libelle + ' : ' + ids.length + ' echeance(s) ?')) return
+    const sel = cheques.filter(c => fromStatuts.includes(c.statut))
+    if (sel.length === 0) { alert('Aucune echeance concernee.'); return }
+    // AUDIT P1 : « Tout encaisser » passe par la brique partagée (règlements créés,
+    // idempotence par référence) avec avertissement explicite en cas de dépassement du dû.
+    if (toStatut === 'encaisse') {
+      const avert = avertissementDepassement(sel)
+      if (!confirm(libelle + ' : ' + sel.length + ' echeance(s) ?' + avert)) return
+      setBusy(true)
+      const s = createClient()
+      const resultats = []
+      for (const c of sel) resultats.push(await encaisserEcheance(s, { ...c, famille_id: familleId }))
+      setBusy(false)
+      alert(bilanEncaissements(resultats))
+      await load()
+      return
+    }
+    if (!confirm(libelle + ' : ' + sel.length + ' echeance(s) ?')) return
     setBusy(true)
-    const patch: any = { statut: toStatut }
-    if (toStatut === 'encaisse') patch.encaisse_le = TODAY
-    const { error } = await createClient().from('cheques_prevus').update(patch).in('id', ids)
+    const { error } = await createClient().from('cheques_prevus').update({ statut: toStatut }).in('id', sel.map(c => c.id))
     setBusy(false)
     if (error) { alert('Erreur : ' + error.message); return }
     await load()
@@ -253,7 +298,18 @@ export default function ChequesFamillePage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Cheques &amp; echeancier</h1>
           <p style={{ color: '#64748B', fontSize: 13, margin: '2px 0 0' }}>Famille {familleNom}</p>
         </div>
-        <button onClick={() => { setShowGen(v => !v); setShowForm(false) }}
+        <button onClick={() => {
+          // AUDIT P1 : le générateur est pré-rempli avec le RESTE DÛ réel
+          // (règlements et avoirs déjà saisis déduits), plus jamais un champ vide
+          // qui invitait à ressaisir le montant du contrat déjà partiellement payé.
+          setShowGen(v => {
+            if (!v && !gen.montant_total && solde && solde.soldeRestant > 0) {
+              setGen(g => ({ ...g, montant_total: String(Math.round(solde.soldeRestant * 100) / 100) }))
+            }
+            return !v
+          })
+          setShowForm(false)
+        }}
           style={{ background: showGen ? '#F1F5F9' : '#fff', color: '#1E293B', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
           Generer un echeancier
         </button>
@@ -262,6 +318,29 @@ export default function ChequesFamillePage() {
           + Ajouter une echeance
         </button>
       </div>
+
+      {/* AUDIT P1 — l'échéancier face au réel : facturé / déjà réglé / reste dû.
+          Alerte rouge si les échéances actives dépassent le reste dû (sur-encaissement). */}
+      {solde && (() => {
+        const actif = cheques.filter(c => c.statut === 'prevu' || c.statut === 'attente_reception')
+          .reduce((s, c) => s + Number(c.montant), 0)
+        const resteDu = Math.max(0, solde.soldeRestant)
+        const exces = Math.round((actif - resteDu) * 100) / 100
+        return (
+          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+            <div><span style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Facturé</span><div style={{ fontWeight: 700 }}>{fmt(solde.totalFacture)}</div></div>
+            <div><span style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Déjà réglé (règlements + avoirs)</span><div style={{ fontWeight: 700, color: '#065F46' }}>{fmt(solde.totalRegle)}</div></div>
+            <div><span style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Reste dû</span><div style={{ fontWeight: 700, color: resteDu > 0 ? '#1E293B' : '#065F46' }}>{fmt(resteDu)}</div></div>
+            <div><span style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Échéancier actif</span><div style={{ fontWeight: 700 }}>{fmt(actif)}</div></div>
+            {exces > 0.009 && (
+              <div style={{ flex: 1, minWidth: 260, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', color: '#991B1B', fontWeight: 600 }}>
+                ⚠️ Sur-encaissement : l&apos;échéancier actif dépasse le reste dû de <strong>{fmt(exces)}</strong>.
+                Des règlements ont déjà été saisis — régénérez l&apos;échéancier sur le reste dû ou annulez les échéances en trop.
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {montantRetard > 0 && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#991B1B' }}>
@@ -336,6 +415,13 @@ export default function ChequesFamillePage() {
           {gen.montant_total && gen.nb_echeances && (
             <div style={{ fontSize: 12, color: '#1E40AF', background: '#EFF6FF', borderRadius: 8, padding: '8px 12px', marginTop: 12 }}>
               ~ {fmt((parseFloat(gen.montant_total) || 0) / (parseInt(gen.nb_echeances) || 1))} par echeance &middot; {gen.nb_echeances} echeances mensuelles
+            </div>
+          )}
+          {/* AUDIT P1 : garde-fou visuel — le total saisi dépasse le reste dû réel. */}
+          {solde && gen.montant_total && (parseFloat(gen.montant_total) || 0) > Math.max(0, solde.soldeRestant) + 0.009 && (
+            <div style={{ fontSize: 12, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 12px', marginTop: 8, fontWeight: 600 }}>
+              ⚠️ Ce total dépasse le reste dû de la famille ({fmt(Math.max(0, solde.soldeRestant))}) de {fmt((parseFloat(gen.montant_total) || 0) - Math.max(0, solde.soldeRestant))}.
+              Des règlements ont déjà été saisis sur les factures : échelonner ce montant conduirait à un sur-encaissement.
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>

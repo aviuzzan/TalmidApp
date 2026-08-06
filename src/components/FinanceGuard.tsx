@@ -5,24 +5,33 @@
  * (ex: familles/[id]/compte, inscriptions/contrat). Pour un dossier sans shell,
  * l'envelopper soi-meme : <EcoleAppLayout><FinanceGuard>{children}</FinanceGuard></EcoleAppLayout>.
  *
- * Regle identique au layout finances : super_admin toujours OK, sinon
- * profiles.acces_finances !== false. Redirige vers le dashboard sinon.
+ * Regle identique partout : super_admin toujours OK, sinon profiles.acces_finances !== false.
+ *
+ * AUDIT P2 (06/08/2026) — « redirections muettes » : la garde redirigeait
+ * automatiquement vers le dashboard, le message de refus ne restait affiche que
+ * quelques millisecondes. Vecu utilisateur (constate sur le compte demo.gestion) :
+ * clic sur un lien financier → retour silencieux au tableau de bord, sans jamais
+ * comprendre pourquoi. La garde AFFICHE desormais l'ecran de refus, avec le motif
+ * et un bouton de retour — plus aucune redirection automatique.
+ * Seule exception : pas de session → page de connexion (rien a expliquer a un
+ * utilisateur deconnecte).
  */
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 
-export default function FinanceGuard({ children }: { children: React.ReactNode }) {
+export default function FinanceGuard({ children, message }: { children: React.ReactNode; message?: string }) {
   const router = useRouter()
   const ecole = useEcole()
   const [autorise, setAutorise] = useState<boolean | null>(null)
+  const [sansSession, setSansSession] = useState(false)
 
   useEffect(() => {
     ;(async () => {
       const s = createClient()
       const { data: { session } } = await s.auth.getSession()
-      if (!session) { setAutorise(false); return }
+      if (!session) { setSansSession(true); setAutorise(false); return }
       const { data: p } = await s.from('profiles')
         .select('role, acces_finances')
         .eq('id', session.user.id)
@@ -33,15 +42,24 @@ export default function FinanceGuard({ children }: { children: React.ReactNode }
   }, [])
 
   useEffect(() => {
-    if (autorise === false && ecole?.slug) router.replace(`/${ecole.slug}/dashboard`)
-  }, [autorise, ecole?.slug, router])
+    if (sansSession && ecole?.slug) router.replace(`/${ecole.slug}/login`)
+  }, [sansSession, ecole?.slug, router])
 
   if (autorise === null) return <div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div>
   if (autorise === false) return (
     <div style={{ padding: 60, textAlign: 'center' }}>
       <div style={{ fontSize: 36 }}>🔒</div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B', marginTop: 12 }}>Accès finances non accordé</h2>
-      <p style={{ fontSize: 13, color: '#64748B', marginTop: 6 }}>Redirection vers le tableau de bord…</p>
+      <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, maxWidth: 460, margin: '6px auto 0', lineHeight: 1.6 }}>
+        {message || 'Cette page contient des données financières et votre compte n\'a pas l\'accès finances.'}
+        {' '}L&apos;accès s&apos;accorde par l&apos;administrateur principal dans Configuration → Comptes &amp; accès.
+      </p>
+      {ecole?.slug && (
+        <button onClick={() => router.push(`/${ecole.slug}/dashboard`)}
+          style={{ marginTop: 18, background: '#1E293B', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          ← Retour au tableau de bord
+        </button>
+      )}
     </div>
   )
   return <>{children}</>

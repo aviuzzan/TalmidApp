@@ -29,6 +29,8 @@ const MODULES_BY_CATEGORY: Record<string, ModuleEntry[]> = {
     { nom: 'Compta analytique', href: 'finances/analytique', module: 'compta' },
     // FIX nav llll2 : la page SEPA vivait sous /inscriptions -> la sidebar basculait sur Administration
     { nom: 'Export SEPA', href: 'finances/sepa', module: 'compta' },
+    // AUDIT P2 : Clôture d'exercice reliée à la nav Finances (route vivante mais orpheline).
+    { nom: 'Clôture d\'exercice', href: 'finances/cloture', module: 'compta' },
     { nom: 'Paie enseignants', href: 'paie', module: 'paye' },
   ],
   pedagogie: [

@@ -36,6 +36,10 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'compta', nom: 'Rapprochement bancaire', description: 'Importer un relevé bancaire et rapprocher les recettes contre les impayés', icone: '🏦', href: 'finances/rapprochement' },
     { code: 'compta', nom: 'Compta analytique', description: 'Ventilation par centre de coût', icone: '📈', href: 'finances/analytique' },
     { code: 'compta', nom: 'Export SEPA', description: 'Générer un fichier de prélèvement bancaire', icone: '🏦', href: 'finances/sepa' },
+    // AUDIT P2 (06/08/2026) — « routes mortes » : la page Clôture d'exercice existait
+    // mais n'était reliée à AUCUNE navigation du module Finances (atteignable
+    // uniquement via Paramètres → Exercices) : une route vivante devenue invisible.
+    { code: 'compta', nom: 'Clôture d\'exercice', description: 'Contrôles de fin d\'année et clôture comptable', icone: '🔏', href: 'finances/cloture' },
     { code: 'paye', nom: 'Paie enseignants', description: 'Bulletins de paie + déclaration DSN mensuelle', icone: '💵', href: 'paie' },
   ],
   pedagogie: [
@@ -164,6 +168,22 @@ export default function CategoryHub({ code }: { code: string }) {
           </p>
         </div>
       </div>
+
+      {/* AUDIT P2 (06/08/2026) — « hub verrouillé » : sans accès finances, le hub
+          Finances affichait 9 cartes cadenassées identiques (« Accès non accordé »)
+          sans jamais dire POURQUOI ni comment débloquer. Le motif est désormais
+          affiché une fois, clairement, en tête de grille. */}
+      {!accesFinances && role !== 'super_admin' &&
+        modules.some(m => ['facturation', 'compta', 'paye'].includes(m.code) || m.href === 'direction') && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 20 }}>🔒</span>
+          <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.6 }}>
+            <strong>Verrou finances actif sur votre compte</strong> — les modules financiers ci-dessous sont
+            verrouillés car votre compte n&apos;a pas l&apos;accès aux données financières (montants, factures, paie).
+            Cet accès s&apos;accorde par l&apos;administrateur principal dans Configuration → Comptes &amp; accès.
+          </div>
+        </div>
+      )}
 
       {/* Grille de cards — largeur égale, remplit la ligne */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
