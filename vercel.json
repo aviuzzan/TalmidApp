@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "regions": ["cdg1"],
   "crons": [
     { "path": "/api/cron/relances-auto", "schedule": "0 8 * * *" },
     { "path": "/api/cron/messages-cleanup", "schedule": "30 3 * * *" },
