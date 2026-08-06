@@ -73,6 +73,19 @@ export default function IntegrationsPage() {
 
   async function save(p: ProviderKey, payload: any) {
     setSaving(true); setMsg('')
+    // gggg1 (audit module 7) : Chrome autofillait l'email et le MOT DE PASSE
+    // enregistres du navigateur dans ces champs (constate en audit sur le champ
+    // Publishable Key). En plus des attributs autoComplete poses sur les inputs,
+    // on valide le format des cles Stripe pour empecher la sauvegarde
+    // d'identifiants personnels comme cles de paiement.
+    if (p === 'stripe') {
+      const pk = payload?.publicConfig?.publishable_key
+      if (pk && !/^pk_(live|test)_/.test(pk)) { setSaving(false); setMsg('Erreur : la Publishable Key doit commencer par pk_live_ ou pk_test_'); return }
+      const sk = payload?.secrets?.secret_key
+      if (sk && !/^(sk|rk)_(live|test)_/.test(sk)) { setSaving(false); setMsg('Erreur : la Secret Key doit commencer par sk_live_ ou sk_test_'); return }
+      const wh = payload?.secrets?.webhook_secret
+      if (wh && !/^whsec_/.test(wh)) { setSaving(false); setMsg('Erreur : le Webhook Signing Secret doit commencer par whsec_'); return }
+    }
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     if (!session) { setSaving(false); return }
@@ -196,18 +209,18 @@ export default function IntegrationsPage() {
             </div>
             <div>
               <label style={label}>Publishable Key (pk_live_... ou pk_test_...)</label>
-              <input type="text" value={stripeForm.publishable_key} onChange={e => setStripeForm(f => ({ ...f, publishable_key: e.target.value }))} placeholder="pk_live_..." style={inp} />
+              <input type="text" autoComplete="off" value={stripeForm.publishable_key} onChange={e => setStripeForm(f => ({ ...f, publishable_key: e.target.value }))} placeholder="pk_live_..." style={inp} />
               <div style={hint}>Visible côté front, copie depuis https://dashboard.stripe.com/apikeys</div>
             </div>
             <div>
               <label style={label}>Secret Key (sk_live_... ou sk_test_...)</label>
-              <input type="password" value={stripeForm.secret_key} onChange={e => setStripeForm(f => ({ ...f, secret_key: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={stripeForm.secret_key} onChange={e => setStripeForm(f => ({ ...f, secret_key: e.target.value }))}
                 placeholder={meta?.hints.secret_key ? `Configurée (****${meta.hints.secret_key}) — laissez vide pour ne pas changer` : 'sk_live_...'} style={inp} />
               <div style={hint}>Chiffrée AES-256 avant stockage. Ne jamais partager.</div>
             </div>
             <div>
               <label style={label}>Webhook Signing Secret (whsec_...)</label>
-              <input type="password" value={stripeForm.webhook_secret} onChange={e => setStripeForm(f => ({ ...f, webhook_secret: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={stripeForm.webhook_secret} onChange={e => setStripeForm(f => ({ ...f, webhook_secret: e.target.value }))}
                 placeholder={meta?.hints.webhook_secret ? `Configurée (****${meta.hints.webhook_secret})` : 'whsec_...'} style={inp} />
               <div style={hint}>
                 Dans Stripe Dashboard → Developers → Webhooks → Ajouter un endpoint :
@@ -246,18 +259,18 @@ export default function IntegrationsPage() {
             </div>
             <div>
               <label style={label}>Creditor ID (CR000xxxx)</label>
-              <input type="text" value={gcForm.creditor_id} onChange={e => setGcForm(f => ({ ...f, creditor_id: e.target.value }))} placeholder="CR000..." style={inp} />
+              <input type="text" autoComplete="off" value={gcForm.creditor_id} onChange={e => setGcForm(f => ({ ...f, creditor_id: e.target.value }))} placeholder="CR000..." style={inp} />
               <div style={hint}>Trouvé dans GoCardless Dashboard → Settings → Account.</div>
             </div>
             <div>
               <label style={label}>Access Token</label>
-              <input type="password" value={gcForm.access_token} onChange={e => setGcForm(f => ({ ...f, access_token: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={gcForm.access_token} onChange={e => setGcForm(f => ({ ...f, access_token: e.target.value }))}
                 placeholder={meta?.hints.access_token ? `Configuré (****${meta.hints.access_token})` : 'live_...'} style={inp} />
               <div style={hint}>Dashboard → Developers → Create access token (permissions Read & Write).</div>
             </div>
             <div>
               <label style={label}>Webhook Secret</label>
-              <input type="password" value={gcForm.webhook_secret} onChange={e => setGcForm(f => ({ ...f, webhook_secret: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={gcForm.webhook_secret} onChange={e => setGcForm(f => ({ ...f, webhook_secret: e.target.value }))}
                 placeholder={meta?.hints.webhook_secret ? `Configuré (****${meta.hints.webhook_secret})` : 'webhook secret 64 chars'} style={inp} />
               <div style={hint}>
                 Dashboard → Developers → Webhook endpoints → Add :
@@ -295,7 +308,7 @@ export default function IntegrationsPage() {
             </div>
             <div>
               <label style={label}>Clé API YouSign (Bearer token)</label>
-              <input type="password" value={ysForm.api_key} onChange={e => setYsForm(f => ({ ...f, api_key: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={ysForm.api_key} onChange={e => setYsForm(f => ({ ...f, api_key: e.target.value }))}
                 placeholder={meta?.hints.api_key ? `Configurée (****${meta.hints.api_key})` : 'YouSign API key v3'} style={inp} />
               <div style={hint}>
                 YouSign Dashboard → Paramètres → API & Webhooks → Créer une clé API.<br/>
@@ -304,7 +317,7 @@ export default function IntegrationsPage() {
             </div>
             <div>
               <label style={label}>Webhook Secret (optionnel mais recommandé)</label>
-              <input type="password" value={ysForm.webhook_secret} onChange={e => setYsForm(f => ({ ...f, webhook_secret: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={ysForm.webhook_secret} onChange={e => setYsForm(f => ({ ...f, webhook_secret: e.target.value }))}
                 placeholder={meta?.hints.webhook_secret ? `Configuré (****${meta.hints.webhook_secret})` : 'webhook secret'} style={inp} />
               <div style={hint}>
                 YouSign Dashboard → Webhooks → Ajouter :
@@ -335,16 +348,16 @@ export default function IntegrationsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
               <label style={label}>Nom expéditeur (11 caractères max, alphanumériques)</label>
-              <input type="text" value={brevoForm.expediteur} maxLength={11} onChange={e => setBrevoForm(f => ({ ...f, expediteur: e.target.value }))} placeholder="TalmidApp" style={inp} />
+              <input type="text" autoComplete="off" value={brevoForm.expediteur} maxLength={11} onChange={e => setBrevoForm(f => ({ ...f, expediteur: e.target.value }))} placeholder="TalmidApp" style={inp} />
               <div style={hint}>Apparaît comme expéditeur sur le téléphone des familles.</div>
             </div>
             <div>
               <label style={label}>Signature (optionnelle, ajoutée à la fin de chaque SMS)</label>
-              <input type="text" value={brevoForm.signature} onChange={e => setBrevoForm(f => ({ ...f, signature: e.target.value }))} placeholder="L'équipe administrative" style={inp} />
+              <input type="text" autoComplete="off" value={brevoForm.signature} onChange={e => setBrevoForm(f => ({ ...f, signature: e.target.value }))} placeholder="L'équipe administrative" style={inp} />
             </div>
             <div>
               <label style={label}>Clé API Brevo (xkeysib-...)</label>
-              <input type="password" value={brevoForm.api_key} onChange={e => setBrevoForm(f => ({ ...f, api_key: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={brevoForm.api_key} onChange={e => setBrevoForm(f => ({ ...f, api_key: e.target.value }))}
                 placeholder={meta?.hints.api_key ? `Configurée (****${meta.hints.api_key})` : 'xkeysib-...'} style={inp} />
               <div style={hint}>Brevo Dashboard → SMTP & API → API Keys → Generate a new API key (Brevo v3).</div>
             </div>
@@ -375,18 +388,18 @@ export default function IntegrationsPage() {
             </div>
             <div>
               <label style={label}>Client ID</label>
-              <input type="text" value={paypalForm.client_id} onChange={e => setPaypalForm(f => ({ ...f, client_id: e.target.value }))} placeholder="AY..." style={inp} />
+              <input type="text" autoComplete="off" value={paypalForm.client_id} onChange={e => setPaypalForm(f => ({ ...f, client_id: e.target.value }))} placeholder="AY..." style={inp} />
               <div style={hint}>PayPal Developer Dashboard → Apps &amp; Credentials → votre application → Client ID.</div>
             </div>
             <div>
               <label style={label}>Client Secret</label>
-              <input type="password" value={paypalForm.client_secret} onChange={e => setPaypalForm(f => ({ ...f, client_secret: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={paypalForm.client_secret} onChange={e => setPaypalForm(f => ({ ...f, client_secret: e.target.value }))}
                 placeholder={meta?.hints.client_secret ? `Configuré (****${meta.hints.client_secret}) — laissez vide pour ne pas changer` : 'EK...'} style={inp} />
               <div style={hint}>Même page PayPal → Secret. Stocké chiffré, jamais relu en clair.</div>
             </div>
             <div>
               <label style={label}>Webhook ID (optionnel)</label>
-              <input type="password" value={paypalForm.webhook_id} onChange={e => setPaypalForm(f => ({ ...f, webhook_id: e.target.value }))}
+              <input type="password" autoComplete="new-password" value={paypalForm.webhook_id} onChange={e => setPaypalForm(f => ({ ...f, webhook_id: e.target.value }))}
                 placeholder={meta?.hints.webhook_id ? `Configuré (****${meta.hints.webhook_id})` : 'webhook id'} style={inp} />
               <div style={hint}>
                 PayPal Dashboard → Webhooks → Ajouter :

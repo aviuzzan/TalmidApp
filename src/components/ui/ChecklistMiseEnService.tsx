@@ -37,7 +37,22 @@ export default function ChecklistMiseEnService() {
 
   async function load() {
     const s = createClient()
-    const annee = detectCodeExerciceCourant()
+    // gggg1 (audit module 8) : l'annee etait calculee sur la date CALENDAIRE
+    // (avant septembre -> annee N-1), d'ou un item "Tarifs 2025-2026" en rouge
+    // sur une ecole dont l'exercice ouvert est 2026-2027. On lit l'exercice
+    // courant de l'ecole (puis l'exercice ouvert le plus recent), et le calcul
+    // par date ne sert plus que de dernier repli.
+    let annee = detectCodeExerciceCourant()
+    try {
+      const { data: ecoleCourant } = await s.from('ecoles').select('exercice_courant_id').eq('id', ecole.id).maybeSingle()
+      if (ecoleCourant?.exercice_courant_id) {
+        const { data: exRow } = await s.from('exercices').select('code').eq('id', ecoleCourant.exercice_courant_id).maybeSingle()
+        if (exRow?.code) annee = exRow.code
+      } else {
+        const { data: exOuvert } = await s.from('exercices').select('code').eq('ecole_id', ecole.id).eq('statut', 'ouvert').order('code', { ascending: false }).limit(1).maybeSingle()
+        if (exOuvert?.code) annee = exOuvert.code
+      }
+    } catch { /* repli : calcul par date */ }
     try {
       // Une requête count/head par item, toutes scopées ecole_id, toutes best-effort.
       const [ecoleR, sectR, clsR, tarR, modR, srvR, tplR] = await Promise.all([
