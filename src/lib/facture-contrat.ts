@@ -162,7 +162,7 @@ export async function construireLignesFacture(
   // coûter aucun aller-retour supplémentaire sur le chemin critique de la
   // facturation. chargerImputations ne lève jamais — au pire il renvoie un
   // résolveur vide et les lignes partent avec des colonnes comptables à NULL.
-  const [{ data: ddr }, { data: tarifsList }, { data: fraisCfg }, { data: pedagos }, resolveur] = await Promise.all([
+  const [{ data: ddr }, { data: tarifsList }, { data: fraisCfg }, { data: pedagos }, resolveur, { data: baremesFN }, { data: familleRow }] = await Promise.all([
     s
       .from('demandes_reduction')
       .select('tarif_accorde, statut')
@@ -176,6 +176,13 @@ export async function construireLignesFacture(
       ? s.from('inscriptions_pedagogiques').select('enfant_id').eq('annee_scolaire', annee).in('enfant_id', enfantIds)
       : Promise.resolve({ data: [] as any[] }),
     chargerImputations(s, ecoleId),
+    // FIX audit démo 06/08 (P1-1) : la réduction famille nombreuse était appliquée
+    // à la signature du contrat mais JAMAIS reproduite ici. Conséquences : bandeau
+    // « écart avec le contrat » erroné sur toute facture de famille nombreuse, et
+    // surtout une RÉGÉNÉRATION qui faisait sauter la réduction (surfacturation).
+    s.from('reductions_famille_nombreuse').select('nb_enfants, montant_reduction, tranches_eligibles')
+      .eq('ecole_id', ecoleId).eq('annee_scolaire', annee).order('nb_enfants'),
+    s.from('familles').select('tranche_id').eq('id', contrat.famille_id).maybeSingle(),
   ])
   const nouveauxIds = new Set((pedagos || []).map((p: any) => p.enfant_id))
   const tarifMap: Record<string, boolean> = {}
@@ -327,6 +334,37 @@ export async function construireLignesFacture(
           montant: parseFloat(e.sous_total) || 0,
           deductible: true,
         }, resolveur.parCle('poste_defaut')))
+      }
+    }
+  }
+
+  // Réduction famille nombreuse — uniquement HORS DDR (une DDR acceptée remplace
+  // le barème), mêmes règles que le contrat portail/admin : ≥ 2 enfants avec
+  // classe, barème le plus élevé dont nb_enfants ≤ effectif, filtré par les
+  // tranches éligibles (null/[] = toutes). Ligne NÉGATIVE imputée sur la clé
+  // comptable 'reduction' (RRR accordés).
+  if (!ddr?.tarif_accorde && Array.isArray(baremesFN) && baremesFN.length > 0) {
+    const nbEnfantsTotal = enfants.length
+    const nbAvecClasse = enfants.filter((e: any) => e.classe_prevue || e.classe_id).length
+    if (nbAvecClasse >= 2) {
+      const trancheFamille = familleRow?.tranche_id || null
+      const applicables = baremesFN.filter((r: any) => {
+        if (parseInt(r.nb_enfants) > nbEnfantsTotal) return false
+        if (Array.isArray(r.tranches_eligibles) && r.tranches_eligibles.length > 0) {
+          if (!trancheFamille || !r.tranches_eligibles.includes(trancheFamille)) return false
+        }
+        return true
+      })
+      const montantFN = applicables.length ? (parseFloat(applicables[applicables.length - 1].montant_reduction) || 0) : 0
+      if (montantFN > 0) {
+        lignes.push(imputer({
+          facture_id: nf.id,
+          enfant_id: null,
+          tarif_id: null,
+          description: `Réduction famille nombreuse (${nbEnfantsTotal} enfants)`,
+          montant: -Math.abs(montantFN),
+          deductible: true,
+        }, resolveur.parCle('reduction')))
       }
     }
   }
