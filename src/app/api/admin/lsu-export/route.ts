@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       .select(`
         id, enfant_id, moyenne_generale, appreciation_generale,
         enfants(prenom, nom, date_naissance, classe_id),
-        bulletin_lignes(matiere_nom, moyenne_eleve, appreciation)
+        bulletin_lignes(moyenne, appreciation, matieres(nom))
       `)
       .eq('ecole_id', ecoleId)
       .eq('exercice_id', exerciceId)
@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
       moyenne_generale: b.moyenne_generale != null ? Number(b.moyenne_generale) : null,
       appreciation_generale: b.appreciation_generale || null,
       matieres: (b.bulletin_lignes || []).map((l: any) => ({
-        nom: l.matiere_nom,
-        moyenne: l.moyenne_eleve != null ? Number(l.moyenne_eleve) : null,
+        nom: l.matieres?.nom || '',
+        moyenne: l.moyenne != null ? Number(l.moyenne) : null,
         appreciation: l.appreciation || null,
       })),
     }))

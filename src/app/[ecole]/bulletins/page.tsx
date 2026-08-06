@@ -97,14 +97,17 @@ export default function BulletinsPage() {
           moyennesParMatiere[matKey].sumCoef += coef
         }
       }
+      // ffff1 (audit module 5, P1) : l'insert envoyait matiere_nom / moyenne_eleve /
+      // position, colonnes INEXISTANTES dans bulletin_lignes (id, bulletin_id,
+      // matiere_id, moyenne, moyenne_classe, appreciation, professeur_nom) ->
+      // aucun detail par matiere n'a jamais pu etre ecrit. Le nom de la matiere
+      // s'obtient par jointure matieres(nom) a la lecture.
       const lignes = Object.values(moyennesParMatiere).map(m => ({
         matiere_id: m.matiere_id,
-        matiere_nom: m.matiere_nom,
-        moyenne_eleve: m.sumCoef > 0 ? Number((m.sumPond / m.sumCoef).toFixed(2)) : null,
-        position: m.ordre,
+        moyenne: m.sumCoef > 0 ? Number((m.sumPond / m.sumCoef).toFixed(2)) : null,
       }))
-      const sumGen = lignes.reduce((s, l) => s + (l.moyenne_eleve || 0), 0)
-      const countGen = lignes.filter(l => l.moyenne_eleve != null).length
+      const sumGen = lignes.reduce((s, l) => s + (l.moyenne || 0), 0)
+      const countGen = lignes.filter(l => l.moyenne != null).length
       const moyenneGen = countGen > 0 ? Number((sumGen / countGen).toFixed(2)) : null
 
       // Crée le bulletin

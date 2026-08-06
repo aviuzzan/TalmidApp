@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { useAnneeScolaireActive } from '@/lib/exercice-context'
 import AidePage from '@/components/ui/AidePage'
 import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
@@ -14,6 +15,7 @@ type Note = { id: string; evaluation_id: string; enfant_id: string; note: number
 export default function NotesPage() {
   const router = useRouter()
   const ecole = useEcole()
+  const annee = useAnneeScolaireActive()
   const [tab, setTab] = useState<'evaluations'|'matieres'>('evaluations')
   const [matieres, setMatieres] = useState<Matiere[]>([])
   const [classes, setClasses] = useState<Classe[]>([])
@@ -58,8 +60,14 @@ export default function NotesPage() {
     e.preventDefault()
     if (!evalForm.titre.trim() || !evalForm.matiere_id || !evalForm.classe_id) return await appAlert('Titre, matière et classe obligatoires')
     const s = createClient()
+    // ffff1 (audit module 5, P1) : l'evaluation partait SANS exercice_id alors que
+    // Bulletins et Conseils filtrent dessus -> toute la chaine notes -> bulletins
+    // tournait a vide (bulletins generes sans lignes ni moyennes).
+    const { data: exRow } = await s.from('exercices').select('id').eq('ecole_id', ecole.id).eq('code', annee).maybeSingle()
+    if (!exRow?.id) return await appAlert('Exercice ' + annee + ' introuvable : impossible de rattacher l\'evaluation.')
     const payload: any = {
       ecole_id: ecole.id,
+      exercice_id: exRow.id,
       titre: evalForm.titre.trim(),
       type: evalForm.type,
       matiere_id: evalForm.matiere_id,

@@ -7,9 +7,10 @@ import { useEcole } from '@/lib/ecole-context'
 const PRINT_CSS = '@media print{.no-print{display:none!important}body{margin:0;padding:0;background:#fff!important}.bul-page{padding:20mm 15mm!important;max-width:none!important;border:none!important;box-shadow:none!important}}'
 
 type Ligne = {
-  id: string; matiere_nom: string; moyenne_eleve: number | null;
-  appreciation: string | null; coefficient: number | null;
-  position: number; professeur_id: string | null;
+  // ffff1 : aligne sur le VRAI schema de bulletin_lignes + jointure matieres(nom, ordre)
+  id: string; matiere_id: string | null; moyenne: number | null;
+  moyenne_classe: number | null; appreciation: string | null;
+  professeur_nom: string | null; matieres?: { nom: string; ordre: number | null } | null;
 }
 type Bulletin = {
   id: string; enfant_id: string; classe_id: string; trimestre: number;
@@ -42,12 +43,12 @@ export default function BulletinDetailPage() {
     const s = createClient()
     const [{ data: bul }, { data: lig }, { data: e }, { data: tpl }] = await Promise.all([
       s.from('bulletins').select('*').eq('id', bulletinId).single(),
-      s.from('bulletin_lignes').select('*').eq('bulletin_id', bulletinId).order('position'),
+      s.from('bulletin_lignes').select('*, matieres(nom, ordre)').eq('bulletin_id', bulletinId),
       s.from('ecoles').select('*').eq('id', ecole.id).single(),
       s.from('appreciations_templates').select('*').eq('ecole_id', ecole.id).order('ordre'),
     ])
     setBulletin(bul as Bulletin)
-    setLignes((lig ?? []) as Ligne[])
+    setLignes(((lig ?? []) as Ligne[]).slice().sort((a, b) => (a.matieres?.ordre ?? 0) - (b.matieres?.ordre ?? 0)))
     setEcoleInfo(e)
     setTemplates(tpl ?? [])
     if (bul?.enfant_id) {
@@ -61,7 +62,7 @@ export default function BulletinDetailPage() {
     setLoading(false)
   }
 
-  async function updateLigne(id: string, field: 'appreciation' | 'moyenne_eleve', value: any) {
+  async function updateLigne(id: string, field: 'appreciation' | 'moyenne', value: any) {
     setLignes(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l))
     await createClient().from('bulletin_lignes').update({ [field]: value }).eq('id', id)
   }
@@ -131,9 +132,9 @@ export default function BulletinDetailPage() {
               <tr><td colSpan={3} style={{ padding: 20, textAlign: 'center', color: '#94A3B8', border: '1px solid #CBD5E1' }}>Aucune note pour ce trimestre</td></tr>
             ) : lignes.map(l => (
               <tr key={l.id}>
-                <td style={{ padding: '8px 10px', border: '1px solid #CBD5E1', fontWeight: 600 }}>{l.matiere_nom}</td>
-                <td style={{ padding: '8px 10px', border: '1px solid #CBD5E1', textAlign: 'center', fontWeight: 700, color: l.moyenne_eleve != null && l.moyenne_eleve >= 10 ? '#059669' : '#DC2626' }}>
-                  {l.moyenne_eleve != null ? Number(l.moyenne_eleve).toFixed(2) : '—'}
+                <td style={{ padding: '8px 10px', border: '1px solid #CBD5E1', fontWeight: 600 }}>{l.matieres?.nom || '—'}</td>
+                <td style={{ padding: '8px 10px', border: '1px solid #CBD5E1', textAlign: 'center', fontWeight: 700, color: l.moyenne != null && l.moyenne >= 10 ? '#059669' : '#DC2626' }}>
+                  {l.moyenne != null ? Number(l.moyenne).toFixed(2) : '—'}
                 </td>
                 <td style={{ padding: '6px 10px', border: '1px solid #CBD5E1', position: 'relative' }}>
                   <textarea className="no-print" value={l.appreciation || ''} onChange={e => updateLigne(l.id, 'appreciation', e.target.value)}
