@@ -3,8 +3,12 @@ import { useI18n, Lang } from '@/lib/i18n'
 
 /**
  * Toggle de langue binaire FR / HE.
- * Le drapeau actif est mis en avant. Clic = bascule l'autre langue.
- * Sur petit ecran le label disparait, on garde juste les drapeaux.
+ * Le bouton actif est mis en avant. Clic = bascule l'autre langue.
+ *
+ * FIX P2-9 (audit portail parent 06/08) : les emojis drapeaux (🇫🇷 / 🇮🇱) ne
+ * sont pas rendus comme drapeaux sous Windows — ils s'affichaient comme les
+ * lettres « FR » / « IL », et le sélecteur semblait proposer une langue « IL ».
+ * On affiche donc TOUJOURS les codes texte « FR » / « HE », sans emoji.
  */
 export default function LangSwitcher({ compact = false }: { compact?: boolean }) {
   const { lang, setLang } = useI18n()
@@ -38,14 +42,12 @@ export default function LangSwitcher({ compact = false }: { compact?: boolean })
       <button onClick={() => setLang('fr' as Lang)} aria-pressed={lang === 'fr'}
         title="Français"
         style={lang === 'fr' ? activeBtn : idleBtn}>
-        <span aria-hidden>🇫🇷</span>
-        {!compact && <span style={{ fontSize: 12 }}>FR</span>}
+        <span style={{ fontSize: 12 }}>FR</span>
       </button>
       <button onClick={() => setLang('he' as Lang)} aria-pressed={lang === 'he'}
         title="עברית"
         style={lang === 'he' ? activeBtn : idleBtn}>
-        <span aria-hidden>🇮🇱</span>
-        {!compact && <span style={{ fontSize: 12 }}>HE</span>}
+        <span style={{ fontSize: 12 }}>HE</span>
       </button>
     </div>
   )

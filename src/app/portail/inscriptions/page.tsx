@@ -9,6 +9,7 @@ import { labelModePaiement } from '@/lib/statuts'
 import AideEtape from '@/components/portail/AideEtape'
 import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
+import { deriverStatutInscription, libelleStatutInscription } from '@/lib/statut-inscription'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -242,16 +243,24 @@ function DossierTab({ router }: { router: any }) {
             {enfants.map(enfant => {
               const dansContrat = contratsEnfants.includes(enfant.id)
               const adm = admissions[enfant.id]
-              const admis = adm === 'accepte' || adm === 'valide'
-              const enAttenteAdm = adm === 'soumis' || adm === 'en_etude'
-              const refuse = adm === 'refuse'
-              // Etat & libelle
-              let badgeBg = '#F1F5F9', badgeColor = '#64748B', badgeLabel = t('portail.inscriptions.badge.unknown_status')
-              if (dansContrat) { badgeBg = '#ECFDF5'; badgeColor = '#065F46'; badgeLabel = t('portail.inscriptions.badge.reenrolled', { annee: anneeInscription }) }
-              else if (admis) { badgeBg = '#EFF6FF'; badgeColor = '#1E40AF'; badgeLabel = t('portail.inscriptions.badge.admitted_to_reenroll') }
-              else if (enAttenteAdm) { badgeBg = '#FFF7ED'; badgeColor = '#9A3412'; badgeLabel = t('portail.inscriptions.badge.admission_pending') }
-              else if (refuse) { badgeBg = '#FEF2F2'; badgeColor = '#991B1B'; badgeLabel = t('portail.inscriptions.badge.admission_refused') }
-              else { badgeBg = '#F1F5F9'; badgeColor = '#64748B'; badgeLabel = t('portail.inscriptions.badge.admission_to_request') }
+              // FIX P1-1 (audit portail parent 06/08) : badge dérivé de la source
+              // unique de statut (src/lib/statut-inscription.ts) — les libellés
+              // sont désormais les mêmes que sur l'accueil et « Mes enfants ».
+              // Seul cas conservé en local : « Admission à demander » (aucune
+              // fiche déposée pour un enfant non scolarisé), plus précis que
+              // « en cours d'étude » pour une démarche jamais entamée.
+              let badgeBg: string, badgeColor: string, badgeLabel: string
+              if (!adm && enfant.statut_inscription !== 'inscrit' && !dansContrat) {
+                badgeBg = '#F1F5F9'; badgeColor = '#64748B'; badgeLabel = t('portail.inscriptions.badge.admission_to_request')
+              } else {
+                const st = libelleStatutInscription(deriverStatutInscription({
+                  admissionStatut: adm,
+                  statutEnfant: enfant.statut_inscription,
+                  dansContrat,
+                  contratStatut: contrat?.statut,
+                }))
+                badgeBg = st.bg; badgeColor = st.color; badgeLabel = t(st.cle, st.label)
+              }
               return (
                 <div key={enfant.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>{enfant.prenom?.[0]?.toUpperCase()}</div>

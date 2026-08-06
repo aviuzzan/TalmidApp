@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import OptionsContratSection from '@/components/OptionsContratSection'
+import { deriverStatutInscription, libelleStatutInscription } from '@/lib/statut-inscription'
 
 export default function PortailEnfantsPage() {
   const { t, lang } = useI18n()
@@ -12,6 +13,11 @@ export default function PortailEnfantsPage() {
   const [enfants, setEnfants] = useState<any[]>([])
   const [ecoleId, setEcoleId] = useState('')
   const [modulesActifs, setModulesActifs] = useState<string[] | null>(null) // null = tous actifs
+  // FIX P1-1 (audit portail parent 06/08) : données nécessaires à la source
+  // unique de statut (fiche pédagogique + contrat de l'année d'inscription).
+  const [admissions, setAdmissions] = useState<Record<string, string>>({})
+  const [contrat, setContrat] = useState<any>(null)
+  const [enfantsContrat, setEnfantsContrat] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -42,10 +48,30 @@ export default function PortailEnfantsPage() {
         .order('nom')
 
       setEnfants(data ?? [])
+
+      // FIX P1-1 (audit portail parent 06/08) : le badge de statut affichait
+      // enfants.statut_inscription brut, en contradiction avec l'accueil et la
+      // page Inscriptions. On charge fiche pédagogique + contrat de l'année
+      // pour dériver le statut canonique (src/lib/statut-inscription.ts).
+      const ids = (data ?? []).map((e: any) => e.id)
+      if (ids.length > 0) {
+        const [{ data: fp }, { data: cont }] = await Promise.all([
+          supabase.from('inscriptions_pedagogiques')
+            .select('enfant_id, statut').in('enfant_id', ids).eq('annee_scolaire', anneeInscription),
+          supabase.from('contrats_scolarisation')
+            .select('statut, contrat_enfants(enfant_id)')
+            .eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
+        ])
+        const map: Record<string, string> = {}
+        ;(fp || []).forEach((f: any) => { map[f.enfant_id] = f.statut })
+        setAdmissions(map)
+        setContrat(cont)
+        setEnfantsContrat(new Set(((cont as any)?.contrat_enfants || []).map((c: any) => c.enfant_id)))
+      }
       setLoading(false)
     }
     load()
-  }, [])
+  }, [anneeInscription])
 
   const REGIME: any = {
     demi_pension: t('portail.enfants.regime.day_meal'),
@@ -106,13 +132,24 @@ export default function PortailEnfantsPage() {
                     </div>
                   </div>
                 </div>
-                <span style={{
-                  background: e.statut_inscription === 'inscrit' ? '#ECFDF5' : '#FFFBEB',
-                  color: e.statut_inscription === 'inscrit' ? '#059669' : '#D97706',
-                  borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 600,
-                }}>
-                  {e.statut_inscription === 'inscrit' ? t('portail.enfants.status.enrolled') : t('portail.enfants.status.pending')}
-                </span>
+                {/* FIX P1-1 (audit portail parent 06/08) : badge dérivé de la source
+                    unique de statut — plus de contradiction avec l'accueil/Inscriptions. */}
+                {(() => {
+                  const st = libelleStatutInscription(deriverStatutInscription({
+                    admissionStatut: admissions[e.id],
+                    statutEnfant: e.statut_inscription,
+                    dansContrat: enfantsContrat.has(e.id),
+                    contratStatut: contrat?.statut,
+                  }))
+                  return (
+                    <span style={{
+                      background: st.bg, color: st.color,
+                      borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                    }}>
+                      {t(st.cle, st.label)}
+                    </span>
+                  )
+                })()}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>

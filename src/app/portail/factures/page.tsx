@@ -568,7 +568,11 @@ export default function PortailFacturesPage() {
                   <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
                     <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>{t('portail.factures.sched.paid_label')}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{reglees.length} / {echeances.length}</div>
-                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{t('portail.factures.sched.collected', { montant: totalRegle.toLocaleString('fr-FR') })}</div>
+                    {/* FIX P2-4 (audit portail parent 06/08) : afficher le total réglé RÉEL de la
+                        facture (factures_solde.total_regle) et non la somme des seules échéances
+                        encaissées — un règlement hors échéancier (ex. 500 € en espèces) affichait
+                        « 0 € encaissés » alors que la famille avait bien payé. */}
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{t('portail.factures.sched.total_regle_facture', { montant: Number(facture.total_regle).toLocaleString('fr-FR') })}</div>
                   </div>
                   {prochaine && (
                     <div style={{ background: '#fff', borderRadius: 8, padding: '10px 12px' }}>

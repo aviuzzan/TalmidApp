@@ -65,6 +65,13 @@ export default function ContratPapierAdminPage() {
   const [reportSolde, setReportSolde] = useState<ReportSoldeActif | null>(null)
   const [ecoleInfo, setEcoleInfo] = useState<any>(null)
 
+  // RÈGLE (a) D'AVI (audit portail parent 06/08) : statut d'admission
+  // (inscriptions_pedagogiques) par enfant pour l'année d'inscription.
+  // Un enfant dont la fiche de l'année existe mais n'est pas validée
+  // ('accepte'/'valide') ne peut PAS être inclus dans un contrat — même en
+  // saisie admin. Pas de fiche = enfant historique en réinscription : autorisé.
+  const [admissions, setAdmissions] = useState<Record<string, string>>({})
+
   // Saisie contrat
   const [enfantsContrat, setEnfantsContrat] = useState<any[]>([])
   const [assuranceEcole, setAssuranceEcole] = useState(true)
@@ -113,7 +120,7 @@ export default function ContratPapierAdminPage() {
   async function chargerFamille(fid: string) {
     setFamilleId(fid)
     setFamille(null); setEnfants([]); setEnfantsContrat([]); setContratExistant(null); setReductionAccordee(null)
-    setScanUploaded(null); setSuccess(null); setReportSolde(null)
+    setScanUploaded(null); setSuccess(null); setReportSolde(null); setAdmissions({})
     if (!fid || !annee) return
     setLoadingFamille(true)
     const s = createClient()
@@ -137,6 +144,22 @@ export default function ContratPapierAdminPage() {
     setPaiementConfig(payCfg); setDatesEncaissement(datesEnc ?? [])
     setReductions(redsf ?? []); setReductionAccordee(redAcc); setContratExistant(cont)
 
+    // RÈGLE (a) D'AVI (audit portail parent 06/08) : statut d'admission de
+    // l'année par enfant — pour griser les enfants non admis dans la sélection.
+    const admStatuts: Record<string, string> = {}
+    if ((enf ?? []).length > 0) {
+      const { data: fp } = await s.from('inscriptions_pedagogiques')
+        .select('enfant_id, statut')
+        .in('enfant_id', (enf ?? []).map((e: any) => e.id))
+        .eq('annee_scolaire', annee)
+      ;(fp || []).forEach((f: any) => { admStatuts[f.enfant_id] = f.statut })
+      setAdmissions(admStatuts)
+    }
+    const admissionBloquee = (enfantId: string) => {
+      const adm = admStatuts[enfantId]
+      return !!adm && adm !== 'accepte' && adm !== 'valide'
+    }
+
     // Report de solde de l'année précédente : chargé pour que l'aperçu de
     // l'échéancier soit identique à ce qui sera réellement enregistré.
     // Non bloquant : un échec de lecture ne doit pas empêcher la saisie du contrat.
@@ -156,10 +179,11 @@ export default function ContratPapierAdminPage() {
     setNbEcheances(Math.min(maxE, 10))
 
     // Pré-cocher tous les enfants avec leur classe actuelle (ou vide) + postes obligatoires
+    // — SAUF ceux dont l'admission n'est pas validée (règle (a), audit 06/08).
     const trancheLoad = fam?.tranche_id
       || Array.from(new Set((tar ?? []).map((t: any) => t.tranche_id).filter(Boolean)))[0]
       || null
-    setEnfantsContrat((enf ?? []).map((e: any) => {
+    setEnfantsContrat((enf ?? []).filter((e: any) => !admissionBloquee(e.id)).map((e: any) => {
       const cls2 = e.classes
       const secteurId = cls2?.secteur_id || ''
       const tarifsApp = (tar ?? []).filter((t: any) => {
@@ -303,6 +327,17 @@ export default function ContratPapierAdminPage() {
   async function valider() {
     if (saving) return
     if (!familleId) { toast?.error?.('Sélectionnez une famille'); return }
+    // RÈGLE (a) D'AVI (audit portail parent 06/08) — garde-fou final : aucun
+    // enfant dont l'admission n'est pas validée ne doit partir dans le contrat.
+    const enfantBloque = enfantsContrat.find(e => {
+      const adm = admissions[e.enfant_id]
+      return !!adm && adm !== 'accepte' && adm !== 'valide'
+    })
+    if (enfantBloque) {
+      const nomBloque = enfants.find((en: any) => en.id === enfantBloque.enfant_id)?.prenom || 'un enfant'
+      toast?.error?.(`L'admission de ${nomBloque} est en cours d'étude — il pourra être ajouté au contrat une fois admis.`)
+      return
+    }
     if (enfantsContrat.filter(e => e.classe_id).length === 0) { toast?.error?.('Sélectionnez au moins une classe'); return }
     if (!modeReglement) { toast?.error?.('Choisissez un mode de règlement'); return }
     if (!signatureDate) { toast?.error?.('Renseignez la date de signature du contrat papier'); return }
@@ -538,13 +573,32 @@ export default function ContratPapierAdminPage() {
               const isSelected = enfantsContrat.some(e => e.enfant_id === enfant.id)
               const cls = classes.find((c: any) => c.id === enf.classe_id)
               const tarifsDispos = getTarifsForSecteur(cls?.secteur_id || '')
+              // RÈGLE (a) D'AVI (audit portail parent 06/08) : fiche pédagogique de
+              // l'année non validée → enfant non sélectionnable (même en admin).
+              const adm = admissions[enfant.id]
+              const admRefusee = adm === 'refuse'
+              const admEnCours = !!adm && !admRefusee && adm !== 'accepte' && adm !== 'valide'
+              const admBloquee = admEnCours || admRefusee
               return (
-                <div key={enfant.id} style={{ border: `2px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`, borderRadius: 12, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', background: isSelected ? '#EFF6FF' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <input type="checkbox" checked={isSelected} onChange={() => toggleEnfantContrat(enfant.id)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }} />
+                <div key={enfant.id} style={{ border: `2px solid ${isSelected ? '#2563EB' : admBloquee ? '#FDE68A' : '#E2E8F0'}`, borderRadius: 12, overflow: 'hidden', opacity: admBloquee ? 0.85 : 1 }}>
+                  <div style={{ padding: '12px 16px', background: isSelected ? '#EFF6FF' : admBloquee ? '#FFFBEB' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <input type="checkbox" checked={isSelected} disabled={admBloquee} onChange={() => !admBloquee && toggleEnfantContrat(enfant.id)} style={{ width: 18, height: 18, cursor: admBloquee ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
-                      {enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>Classe actuelle : {enfant.classes.nom}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
+                        {admEnCours && (
+                          <span style={{ background: '#FFFBEB', color: '#9A3412', border: '1px solid #FDE68A', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>⏳ Admission en cours d&apos;étude</span>
+                        )}
+                        {admRefusee && (
+                          <span style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700 }}>✕ Admission refusée</span>
+                        )}
+                      </div>
+                      {admEnCours && (
+                        <div style={{ fontSize: 11, color: '#9A3412', marginTop: 3 }}>
+                          L&apos;admission de {enfant.prenom} est en cours d&apos;étude — il pourra être ajouté au contrat une fois admis.
+                        </div>
+                      )}
+                      {!admBloquee && enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>Classe actuelle : {enfant.classes.nom}</div>}
                     </div>
                     {enf.sous_total > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: '#059669' }}>{enf.sous_total.toLocaleString('fr-FR')} €</div>}
                   </div>

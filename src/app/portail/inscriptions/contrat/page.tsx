@@ -9,6 +9,7 @@ import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { validerIban, formaterIban, nettoyerIban, validerBic } from '@/lib/iban'
 import { trouverClasseSuivante } from '@/lib/scolarite'
+import { fmtDate } from '@/lib/format-date'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -59,7 +60,7 @@ export default function ContratPage() {
   const { anneeInscription, exerciceInscriptionId } = useAnneeInscription()
   const router = useRouter()
   const parent = useParentCtx()
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   // Marqueur « formulaire modifié » (ex no-op scroll) : alimente le garde beforeunload.
   const dirtyRef = useRef(false)
   const ks = () => { dirtyRef.current = true }
@@ -263,24 +264,32 @@ export default function ContratPage() {
     }
     setClassesImposees(imposees)
 
+    // ── Statut admission par enfant — RÈGLE (a) D'AVI (audit portail parent 06/08) ──
+    // Un enfant dont l'admission n'est pas validée ('accepte') ne peut PAS être
+    // inclus dans un contrat de scolarisation. Chargé SYSTÉMATIQUEMENT (avant :
+    // uniquement quand aucun contrat n'existait → un contrat brouillon repris
+    // n'appliquait plus le verrou d'admission).
+    // Un enfant SANS fiche pédagogique de l'année est un enfant historique en
+    // réinscription (chantier « fiche pédagogique = nouvel enfant uniquement ») :
+    // il reste sélectionnable sans nouvelle admission.
+    const enfAdmStatuts: Record<string, string> = {}
+    if (enfantsList.length > 0) {
+      const { data: fp } = await s.from('inscriptions_pedagogiques')
+        .select('enfant_id, statut').in('enfant_id', enfantsList.map((e: any) => e.id))
+        .eq('annee_scolaire', anneeInscription)
+      ;(fp || []).forEach((f: any) => { enfAdmStatuts[f.enfant_id] = f.statut })
+      setAdmissions(enfAdmStatuts)
+    }
+    // Enfant bloqué par la règle (a) : fiche de l'année existante mais non validée
+    const admissionBloquee = (enfantId: string) => {
+      const adm = enfAdmStatuts[enfantId]
+      return !!adm && adm !== 'accepte' && adm !== 'valide'
+    }
+
     // Pré-sélectionner enfants
     if (enf?.length && !cont) {
-      // Statut admission par enfant
-      const enfantIds2 = enfantsList.map((e: any) => e.id)
-      const enfAdmStatuts: Record<string, string> = {}
-      if (enfantIds2.length > 0) {
-        const { data: fp } = await s.from('inscriptions_pedagogiques')
-          .select('enfant_id, statut').in('enfant_id', enfantIds2)
-          .eq('annee_scolaire', anneeInscription)
-        ;(fp || []).forEach((f: any) => { enfAdmStatuts[f.enfant_id] = f.statut })
-        setAdmissions(enfAdmStatuts)
-      }
-
       // Pre-cocher seulement les enfants dont l'admission est validee
-      const enfAdmis = enfantsList.filter((e: any) => {
-        const adm = enfAdmStatuts[e.id]
-        return adm === 'accepte' || adm === 'valide' || !adm // si pas de fiche encore = enfant historique deja inscrit
-      })
+      const enfAdmis = enfantsList.filter((e: any) => !admissionBloquee(e.id))
       setEnfantsContrat(enfAdmis.map((e: any) => {
         // Classe imposée si elle existe, sinon classe actuelle (comportement historique)
         const impos = imposees[e.id]
@@ -301,7 +310,9 @@ export default function ContratPage() {
       // Contrat repris (non soumis) : la classe imposée prime aussi ici, et les
       // postes sont recalés sur son secteur (les options déjà cochées sont
       // conservées si elles restent applicables).
-      setEnfantsContrat((cont.contrat_enfants as any[]).map((ce: any) => {
+      // RÈGLE (a) audit 06/08 : un enfant dont l'admission n'est plus/pas validée
+      // est retiré de la sélection reprise (il réapparaîtra grisé dans la liste).
+      setEnfantsContrat((cont.contrat_enfants as any[]).filter((ce: any) => !admissionBloquee(ce.enfant_id)).map((ce: any) => {
         const impos = imposees[ce.enfant_id]
         if (!impos) return ce
         const optionIds = (ce.postes || []).map((p: any) => p.tarif_id).filter(Boolean)
@@ -552,6 +563,13 @@ export default function ContratPage() {
     // La classe envoyée est celle déterminée par l'appli quand elle est imposée
     // (passage de classe) — le serveur la revérifie de toute façon.
     const enfantsPayload = enfantsContrat
+      // RÈGLE (a) D'AVI (audit portail parent 06/08) — garde-fou final : aucun
+      // enfant dont l'admission n'est pas validée ne part dans le contrat, même
+      // si un état intermédiaire l'avait laissé dans la sélection.
+      .filter(e => {
+        const adm = admissions[e.enfant_id]
+        return !adm || adm === 'accepte' || adm === 'valide'
+      })
       .map(e => ({
         enfant_id: e.enfant_id,
         classe_id: classesImposees[e.enfant_id]?.classe_id || e.classe_id,
@@ -626,14 +644,65 @@ export default function ContratPage() {
   )
 
   if (contrat?.statut === 'soumis' || contrat?.statut === 'valide') {
+    // ── FIX P2-5 (audit portail parent 06/08) ──
+    // Avant : un titre-statut « Contrat soumis » DOUBLÉ d'un badge de statut
+    // (« envoyé » / « Validé »), et aucun détail. Désormais : un titre neutre,
+    // UN SEUL badge (formatStatut → « Validé » pour un contrat validé), la date
+    // de signature si disponible, et le détail par enfant (postes + montants,
+    // repris de contrat_enfants.postes tels qu'enregistrés par le serveur).
+    // NB : pas de page d'impression du contrat côté parent à ce jour (la seule
+    // impression existante est le contrat papier semi-vierge côté admin).
     const st = formatStatut(contrat.statut)
+    const lignesEnfants: any[] = (contrat.contrat_enfants as any[]) || []
     return (
-      <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '40px 24px', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
         <button onClick={() => router.push('/portail/inscriptions')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 32, display: 'block' }}>{t('portail.peda.back')}</button>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📝</div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>{t('portail.contrat.submitted.title')}</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B' }}>{t('portail.contrat.valide.title', { annee: anneeInscription })}</h2>
         <span style={{ fontSize: 14, fontWeight: 700, color: st.color, background: st.bg, padding: '8px 20px', borderRadius: 20, display: 'inline-block', marginTop: 12 }}>{st.label}</span>
-        <div style={{ marginTop: 24, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20, textAlign: 'left' }}>
+        {contrat.signature_date && (
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 10 }}>
+            {t('portail.contrat.valide.signe_le', { date: fmtDate(contrat.signature_date, lang) })}
+          </div>
+        )}
+
+        {/* Détail par enfant : classe, postes et montants */}
+        {lignesEnfants.length > 0 && (
+          <div style={{ marginTop: 24, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', textAlign: 'left' }}>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+              {t('portail.contrat.valide.enfants_heading')}
+            </div>
+            {lignesEnfants.map((ce: any) => {
+              const enfant = enfants.find((en: any) => en.id === ce.enfant_id)
+              const postes: any[] = Array.isArray(ce.postes) ? ce.postes : []
+              return (
+                <div key={ce.enfant_id || ce.id} style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+                      {enfant ? `${enfant.prenom} ${enfant.nom}` : '—'}
+                      {ce.classe_prevue && <span style={{ fontWeight: 500, color: '#64748B' }}> — {ce.classe_prevue}</span>}
+                    </div>
+                    {ce.sous_total != null && (
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>{Number(ce.sous_total).toLocaleString('fr-FR')} €</div>
+                    )}
+                  </div>
+                  {postes.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {postes.map((p: any, i: number) => (
+                        <div key={p.tarif_id || i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#475569' }}>
+                          <span>{p.nom}</span>
+                          <span style={{ fontWeight: 600 }}>{(parseFloat(p.montant) || 0).toLocaleString('fr-FR')} €</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20, textAlign: 'left' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
             <span style={{ color: '#64748B' }}>{t('portail.contrat.total_annuel')}</span>
             <span style={{ fontWeight: 700 }}>{contrat.montant_total?.toLocaleString('fr-FR')} €</span>
@@ -716,8 +785,11 @@ export default function ContratPage() {
           const cls = classes.find((c: any) => c.id === enf.classe_id)
           const tarifsDispos = getTarifsForSecteur(cls?.secteur_id || '')
           const adm = admissions[enfant.id]
-          const enAttenteAdm = adm === 'soumis' || adm === 'en_etude'
+          // RÈGLE (a) D'AVI (audit portail parent 06/08) : toute fiche pédagogique
+          // de l'année NON validée bloque l'enfant (soumis, en_etude, brouillon…).
+          // Pas de fiche = enfant historique en réinscription → sélectionnable.
           const refuseAdm = adm === 'refuse'
+          const enAttenteAdm = !!adm && !refuseAdm && adm !== 'accepte' && adm !== 'valide'
           const peutReinscrire = !enAttenteAdm && !refuseAdm
           return (
             <div key={enfant.id} style={{ border: `2px solid ${isSelected ? '#2563EB' : enAttenteAdm ? '#FDE68A' : '#E2E8F0'}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color 0.15s', opacity: peutReinscrire ? 1 : 0.85 }}>
@@ -735,7 +807,8 @@ export default function ContratPage() {
                     )}
                   </div>
                   {enAttenteAdm && (
-                    <div style={{ fontSize: 11, color: '#9A3412', marginTop: 3 }}>{t('portail.contrat.adm_pending_hint')}</div>
+                    // RÈGLE (a) audit 06/08 : message explicite avec le prénom de l'enfant
+                    <div style={{ fontSize: 11, color: '#9A3412', marginTop: 3 }}>{t('portail.contrat.adm_pending_hint', { prenom: enfant.prenom })}</div>
                   )}
                   {!enAttenteAdm && !refuseAdm && enfant.classes?.nom && <div style={{ fontSize: 11, color: '#94A3B8' }}>{t('portail.common.current_class', { classe: enfant.classes.nom })}</div>}
                 </div>

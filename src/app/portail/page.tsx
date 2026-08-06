@@ -8,6 +8,7 @@ import { useParentCtx } from '@/lib/parent-context'
 import PushPrompt from '@/components/PushPrompt'
 import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
+import { deriverStatutInscription } from '@/lib/statut-inscription'
 
 export default function PortailPage() {
   const { t, lang } = useI18n()
@@ -38,11 +39,12 @@ export default function PortailPage() {
       const ecoleId = (profile as any).familles?.ecole_id
       const now = new Date().toISOString().split('T')[0]
 
-      const [{ count: enfants }, { data: enfantsList }, { data: facture }, { data: cfg }, { data: contrat }, { data: docsConfig }, { data: docsFournis }, { data: ddr }] = await Promise.all([
-        supabase.from('enfants').select('*', { count: 'exact', head: true })
-          .eq('famille_id', familleId)
-          .or(`date_entree.is.null,date_entree.lte.${now}`)
-          .or(`date_sortie.is.null,date_sortie.gte.${now}`),
+      // FIX P1-3 (audit portail parent 06/08) : l'ancien count d'enfants « actifs »
+      // servait de KPI « élèves inscrits » — remplacé par la liste des enfants +
+      // le contrat (avec contrat_enfants) pour dériver le statut canonique.
+      // On charge aussi les modules portail actifs (carte Messagerie, P2-7).
+      const [{ data: ecoleConf }, { data: enfantsList }, { data: facture }, { data: cfg }, { data: contrat }, { data: docsConfig }, { data: docsFournis }, { data: ddr }] = await Promise.all([
+        supabase.from('ecoles').select('portail_modules_actifs').eq('id', ecoleId).single(),
         supabase.from('enfants').select('id, prenom, nom, statut_inscription').eq('famille_id', familleId),
         supabase.from('factures_solde').select('*')
           .eq('famille_id', familleId)
@@ -51,7 +53,7 @@ export default function PortailPage() {
         supabase.from('inscriptions_config')
           .select('inscriptions_ouvertes, date_ouverture_inscription, date_cloture_inscription, reductions_ouvertes, date_ouverture_reduction, date_cloture_reduction, tranches_eligibles_ddr, bandeau_titre, bandeau_message')
           .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
-        supabase.from('contrats_scolarisation').select('id, statut').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
+        supabase.from('contrats_scolarisation').select('id, statut, contrat_enfants(enfant_id)').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
         supabase.from('documents_ecole').select('id, nom, obligatoire').eq('ecole_id', ecoleId).eq('actif', true),
         supabase.from('documents_famille').select('document_id').eq('famille_id', familleId),
         supabase.from('demandes_reduction').select('id, statut').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
@@ -61,6 +63,19 @@ export default function PortailPage() {
       const { data: fichesPedago } = enfantIds.length > 0
         ? await supabase.from('inscriptions_pedagogiques').select('id, enfant_id, urgence_1_nom, medecin_nom, statut').in('enfant_id', enfantIds).eq('annee_scolaire', anneeInscription)
         : { data: [] }
+
+      // FIX P1-3 + P1-1 (audit portail parent 06/08) : le KPI « élèves inscrits »
+      // ne compte que les enfants au statut canonique 'inscrit' (contrat de
+      // l'année VALIDÉ — règle (a) d'Avi), via la source unique de statut.
+      // Avant : simple count d'enfants actifs → une famille sans contrat validé
+      // voyait quand même « 2 élèves inscrits ».
+      const enfantsDansContrat = new Set(((contrat as any)?.contrat_enfants || []).map((c: any) => c.enfant_id))
+      const nbInscrits = (enfantsList || []).filter((enf: any) => deriverStatutInscription({
+        admissionStatut: (fichesPedago || []).find((f: any) => f.enfant_id === enf.id)?.statut,
+        statutEnfant: enf.statut_inscription,
+        dansContrat: enfantsDansContrat.has(enf.id),
+        contratStatut: (contrat as any)?.statut,
+      }) === 'inscrit').length
 
       // Tranche famille (pour check éligibilité DDR sur la pastille "réductions ouvertes")
       const trancheFamille = (profile as any)?.familles?.tranche_id || null
@@ -145,13 +160,15 @@ export default function PortailPage() {
 
       setData({
         famille: (profile as any).familles,
-        nbEnfants: enfants ?? 0,
+        nbInscrits,
         facture: facture ?? null,
         reglements,
         inscriptionsOuvertes,
         cfg: cfg ?? null,
         anneeInscription,
         taches,
+        // Modules portail actifs (null = tous) pour filtrer les liens rapides
+        modulesActifs: Array.isArray((ecoleConf as any)?.portail_modules_actifs) ? (ecoleConf as any).portail_modules_actifs : null,
       })
     } catch (e) {
       console.error('[portail] Erreur de chargement accueil :', e)
@@ -331,7 +348,8 @@ export default function PortailPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
-          { icon: '🎓', label: t('portail.home.stats.students'), value: data.nbEnfants, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
+          // FIX P1-3 (audit portail parent 06/08) : nbInscrits = enfants au statut 'inscrit' uniquement
+          { icon: '🎓', label: t('portail.home.stats.students'), value: data.nbInscrits, color: '#2563EB', bg: '#EFF6FF', action: () => router.push('/portail/enfants') },
           { icon: '📄', label: parent.estSeparee ? t('portail.home.stats.my_share') : t('portail.home.stats.invoice_year', { annee: anneeInscription }), value: factureActive ? `${(parent.estSeparee ? maPart : Number(factureActive.total_facture)).toLocaleString('fr-FR')} €` : '—', color: '#059669', bg: '#ECFDF5', action: () => router.push('/portail/factures') },
           { icon: '💳', label: parent.estSeparee ? t('portail.home.stats.my_balance') : t('portail.home.stats.remaining_balance'), value: factureActive ? `${(parent.estSeparee ? monSolde : solde).toLocaleString('fr-FR')} €` : '—', color: (parent.estSeparee ? monSolde : solde) > 0 ? '#DC2626' : '#059669', bg: (parent.estSeparee ? monSolde : solde) > 0 ? '#FEF2F2' : '#ECFDF5', action: () => router.push('/portail/factures') },
         ].map(s => (
@@ -355,6 +373,11 @@ export default function PortailPage() {
           { icon: '💰', title: t('portail.home.links.invoices.title'), desc: t('portail.home.links.invoices.desc'), href: '/portail/factures' },
           { icon: '📝', key: 'insc', title: t('portail.home.links.back_to_school.title', { annee: anneeInscription }), desc: t('portail.home.links.back_to_school.desc', { annee: anneeInscription }), href: '/portail/inscriptions' },
           { icon: '📄', title: t('portail.home.links.documents.title'), desc: t('portail.home.links.documents.desc'), href: '/portail/documents' },
+          // FIX P2-7 (audit portail parent 06/08) : point d'entrée visible vers la messagerie
+          // (uniquement si le module messagerie est actif pour l'école — même règle que la nav).
+          ...(!data.modulesActifs || data.modulesActifs.includes('messagerie')
+            ? [{ icon: '💬', title: t('portail.home.links.messages.title'), desc: t('portail.home.links.messages.desc'), href: '/portail/messages' }]
+            : []),
           { icon: '📞', title: t('portail.home.links.contact.title'), desc: t('portail.home.links.contact.desc'), href: '/portail/contact' },
         ].map(item => {
           const bloque = (item as any).key === 'insc' && data && data.inscriptionsOuvertes === false

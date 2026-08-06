@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useI18n } from '@/lib/i18n'
 
 /**
  * Bouton "Activer les notifications" — à placer dans le portail / dashboard.
@@ -8,8 +9,13 @@ import { createClient } from '@/lib/supabase'
  * - Demande permission notification
  * - Souscrit avec VAPID_PUBLIC_KEY
  * - POST /api/push/subscribe pour stocker
+ *
+ * FIX P2-9 (audit portail parent 06/08) : les textes du bandeau étaient en dur
+ * en français — ils passent par t() pour être affichés en hébreu quand le
+ * parent a choisi HE (clés portail.push.* dans i18n-portail-extra.ts).
  */
 export default function PushPrompt() {
+  const { t } = useI18n()
   const [supported, setSupported] = useState(false)
   const [permission, setPermission] = useState<NotificationPermission>('default')
   const [subscribed, setSubscribed] = useState(false)
@@ -113,10 +119,10 @@ export default function PushPrompt() {
     return (
       <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 12, color: '#065F46' }}>
-          🔔 Notifications activées sur cet appareil
+          {t('portail.push.enabled')}
         </div>
         <button onClick={desactiver} disabled={working} style={{ background: 'transparent', color: '#065F46', border: '1px solid #A7F3D0', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-          {working ? '...' : 'Désactiver'}
+          {working ? '...' : t('portail.push.disable')}
         </button>
       </div>
     )
@@ -125,7 +131,7 @@ export default function PushPrompt() {
   if (permission === 'denied') {
     return (
       <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#991B1B' }}>
-        🔕 Notifications bloquées par le navigateur. Pour les activer, ouvrez les paramètres du site et autorisez les notifications.
+        {t('portail.push.blocked')}
       </div>
     )
   }
@@ -133,11 +139,11 @@ export default function PushPrompt() {
   return (
     <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#1E40AF' }}>🔔 Activez les notifications</div>
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Recevez les annonces importantes de l&apos;école directement sur votre appareil.</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#1E40AF' }}>{t('portail.push.activate.title')}</div>
+        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{t('portail.push.activate.desc')}</div>
       </div>
       <button onClick={activer} disabled={working} className="btn-primary" style={{ fontSize: 12, padding: '7px 14px' }}>
-        {working ? 'Activation…' : 'Activer'}
+        {working ? t('portail.push.activating') : t('portail.push.activate.btn')}
       </button>
       {error && <div style={{ width: '100%', fontSize: 11, color: '#DC2626' }}>{error}</div>}
     </div>
