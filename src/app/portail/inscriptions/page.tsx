@@ -10,6 +10,7 @@ import AideEtape from '@/components/portail/AideEtape'
 import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
 import { deriverStatutInscription, libelleStatutInscription } from '@/lib/statut-inscription'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type SubTab = 'dossier' | 'facture' | 'documents'
 
@@ -153,11 +154,11 @@ function DossierTab({ router }: { router: any }) {
 
   async function renoncerDDR() {
     if (!famille) return
-    if (!confirm(t('portail.inscriptions.ddr_waive_confirm', { annee: anneeInscription }))) return
+    if (!await appConfirm(t('portail.inscriptions.ddr_waive_confirm', { annee: anneeInscription }))) return
     const s = createClient()
     const nouveau = { ...renoncements, [anneeInscription]: { renonce_le: new Date().toISOString() } }
     const { error } = await s.from('familles').update({ renoncements_ddr: nouveau }).eq('id', famille.id)
-    if (error) { alert(t('portail.inscriptions.error_prefix') + ' ' + error.message); return }
+    if (error) { await appAlert(t('portail.inscriptions.error_prefix') + ' ' + error.message); return }
     setFamille({ ...famille, renoncements_ddr: nouveau })
   }
   const contratSoumis = contrat && ['soumis', 'valide'].includes(contrat.statut)

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Casier = {
   id: string; numero: string; etage: string | null; zone: string | null;
@@ -78,7 +79,7 @@ export default function CasiersPage() {
   }
 
   async function rendre(c: Casier) {
-    if (!confirm(`Marquer le casier ${c.numero} comme rendu ?`)) return
+    if (!await appConfirm(`Marquer le casier ${c.numero} comme rendu ?`)) return
     await createClient().from('casiers').update({
       attribue_a: null, rendu_le: new Date().toISOString().slice(0, 10),
       statut: 'libre', updated_at: new Date().toISOString(),
@@ -87,7 +88,7 @@ export default function CasiersPage() {
   }
 
   async function supprimer(c: Casier) {
-    if (!confirm(`Supprimer le casier ${c.numero} ?`)) return
+    if (!await appConfirm(`Supprimer le casier ${c.numero} ?`)) return
     await createClient().from('casiers').delete().eq('id', c.id)
     await load()
   }

@@ -7,6 +7,7 @@ import { labelModePaiement } from '@/lib/statuts'
 import { useI18n } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format-date'
 import { chargerReportActif, type ReportSoldeActif } from '@/lib/report-solde'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 // Libelles propres des statuts d'avoir (codes BDD -> affichage FR)
 const LABEL_STATUT_AVOIR: Record<string, string> = {
@@ -132,7 +133,7 @@ export default function PortailFacturesPage() {
     try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { alert('Session expirée'); setPaying(false); return }
+      if (!session) { await appAlert('Session expirée'); setPaying(false); return }
       const endpoint = provider === 'stripe' ? '/api/stripe/checkout' : provider === 'paypal' ? '/api/paypal/checkout' : '/api/gocardless/checkout'
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -144,31 +145,31 @@ export default function PortailFacturesPage() {
       })
       const data = await res.json()
       if (!res.ok || !data.url) {
-        alert(data.error || 'Erreur lors de la création du paiement')
+        await appAlert(data.error || 'Erreur lors de la création du paiement')
         setPaying(false)
         return
       }
       window.location.href = data.url
     } catch (e: any) {
-      alert(e?.message || 'Erreur paiement')
+      await appAlert(e?.message || 'Erreur paiement')
       setPaying(false)
     }
   }
 
   async function gererMandat(action: 'activer' | 'revoquer') {
-    if (action === 'revoquer' && !confirm('Désactiver le prélèvement automatique ? Vous devrez régler vos échéances manuellement.')) return
+    if (action === 'revoquer' && !await appConfirm('Désactiver le prélèvement automatique ? Vous devrez régler vos échéances manuellement.')) return
     setMandatBusy(true)
     try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { alert('Session expirée'); return }
+      if (!session) { await appAlert('Session expirée'); return }
       const res = await fetch('/api/stripe/mandat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action }),
       })
       const data = await res.json()
-      if (!res.ok) { alert(data.error || 'Erreur'); return }
+      if (!res.ok) { await appAlert(data.error || 'Erreur'); return }
       if (action === 'activer' && data.url) { window.location.href = data.url; return }
       await load()
     } finally {

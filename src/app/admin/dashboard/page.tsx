@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { appAlert } from '@/components/ui/ConfirmDialog'
 
 const PLAN_BADGE: Record<string, { label: string; color: string; bg: string }> = {
   starter:    { label: 'Starter',    color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
@@ -60,7 +61,7 @@ export default function AdminDashboardPage() {
     const path = `${editId}.${ext}`
 
     const { error: upErr } = await s.storage.from('logos').upload(path, file, { upsert: true })
-    if (upErr) { alert('Erreur upload : ' + upErr.message); setUploadingLogo(false); return }
+    if (upErr) { await appAlert('Erreur upload : ' + upErr.message); setUploadingLogo(false); return }
 
     const { data: { publicUrl } } = s.storage.from('logos').getPublicUrl(path)
     setEditForm((p: any) => ({ ...p, logo_url: publicUrl }))
@@ -77,7 +78,7 @@ export default function AdminDashboardPage() {
 
     if (editForm.slug !== ecoles.find(e => e.id === editId)?.slug) {
       const { data: ex } = await s.from('ecoles').select('id').eq('slug', editForm.slug).neq('id', editId).single()
-      if (ex) { alert(`Slug « ${editForm.slug} » déjà utilisé`); setSaving(false); return }
+      if (ex) { await appAlert(`Slug « ${editForm.slug} » déjà utilisé`); setSaving(false); return }
     }
 
     await s.from('ecoles').update({

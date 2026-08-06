@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Tab = 'envoyer' | 'templates' | 'historique'
 
@@ -130,7 +131,7 @@ export default function NotificationsPage() {
   }
 
   async function deleteTemplate(id: string) {
-    if (!confirm('Supprimer ce template ?')) return
+    if (!await appConfirm('Supprimer ce template ?')) return
     await supabase.from('email_templates').update({ actif: false }).eq('id', id)
     load()
   }

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import AidePage from '@/components/ui/AidePage'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Statut = 'present' | 'absent' | 'retard' | 'sortie_anticipee'
 type DemiJournee = 'matin' | 'apres_midi' | 'journee'
@@ -95,7 +96,7 @@ export default function PresencesPage() {
   }
 
   async function tousPresents() {
-    if (!confirm(`Marquer les ${eleves.length} élèves comme présents pour ${demi === 'matin' ? 'le matin' : demi === 'apres_midi' ? 'l\'après-midi' : 'la journée'} du ${new Date(date).toLocaleDateString('fr-FR')} ?`)) return
+    if (!await appConfirm(`Marquer les ${eleves.length} élèves comme présents pour ${demi === 'matin' ? 'le matin' : demi === 'apres_midi' ? 'l\'après-midi' : 'la journée'} du ${new Date(date).toLocaleDateString('fr-FR')} ?`)) return
     setSaving(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()

@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Plan = {
   id: string
@@ -77,9 +78,9 @@ export default function PlanPaiementPage() {
   async function createPlan(e: React.FormEvent) {
     e.preventDefault()
     const total = parseFloat(form.montant_total)
-    if (isNaN(total) || total <= 0) return alert('Montant total invalide')
-    if (form.nb_echeances < 1) return alert('Au moins 1 échéance')
-    if (!form.date_premiere_echeance) return alert('Date première échéance obligatoire')
+    if (isNaN(total) || total <= 0) return await appAlert('Montant total invalide')
+    if (form.nb_echeances < 1) return await appAlert('Au moins 1 échéance')
+    if (!form.date_premiere_echeance) return await appAlert('Date première échéance obligatoire')
 
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
@@ -95,7 +96,7 @@ export default function PlanPaiementPage() {
       motif: form.motif || null,
       cree_par: session?.user.id,
     }).select().single()
-    if (e1) return alert('Erreur : ' + e1.message)
+    if (e1) return await appAlert('Erreur : ' + e1.message)
 
     // 2. Générer les échéances
     const montantParEcheance = Math.round(total / form.nb_echeances * 100) / 100
@@ -135,7 +136,7 @@ export default function PlanPaiementPage() {
   }
 
   async function deletePlan(id: string) {
-    if (!confirm('Supprimer ce plan et toutes ses échéances ?')) return
+    if (!await appConfirm('Supprimer ce plan et toutes ses échéances ?')) return
     await createClient().from('plans_paiement_famille').delete().eq('id', id)
     await load()
   }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Doc = {
   id: string
@@ -82,7 +83,7 @@ export default function DocumentsFamillePage() {
       taille: file.size,
       mime_type: file.type || null,
       visible_famille: visibleFamille,
-      uploaded_by: session?.user.id,
+      created_by: session?.user.id, // dddd1 : la colonne s'appelle created_by
     })
     if (insErr) {
       await s.storage.from('documents-famille').remove([path])
@@ -100,7 +101,7 @@ export default function DocumentsFamillePage() {
   }
 
   async function deleteDoc(doc: Doc) {
-    if (!confirm(`Supprimer le document "${doc.nom}" ?`)) return
+    if (!await appConfirm(`Supprimer le document "${doc.nom}" ?`)) return
     const s = createClient()
     await s.storage.from('documents-famille').remove([doc.storage_path])
     await s.from('documents_famille').delete().eq('id', doc.id)

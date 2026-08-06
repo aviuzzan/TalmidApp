@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { ANNEE_COURANTE } from '@/lib/inscriptions'
 import { soldesParFamille, type SoldeFamille } from '@/lib/encaissement'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 // AUDIT P1 (06/08/2026) — export SEPA branché sur une CONFIG vide au lieu des
 // échéances réelles : l'écran ne proposait que les jours configurés dans
@@ -131,7 +132,7 @@ export default function SepaExportPage() {
       const sf = soldes.get(c.famille_id)
       return sf && sf.soldeRestant <= 0.009
     })
-    if (soldees.length > 0 && !confirm(`⚠️ ${soldees.length} prélèvement(s) concernent une famille dont les factures sont DÉJÀ SOLDÉES (règlements saisis). Les prélever créerait un trop-perçu.\n\nGénérer quand même le fichier avec TOUS les prélèvements ?`)) return
+    if (soldees.length > 0 && !await appConfirm(`⚠️ ${soldees.length} prélèvement(s) concernent une famille dont les factures sont DÉJÀ SOLDÉES (règlements saisis). Les prélever créerait un trop-perçu.\n\nGénérer quand même le fichier avec TOUS les prélèvements ?`)) return
     setExporting(true)
     const { data: { session } } = await createClient().auth.getSession()
     const dateStr = selectedDateStr
@@ -144,7 +145,7 @@ export default function SepaExportPage() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Erreur inconnue' }))
-      alert(`Erreur : ${err.error}`)
+      await appAlert(`Erreur : ${err.error}`)
       setExporting(false)
       return
     }

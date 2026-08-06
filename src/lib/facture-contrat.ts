@@ -62,21 +62,13 @@ export async function creerFactureDepuisContrat(
     }
   }
 
-  // 2. Numéro séquentiel FACT-{YYYY}-{NNNN}
-  const yearSuffix = annee.split('-')[1] || new Date().getFullYear().toString()
-  const { data: lastFact } = await s
-    .from('factures')
-    .select('numero')
-    .like('numero', `FACT-${yearSuffix}-%`)
-    .order('numero', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  let nextNum = 1
-  if (lastFact?.numero) {
-    const m = lastFact.numero.match(/FACT-\d+-(\d+)$/)
-    if (m) nextNum = parseInt(m[1]) + 1
-  }
-  const numero = `FACT-${yearSuffix}-${String(nextNum).padStart(4, '0')}`
+  // 2. Numero de facture : NE PLUS le calculer cote app (dddd1, 06/08/2026).
+  //    L'ancien scan max(FACT-...) tournait sous RLS : chaque ecole etait
+  //    aveugle aux numeros des autres alors que la contrainte UNIQUE est
+  //    globale -> collision inter-ecoles reelle (demo a tire le numero d'une
+  //    famille Eschel). Le trigger gen_facture_numero (SECURITY DEFINER,
+  //    convention arbitree : annee de DEBUT de l'annee scolaire) attribue le
+  //    numero a l'insert ; on le relit dans le retour du .select().
 
   // Résoudre exercice_id (NULL → résolution via annee_scolaire)
   let exerciceId: string | null = contrat.exercice_id || null
@@ -110,7 +102,6 @@ export async function creerFactureDepuisContrat(
         famille_id: contrat.famille_id,
         annee_scolaire: annee,
         exercice_id: exerciceId,
-        numero,
         date_emission: new Date().toISOString().split('T')[0],
         statut: 'en_attente',
         notes: `Générée automatiquement à la validation du contrat ${annee}`,

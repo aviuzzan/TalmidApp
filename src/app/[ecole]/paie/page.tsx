@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Prof = { id: string; prenom: string; nom: string; nir: string | null; salaire_brut_mensuel: number | null }
 type Bulletin = {
@@ -35,7 +36,7 @@ export default function PaiePage() {
   useEffect(() => { load() }, [load])
 
   async function genererBulletinsAutoMois() {
-    if (!confirm(`Générer les bulletins de paie pour ${moisFiltre} ? (${profs.length} professeurs)`)) return
+    if (!await appConfirm(`Générer les bulletins de paie pour ${moisFiltre} ? (${profs.length} professeurs)`)) return
     setGenerating(true); setMsg('')
     const s = createClient()
 

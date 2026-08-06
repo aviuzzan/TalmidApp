@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { uploadAttachments, fileIcon, formatSize, Attachment } from '@/lib/messages-upload'
+import { appAlert } from '@/components/ui/ConfirmDialog'
 
 export default function EcoleThreadPage() {
   const params = useParams()
@@ -72,7 +73,7 @@ export default function EcoleThreadPage() {
   async function changeStatut(nouveau: 'ouvert' | 'resolu' | 'archive') {
     const s = createClient()
     const { error: err } = await s.from('message_threads').update({ statut: nouveau }).eq('id', threadId)
-    if (err) { alert('Erreur : ' + err.message); return }
+    if (err) { await appAlert('Erreur : ' + err.message); return }
     await load()
   }
 
@@ -80,7 +81,7 @@ export default function EcoleThreadPage() {
     if (!newServiceId) return
     const s = createClient()
     const { error: err } = await s.from('message_threads').update({ service_id: newServiceId }).eq('id', threadId)
-    if (err) { alert('Erreur : ' + err.message); return }
+    if (err) { await appAlert('Erreur : ' + err.message); return }
     await load()
   }
 

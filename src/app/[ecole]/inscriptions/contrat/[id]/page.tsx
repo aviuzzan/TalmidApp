@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { formatStatut } from '@/lib/inscriptions'
 import { logAction } from '@/lib/audit-log'
 import { creerFactureDepuisContrat } from '@/lib/facture-contrat'
+import { appAlert, appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 export default function ContratAdminDetailPage() {
   const router = useRouter()
@@ -39,7 +40,7 @@ export default function ContratAdminDetailPage() {
     // Deuxième garde par état BDD : si le contrat est déjà validé, on refuse
     // (protège contre une race condition ou un état UI désynchronisé).
     if (contrat.statut === 'valide') {
-      alert('Contrat déjà validé')
+      await appAlert('Contrat déjà validé')
       return
     }
     setValidating(true)
@@ -50,7 +51,7 @@ export default function ContratAdminDetailPage() {
       .from('contrats_scolarisation')
       .update({ statut: 'valide', valide_le: new Date().toISOString(), valide_par: session?.user.id })
       .eq('id', contratId)
-    if (error) { alert('Erreur : ' + error.message); return }
+    if (error) { await appAlert('Erreur : ' + error.message); return }
 
     // Créer / mettre à jour la scolarité de chaque enfant pour l'exercice cible
     // (modèle AGATE : la scolarité par année est la source de vérité)
@@ -117,7 +118,7 @@ export default function ContratAdminDetailPage() {
     }
 
     setContrat({ ...contrat, statut: 'valide' })
-    alert('Contrat validé.' + factureMsg)
+    await appAlert('Contrat validé.' + factureMsg)
     } finally {
       setValidating(false)
     }
@@ -125,9 +126,9 @@ export default function ContratAdminDetailPage() {
 
   async function annuler() {
     if (!contrat) return
-    const motif = window.prompt('Motif de l\'annulation (sera enregistré et envoyé à la famille) :')
+    const motif = await appPrompt('Motif de l\'annulation (sera enregistré et envoyé à la famille) :')
     if (!motif || !motif.trim()) return
-    if (!window.confirm(`Confirmer l'annulation du contrat ${contrat.numero || contrat.id.substring(0, 8)} ?\n\n— Le contrat passera en statut "annulé"\n— La facture liée sera marquée "annulée"\n— Les enfants reviendront en "en_attente" pour pouvoir signer un nouveau contrat`)) return
+    if (!await appConfirm(`Confirmer l'annulation du contrat ${contrat.numero || contrat.id.substring(0, 8)} ?\n\n— Le contrat passera en statut "annulé"\n— La facture liée sera marquée "annulée"\n— Les enfants reviendront en "en_attente" pour pouvoir signer un nouveau contrat`)) return
     setAnnulating(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
@@ -142,7 +143,7 @@ export default function ContratAdminDetailPage() {
         motif_annulation: motif.trim(),
       })
       .eq('id', contratId)
-    if (errC) { alert('Erreur annulation contrat : ' + errC.message); setAnnulating(false); return }
+    if (errC) { await appAlert('Erreur annulation contrat : ' + errC.message); setAnnulating(false); return }
 
     // 2. Annuler la facture liée si elle existe
     try {
@@ -186,7 +187,7 @@ export default function ContratAdminDetailPage() {
     })
     setContrat({ ...contrat, statut: 'annule', motif_annulation: motif.trim() })
     setAnnulating(false)
-    alert('Contrat annulé. La famille a été notifiée par email.')
+    await appAlert('Contrat annulé. La famille a été notifiée par email.')
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748B' }}>Chargement...</div>
@@ -252,11 +253,11 @@ export default function ContratAdminDetailPage() {
                   const up = await fetch('/api/upload', { method: 'POST', headers: { Authorization: 'Bearer ' + (sess?.access_token || '') }, body: fd })
                   const json = await up.json()
                   const url = json?.url || json?.publicUrl || json?.signedUrl
-                  if (!up.ok || !url) { alert('Échec upload : ' + (json?.error || 'inconnue')); return }
+                  if (!up.ok || !url) { await appAlert('Échec upload : ' + (json?.error || 'inconnue')); return }
                   const { error: upErr } = await s2.from('contrats_scolarisation').update({ contrat_papier_url: url }).eq('id', contrat.id)
-                  if (upErr) { alert('Enregistrement impossible : ' + upErr.message); return }
+                  if (upErr) { await appAlert('Enregistrement impossible : ' + upErr.message); return }
                   setContrat({ ...contrat, contrat_papier_url: url })
-                } catch (err: any) { alert('Erreur : ' + (err?.message || 'inconnue')) }
+                } catch (err: any) { await appAlert('Erreur : ' + (err?.message || 'inconnue')) }
               }} />
           </label>
         </div>

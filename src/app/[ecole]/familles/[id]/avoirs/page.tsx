@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { labelStatutFacture } from '@/lib/statuts'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Avoir = {
   id: string
@@ -66,7 +67,7 @@ export default function AvoirsFamillePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.montant) return alert('Montant obligatoire')
+    if (!form.montant) return await appAlert('Montant obligatoire')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     // FIX audit 24/07/2026 pt 7 : numerotation atomique via sequence BDD
@@ -87,16 +88,16 @@ export default function AvoirsFamillePage() {
     if (!editId) payload.cree_par = session?.user.id
     if (editId) {
       const { error } = await s.from('avoirs').update(payload).eq('id', editId)
-      if (error) return alert('Erreur : ' + error.message)
+      if (error) return await appAlert('Erreur : ' + error.message)
     } else {
       const { data: avoirCree, error } = await s.from('avoirs').insert(payload).select('id, montant, numero').single()
-      if (error) return alert('Erreur : ' + error.message)
+      if (error) return await appAlert('Erreur : ' + error.message)
       // Si une facture d'origine est selectionnee, proposer l'imputation automatique
       if (avoirCree && form.facture_origine_id) {
         const fact = factures.find(f => f.id === form.facture_origine_id)
         const factLabel = fact ? `${fact.numero} (${fact.annee_scolaire})` : 'la facture'
         const m = Number(payload.montant)
-        if (confirm(`Imputer immediatement ${m.toFixed(2)} EUR sur ${factLabel} ?\n\n(L avoir va deduire ce montant du solde restant.)`)) {
+        if (await appConfirm(`Imputer immediatement ${m.toFixed(2)} EUR sur ${factLabel} ?\n\n(L avoir va deduire ce montant du solde restant.)`)) {
           // FIX audit RLS 29/07/2026 : une policy qui refuse l insert renvoie
           // { error } sans lever d exception. Si l imputation echouait mais pas
           // le reglement, le solde de la facture baissait alors que l avoir
@@ -108,7 +109,7 @@ export default function AvoirsFamillePage() {
             cree_par: session?.user.id,
           })
           if (errImpA) {
-            alert('Avoir cree, mais l imputation a ete refusee : ' + errImpA.message + '\n\nAucun reglement n a ete enregistre. L avoir reste disponible : refaire l imputation depuis la liste.')
+            await appAlert('Avoir cree, mais l imputation a ete refusee : ' + errImpA.message + '\n\nAucun reglement n a ete enregistre. L avoir reste disponible : refaire l imputation depuis la liste.')
           } else {
             const { error: errRegA } = await s.from('reglements').insert({
               facture_id: form.facture_origine_id,
@@ -119,9 +120,9 @@ export default function AvoirsFamillePage() {
               reference: avoirCree.numero,
               notes: `Imputation avoir ${avoirCree.numero || avoirCree.id.substring(0, 8)} (cree dans le meme geste)`,
             })
-            if (errRegA) alert('Avoir cree mais reglement non trace : ' + errRegA.message)
+            if (errRegA) await appAlert('Avoir cree mais reglement non trace : ' + errRegA.message)
             const { error: errStatutA } = await s.from('avoirs').update({ statut: 'utilise' }).eq('id', avoirCree.id)
-            if (errStatutA) alert('Imputation enregistree mais le statut de l avoir n a pas pu etre mis a jour : ' + errStatutA.message + '\n\nL avoir va apparaitre comme encore disponible : le corriger a la main avant toute nouvelle imputation.')
+            if (errStatutA) await appAlert('Imputation enregistree mais le statut de l avoir n a pas pu etre mis a jour : ' + errStatutA.message + '\n\nL avoir va apparaitre comme encore disponible : le corriger a la main avant toute nouvelle imputation.')
           }
         }
       }
@@ -134,10 +135,10 @@ export default function AvoirsFamillePage() {
   async function imputerSur() {
     if (!imputForm) return
     const m = parseFloat(imputForm.montant)
-    if (isNaN(m) || m <= 0) return alert('Montant invalide')
+    if (isNaN(m) || m <= 0) return await appAlert('Montant invalide')
     const avoir = avoirs.find(a => a.id === imputForm.avoirId)
     if (!avoir) return
-    if (m > avoir.montant_disponible) return alert(`Montant disponible : ${avoir.montant_disponible.toFixed(2)} €`)
+    if (m > avoir.montant_disponible) return await appAlert(`Montant disponible : ${avoir.montant_disponible.toFixed(2)} €`)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
 
@@ -148,7 +149,7 @@ export default function AvoirsFamillePage() {
       montant: m,
       cree_par: session?.user.id,
     })
-    if (e1) return alert('Erreur : ' + e1.message)
+    if (e1) return await appAlert('Erreur : ' + e1.message)
 
     // 2. Si imputé sur une facture → créer un règlement de type "avoir"
     if (imputForm.factureId) {
@@ -161,7 +162,7 @@ export default function AvoirsFamillePage() {
         reference: avoir.numero,
         notes: `Imputation avoir ${avoir.numero || avoir.id.substring(0, 8)}`,
       })
-      if (errReg) alert('Imputation enregistree mais reglement non trace : ' + errReg.message)
+      if (errReg) await appAlert('Imputation enregistree mais reglement non trace : ' + errReg.message)
     }
 
     // 3. Mettre à jour le statut de l'avoir
@@ -170,16 +171,16 @@ export default function AvoirsFamillePage() {
     const nouveau_utilise = avoir.montant_utilise + m
     const nouveau_statut = nouveau_utilise >= avoir.montant ? 'utilise' : 'partiellement_utilise'
     const { error: e3 } = await s.from('avoirs').update({ statut: nouveau_statut }).eq('id', imputForm.avoirId)
-    if (e3) alert('Imputation enregistree mais le statut de l avoir n a pas pu etre mis a jour : ' + e3.message + '\n\nL avoir va apparaitre comme encore disponible : le corriger a la main avant toute nouvelle imputation.')
+    if (e3) await appAlert('Imputation enregistree mais le statut de l avoir n a pas pu etre mis a jour : ' + e3.message + '\n\nL avoir va apparaitre comme encore disponible : le corriger a la main avant toute nouvelle imputation.')
 
     setImputForm(null)
     await load()
   }
 
   async function remove(id: string) {
-    if (!confirm('Supprimer cet avoir ? Toutes les imputations seront supprimées.')) return
+    if (!await appConfirm('Supprimer cet avoir ? Toutes les imputations seront supprimées.')) return
     const { error } = await createClient().from('avoirs').delete().eq('id', id)
-    if (error) { alert('Suppression refusee : ' + error.message); return }
+    if (error) { await appAlert('Suppression refusee : ' + error.message); return }
     await load()
   }
 

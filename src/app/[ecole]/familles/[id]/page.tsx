@@ -9,7 +9,7 @@ import { useAccesFinances } from '@/lib/acces-finances'
 import { getAnneeCouranteSync } from '@/lib/annee-courante'
 import { useAnneeScolaireActive } from '@/lib/exercice-context'
 import { useToast } from '@/components/ui/Toast'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useConfirm, appAlert } from '@/components/ui/ConfirmDialog'
 import BoutonReinscription from '@/components/BoutonReinscription'
 import { labelModePaiement, labelStatutFacture } from '@/lib/statuts'
 import { logAction } from '@/lib/audit-log'
@@ -126,8 +126,8 @@ export default function FamilleDetailPage() {
       supabase.from('familles').select('*').eq('id', id).single(),
       supabase.from('enfants').select('*').eq('famille_id', id).order('nom'),
       supabase.from('classes').select('*').eq('ecole_id', ecole.id).order('ordre'),
-      supabase.from('transports').select('*').eq('ecole_id', ecole.id).order('nom'),
-      supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
+      supabase.from('transports').select('*').order('nom'), // dddd1 : referentiel global, pas de colonne ecole_id
+      supabase.from('modes_paiement').select('*').order('libelle'), // dddd1 : referentiel global, pas de colonne ecole_id
       // ssss2 : ce sélecteur lisait la table `tarifs`, VIDE depuis l'unification
       // des tarifs — la liste déroulante ne proposait donc jamais rien, et le
       // tarif_id posé sur la ligne ne correspondait à aucun poste imputable.
@@ -1101,13 +1101,13 @@ export default function FamilleDetailPage() {
                       attestation_honneur: true,
                     }
                     const { error } = await supabase.from('demandes_reduction').insert(payload)
-                    if (error) { alert('Erreur : ' + error.message); setSavingTranche(false); return }
-                    alert(`Tranche ${tr?.code} définie pour ${ex?.code}. La famille n'aura pas la DDR à remplir.`)
+                    if (error) { await appAlert('Erreur : ' + error.message); setSavingTranche(false); return }
+                    await appAlert(`Tranche ${tr?.code} définie pour ${ex?.code}. La famille n'aura pas la DDR à remplir.`)
                     setShowTrancheModal(false)
                     setTrancheForm({ exercice_id: '', tranche_id: '', tarif_accorde: '', note: '' })
                     setSavingTranche(false)
                   } catch (err: any) {
-                    alert('Erreur : ' + (err?.message || 'inconnue'))
+                    await appAlert('Erreur : ' + (err?.message || 'inconnue'))
                     setSavingTranche(false)
                   }
                 }}

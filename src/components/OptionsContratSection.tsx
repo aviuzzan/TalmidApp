@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { chargerPlacesOptions, type PlacesOption } from '@/lib/options-vie-scolaire'
+import { appAlert } from '@/components/ui/ConfirmDialog'
 
 interface Props {
   enfantId: string
@@ -68,15 +69,15 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
     setSaving(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    if (!session) { alert('Session expiree'); setSaving(false); return }
+    if (!session) { await appAlert('Session expiree'); setSaving(false); return }
     const res = await fetch('/api/admin/gerer-option', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ action: 'ajouter_direct', enfantId, tarifId: tarifChoisi, ecoleId, anneeScolaire }),
     })
     const data = await res.json()
-    if (!res.ok || !data.ok) { alert(data.error || 'Erreur'); setSaving(false); return }
-    alert(`Option ajoutee${data.factureModifiee ? ' + facture ' + (data.factureNumero || '') + ' mise a jour' : ''}`)
+    if (!res.ok || !data.ok) { await appAlert(data.error || 'Erreur'); setSaving(false); return }
+    await appAlert(`Option ajoutee${data.factureModifiee ? ' + facture ' + (data.factureNumero || '') + ' mise a jour' : ''}`)
     setShowAdd(false); setTarifChoisi(''); setSaving(false)
     await load()
   }
@@ -86,18 +87,18 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
     setSaving(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    if (!session) { alert('Session expiree'); setSaving(false); return }
+    if (!session) { await appAlert('Session expiree'); setSaving(false); return }
     const res = await fetch('/api/famille/demander-option', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ enfantId, tarifId: tarifChoisi, anneeScolaire, note: note.trim() || undefined }),
     })
     const data = await res.json()
-    if (!res.ok || !data.ok) { alert(data.error || 'Erreur'); setSaving(false); return }
+    if (!res.ok || !data.ok) { await appAlert(data.error || 'Erreur'); setSaving(false); return }
     if (data.listeAttente) {
-      alert(`Option complète : votre demande a été placée en liste d'attente${data.position ? ` (position ${data.position})` : ''}. L'école vous contactera si une place se libère.`)
+      await appAlert(`Option complète : votre demande a été placée en liste d'attente${data.position ? ` (position ${data.position})` : ''}. L'école vous contactera si une place se libère.`)
     } else {
-      alert('Demande envoyée. L\'école vous confirmera l\'ajout.')
+      await appAlert('Demande envoyée. L\'école vous confirmera l\'ajout.')
     }
     setShowAdd(false); setTarifChoisi(''); setNote(''); setSaving(false)
     await load()
@@ -107,14 +108,14 @@ export default function OptionsContratSection({ enfantId, ecoleId, anneeScolaire
     setSaving(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
-    if (!session) { alert('Session expiree'); setSaving(false); return }
+    if (!session) { await appAlert('Session expiree'); setSaving(false); return }
     const res = await fetch('/api/admin/gerer-option', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ action: accepte ? 'accepter_demande' : 'refuser_demande', demandeId }),
     })
     const data = await res.json()
-    if (!res.ok || !data.ok) { alert(data.error || 'Erreur'); setSaving(false); return }
+    if (!res.ok || !data.ok) { await appAlert(data.error || 'Erreur'); setSaving(false); return }
     setSaving(false)
     await load()
   }

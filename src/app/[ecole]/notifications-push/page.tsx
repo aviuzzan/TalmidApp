@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Classe = { id: string; nom: string; ordre: number }
 type Log = { id: string; titre: string; body: string; statut: string; created_at: string }
@@ -40,7 +41,7 @@ export default function NotificationsPushPage() {
   async function envoyer() {
     if (!titre.trim() || !body.trim()) { setMsg('Titre et message requis'); return }
     if (cibleType === 'classe' && !cibleClasse) { setMsg('Sélectionnez une classe'); return }
-    if (!confirm(`Envoyer cette notification ?`)) return
+    if (!await appConfirm(`Envoyer cette notification ?`)) return
     setSending(true); setMsg('')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()

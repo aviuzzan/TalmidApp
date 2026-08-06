@@ -12,6 +12,7 @@ import { chargerParLots } from '@/lib/pagination'
 // double encaissement. Corrigé : reste dû affiché par chèque + dépôt via la brique
 // partagée lib/encaissement (règlement idempotent + statut).
 import { encaisserEcheance, soldesParFamille, calculerDepassement, bilanEncaissements, type SoldeFamille } from '@/lib/encaissement'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Cheque = {
   id: string
@@ -133,7 +134,7 @@ export default function BordereauPage() {
     const avert = depassement > 0
       ? `\n\n⚠️ ATTENTION SUR-ENCAISSEMENT : ${fDep.length} famille(s) ont déjà des règlements saisis — ce dépôt percevrait ${fmt(depassement)} AU-DELÀ du reste dû. Vérifiez les lignes marquées en rouge avant de continuer.`
       : ''
-    if (!confirm(`Marquer ${selectedCheques.length} chèque(s) comme déposé(s) ? Un règlement sera enregistré sur la facture de chaque chèque.${avert}`)) return
+    if (!await appConfirm(`Marquer ${selectedCheques.length} chèque(s) comme déposé(s) ? Un règlement sera enregistré sur la facture de chaque chèque.${avert}`)) return
     // FIX audit 29/07/2026 (conservé) : chaque étape est vérifiée et remontée — jamais
     // d'écran qui laisse croire au dépôt réussi sur un échec silencieux.
     // AUDIT P1 : le dépôt passe par la brique partagée : règlement créé (idempotent
@@ -145,7 +146,7 @@ export default function BordereauPage() {
     setDeposeEnCours(false)
     const echecs = resultats.filter(r => !r.ok)
     setErreurChargement(echecs.length ? `Dépôt partiel — ${echecs.length} échec(s) : ${echecs[0].erreur}` : '')
-    alert(bilanEncaissements(resultats))
+    await appAlert(bilanEncaissements(resultats))
     setSelected(new Set())
     await load()
   }

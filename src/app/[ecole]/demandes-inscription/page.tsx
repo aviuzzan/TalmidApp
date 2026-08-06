@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useI18n } from '@/lib/i18n'
 import AidePage from '@/components/ui/AidePage'
+import { appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 /**
  * Demandes d'inscription : l'admin envoie un lien a un parent prospect,
@@ -106,9 +107,9 @@ export default function DemandesInscriptionPage() {
     if (!detail) return
     let motif = ''
     if (action === 'refuser') {
-      motif = window.prompt('Motif du refus (optionnel, sera communique a la famille) :') || ''
+      motif = await appPrompt('Motif du refus (optionnel, sera communique a la famille) :') || ''
     } else {
-      if (!window.confirm('Accepter cette demande ? La famille, l\'enfant et le compte parent vont etre crees automatiquement, et un email d\'acces sera envoye.')) return
+      if (!await appConfirm('Accepter cette demande ? La famille, l\'enfant et le compte parent vont etre crees automatiquement, et un email d\'acces sera envoye.')) return
     }
     setTraiteLoading(true); setTraiteMsg('')
     const s = createClient()

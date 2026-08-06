@@ -76,7 +76,7 @@ export default function FamillesPage() {
       // modale d'édition rapide lisent une trentaine de colonnes de `familles`,
       // les énumérer ici reviendrait à en perdre au premier oubli.
       supabase.from('familles').select('*').eq('ecole_id', ecole.id).order('date_creation', { ascending: false }),
-      supabase.from('modes_paiement').select('*').eq('ecole_id', ecole.id).order('libelle'),
+      supabase.from('modes_paiement').select('*').order('libelle'), // dddd1 : referentiel global, pas de colonne ecole_id
       supabase.from('tranches_facturation').select('id, code, libelle').eq('ecole_id', ecole.id).order('ordre'),
     ])
 

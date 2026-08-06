@@ -6,6 +6,7 @@ import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import { calcDuADateBatch, type DuADateResult } from '@/lib/du-a-date'
 import { chargerParLots } from '@/lib/pagination'
 import AidePage from '@/components/ui/AidePage'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Facture = {
   id: string
@@ -121,7 +122,7 @@ export default function RelancesPage() {
 
   async function envoyerRelance(f: Facture, niveau: number) {
     if (!f.parent_email) { setMsg('❌ Aucun email parent'); return }
-    if (!confirm(`Envoyer la relance N${niveau} (${nomNiveau(niveau)}) à ${f.parent_email} pour ${f.numero} ?`)) return
+    if (!await appConfirm(`Envoyer la relance N${niveau} (${nomNiveau(niveau)}) à ${f.parent_email} pour ${f.numero} ?`)) return
     setSending(f.id); setMsg('')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()

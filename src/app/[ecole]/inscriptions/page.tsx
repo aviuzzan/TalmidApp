@@ -13,6 +13,7 @@ import { chargerParLots } from '@/lib/pagination'
 import { useI18n } from '@/lib/i18n'
 import { useToast } from '@/components/ui/Toast'
 import AidePage from '@/components/ui/AidePage'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Onglet = 'tableau_bord' | 'pedagogique' | 'reduction' | 'contrats' | 'a_relancer' | 'cheques'
 
@@ -420,7 +421,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     const contrat = contrats.find(c => c.id === id)
-    if (!contrat) { alert('Contrat introuvable'); return }
+    if (!contrat) { await appAlert('Contrat introuvable'); return }
 
     // 1. Marquer contrat comme validé
     const { data: upd, error: updErr } = await s
@@ -429,7 +430,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
       .eq('id', id)
       .select()
     if (updErr || !upd || upd.length === 0) {
-      alert('Erreur lors de la validation : ' + (updErr?.message || 'aucune ligne modifiée'))
+      await appAlert('Erreur lors de la validation : ' + (updErr?.message || 'aucune ligne modifiée'))
       return
     }
 
@@ -439,7 +440,7 @@ function ContratsList({ ecoleId, ecoleSlug, annee }: { ecoleId: string; ecoleSlu
     //    de DDR au lieu de la ventilation par enfant. Supprimé : ~240 lignes.)
     const factRes = await creerFactureDepuisContrat(s, contrat, ecoleId, annee)
     if (!factRes.ok) {
-      alert('Contrat validé mais erreur création facture : ' + (factRes.error || 'inconnue'))
+      await appAlert('Contrat validé mais erreur création facture : ' + (factRes.error || 'inconnue'))
       setContrats(p => p.map(c => c.id === id ? { ...c, statut: 'valide' } : c))
       return
     }
@@ -620,7 +621,7 @@ function ReductionsList({ ecoleId, annee, ecoleSlug }: { ecoleId: string; annee:
   }
 
   async function refuserReduction(id: string) {
-    if (!confirm('Refuser cette demande de réduction ?')) return
+    if (!await appConfirm('Refuser cette demande de réduction ?')) return
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     await s.from('demandes_reduction').update({ statut: 'refuse', traite_le: new Date().toISOString(), traite_par: session?.user.id }).eq('id', id)
@@ -712,7 +713,7 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
   async function changerStatut(id: string, statut: string) {
     const s = createClient()
     const { error: errFiche } = await s.from('inscriptions_pedagogiques').update({ statut }).eq('id', id)
-    if (errFiche) { alert('Erreur fiche : ' + errFiche.message); return }
+    if (errFiche) { await appAlert('Erreur fiche : ' + errFiche.message); return }
     // Repercuter sur l'eleve : accepte => inscrit (debloque la reinscription), refuse => refuse
     const fiche = liste.find(d => d.id === id)
     if (fiche?.enfant_id) {
@@ -725,7 +726,7 @@ function PedagogiqueList({ ecoleId, annee }: { ecoleId: string; annee: string })
           .eq('id', fiche.enfant_id)
           .select('id, statut_inscription')
         if (errEnf || !data || data.length === 0) {
-          alert(`Fiche validée mais le statut de l'élève n'a pas pu être mis à jour. Détail : ${errEnf?.message || 'aucune ligne modifiée (probablement RLS)'}`)
+          await appAlert(`Fiche validée mais le statut de l'élève n'a pas pu être mis à jour. Détail : ${errEnf?.message || 'aucune ligne modifiée (probablement RLS)'}`)
           return
         }
         // 2) Update aussi scolarites.statut_inscription pour l'annee de la fiche
@@ -1075,7 +1076,7 @@ function ChequesList({ ecoleId, annee }: { ecoleId: string; annee: string }) {
       {aEncaisser.length > 1 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
           <button disabled={batchEncaissement} onClick={async () => {
-            const okConfirm = window.confirm(`Encaisser les ${aEncaisser.length} échéances échues d'un coup ?\n(crée un règlement par échéance : ${aEncaisser.reduce((s: number, c: any) => s + (c.montant || 0), 0).toLocaleString('fr-FR')} € au total)`)
+            const okConfirm = await appConfirm(`Encaisser les ${aEncaisser.length} échéances échues d'un coup ?\n(crée un règlement par échéance : ${aEncaisser.reduce((s: number, c: any) => s + (c.montant || 0), 0).toLocaleString('fr-FR')} € au total)`)
             if (!okConfirm) return
             setBatchEncaissement(true)
             let okCount = 0

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { Niveau, NIVEAUX, NIVEAU_LABEL, NIVEAU_COLOR, TEMPLATES, loadPermissions } from '@/lib/permissions'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Module = { code: string; nom: string; description: string | null; icone: string; ordre: number }
 type Admin = { id: string; prenom: string | null; nom: string | null; email: string; role: string; secteur_id: string | null; acces_finances?: boolean }
@@ -106,7 +107,7 @@ export default function ComptesAccesPage() {
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     const { error } = await s.from('profiles').update({ acces_finances: valeur }).eq('id', profileId)
-    if (error) { alert('Erreur : ' + error.message); setSaving(false); return }
+    if (error) { await appAlert('Erreur : ' + error.message); setSaving(false); return }
     await s.from('permissions_audit').insert({
       acteur_id: session?.user.id, cible_profile_id: profileId, ecole_id: ecole.id,
       action: 'toggle_acces_finances',
@@ -144,7 +145,7 @@ export default function ComptesAccesPage() {
   }
 
   async function handleRevoke(profileId: string, nomAffiche: string) {
-    if (!confirm(`Revoquer l'acces administrateur de ${nomAffiche} sur cette ecole ?\n\nToutes ses permissions seront supprimees. S'il n'a plus aucun acces sur d'autres ecoles, il sera retrograde en parent.`)) return
+    if (!await appConfirm(`Revoquer l'acces administrateur de ${nomAffiche} sur cette ecole ?\n\nToutes ses permissions seront supprimees. S'il n'a plus aucun acces sur d'autres ecoles, il sera retrograde en parent.`)) return
     setRevoking(true); setRevokeError(''); setRevokeOk('')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
@@ -179,7 +180,7 @@ export default function ComptesAccesPage() {
   }
 
   async function applyTemplate(profileId: string, templateKey: string) {
-    if (!confirm(`Appliquer le template "${TEMPLATES[templateKey].label}" ? Toutes les permissions seront remplaceec.`)) return
+    if (!await appConfirm(`Appliquer le template "${TEMPLATES[templateKey].label}" ? Toutes les permissions seront remplaceec.`)) return
     setSaving(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()

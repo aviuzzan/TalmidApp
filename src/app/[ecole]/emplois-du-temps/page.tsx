@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Prof = { id: string; prenom: string; nom: string; statut: string }
 type Classe = { id: string; nom: string; ordre: number }
@@ -91,17 +92,17 @@ export default function EmploisDuTempsPage() {
 
   async function save() {
     if (!form.professeur_id || !form.classe_id) {
-      alert('Professeur et classe sont requis.')
+      await appAlert('Professeur et classe sont requis.')
       return
     }
     if (form.heure_debut >= form.heure_fin) {
-      alert('L heure de fin doit etre apres l heure de debut.')
+      await appAlert('L heure de fin doit etre apres l heure de debut.')
       return
     }
     const conflits = detectConflits(form)
     if (conflits.length > 0) {
       const msg = 'Conflit detecte : ' + conflits.length + ' creneau(x) qui se chevauche(nt). Voulez-vous quand meme enregistrer (override) ?'
-      if (!confirm(msg)) return
+      if (!await appConfirm(msg)) return
     }
     setSaving(true)
     const s = createClient()
@@ -121,17 +122,17 @@ export default function EmploisDuTempsPage() {
       ? await s.from('emploi_du_temps').update(payload).eq('id', editing.id)
       : await s.from('emploi_du_temps').insert(payload)
     setSaving(false)
-    if (error) { alert('Erreur: ' + error.message); return }
+    if (error) { await appAlert('Erreur: ' + error.message); return }
     setShowModal(false); setEditing(null)
     await load()
   }
 
   async function supprimer() {
     if (!editing) return
-    if (!confirm('Supprimer ce creneau ?')) return
+    if (!await appConfirm('Supprimer ce creneau ?')) return
     const s = createClient()
     const { error } = await s.from('emploi_du_temps').delete().eq('id', editing.id)
-    if (error) { alert('Erreur: ' + error.message); return }
+    if (error) { await appAlert('Erreur: ' + error.message); return }
     setShowModal(false); setEditing(null)
     await load()
   }

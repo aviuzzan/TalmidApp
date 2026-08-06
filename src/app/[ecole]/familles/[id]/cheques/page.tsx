@@ -9,6 +9,7 @@ import { useEcole } from '@/lib/ecole-context'
 // (même circuit que l'onglet Échéances des inscriptions), et l'écran affiche
 // le reste dû réel de la famille face au total de l'échéancier actif.
 import { encaisserEcheance, soldesParFamille, calculerDepassement, bilanEncaissements, type SoldeFamille } from '@/lib/encaissement'
+import { appAlert, appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 type Statut = 'attente_reception' | 'prevu' | 'encaisse' | 'rejete' | 'restitue' | 'annule'
 
@@ -113,7 +114,7 @@ export default function ChequesFamillePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.numero_cheque.trim() || !form.montant) return alert('Nchq et montant obligatoires')
+    if (!form.numero_cheque.trim() || !form.montant) return await appAlert('Nchq et montant obligatoires')
     const s = createClient()
     const payload: any = {
       famille_id: familleId,
@@ -129,17 +130,17 @@ export default function ChequesFamillePage() {
     }
     if (editId) {
       const { error } = await s.from('cheques_prevus').update(payload).eq('id', editId)
-      if (error) return alert('Erreur : ' + error.message)
+      if (error) return await appAlert('Erreur : ' + error.message)
     } else {
       const { error } = await s.from('cheques_prevus').insert(payload)
-      if (error) return alert('Erreur : ' + error.message)
+      if (error) return await appAlert('Erreur : ' + error.message)
     }
     resetForm()
     await load()
   }
 
   async function remove(id: string) {
-    if (!confirm('Supprimer cette echeance ?')) return
+    if (!await appConfirm('Supprimer cette echeance ?')) return
     await createClient().from('cheques_prevus').delete().eq('id', id)
     await load()
   }
@@ -160,12 +161,12 @@ export default function ChequesFamillePage() {
       const c = cheques.find(x => x.id === id)
       if (!c) return
       const avert = avertissementDepassement([c])
-      if (avert && !confirm('Encaisser cette échéance de ' + fmt(c.montant) + ' ?' + avert)) return
+      if (avert && !await appConfirm('Encaisser cette échéance de ' + fmt(c.montant) + ' ?' + avert)) return
       setBusy(true)
       const r = await encaisserEcheance(createClient(), { ...c, famille_id: familleId })
       setBusy(false)
-      if (!r.ok) { alert('Encaissement impossible : ' + r.erreur); return }
-      if (r.sansFacture) alert('Échéance encaissée, mais AUCUNE facture liée : aucun règlement créé. Saisissez le règlement à la main sur la bonne facture.')
+      if (!r.ok) { await appAlert('Encaissement impossible : ' + r.erreur); return }
+      if (r.sansFacture) await appAlert('Échéance encaissée, mais AUCUNE facture liée : aucun règlement créé. Saisissez le règlement à la main sur la bonne facture.')
       await load()
       return
     }
@@ -176,26 +177,26 @@ export default function ChequesFamillePage() {
 
   async function bulkUpdate(fromStatuts: Statut[], toStatut: Statut, libelle: string) {
     const sel = cheques.filter(c => fromStatuts.includes(c.statut))
-    if (sel.length === 0) { alert('Aucune echeance concernee.'); return }
+    if (sel.length === 0) { await appAlert('Aucune echeance concernee.'); return }
     // AUDIT P1 : « Tout encaisser » passe par la brique partagée (règlements créés,
     // idempotence par référence) avec avertissement explicite en cas de dépassement du dû.
     if (toStatut === 'encaisse') {
       const avert = avertissementDepassement(sel)
-      if (!confirm(libelle + ' : ' + sel.length + ' echeance(s) ?' + avert)) return
+      if (!await appConfirm(libelle + ' : ' + sel.length + ' echeance(s) ?' + avert)) return
       setBusy(true)
       const s = createClient()
       const resultats = []
       for (const c of sel) resultats.push(await encaisserEcheance(s, { ...c, famille_id: familleId }))
       setBusy(false)
-      alert(bilanEncaissements(resultats))
+      await appAlert(bilanEncaissements(resultats))
       await load()
       return
     }
-    if (!confirm(libelle + ' : ' + sel.length + ' echeance(s) ?')) return
+    if (!await appConfirm(libelle + ' : ' + sel.length + ' echeance(s) ?')) return
     setBusy(true)
     const { error } = await createClient().from('cheques_prevus').update({ statut: toStatut }).in('id', sel.map(c => c.id))
     setBusy(false)
-    if (error) { alert('Erreur : ' + error.message); return }
+    if (error) { await appAlert('Erreur : ' + error.message); return }
     await load()
   }
 
@@ -204,14 +205,14 @@ export default function ChequesFamillePage() {
     const total = parseFloat(gen.montant_total)
     const n = parseInt(gen.nb_echeances)
     if (!total || total <= 0 || !n || n <= 0 || !gen.date_premiere) {
-      alert('Montant total, nombre d echeances et date de la 1ere echeance sont obligatoires.')
+      await appAlert('Montant total, nombre d echeances et date de la 1ere echeance sont obligatoires.')
       return
     }
     const aRemplacer = cheques.filter(c => c.statut === 'attente_reception' || c.statut === 'prevu')
     const msg = aRemplacer.length > 0
       ? 'Generer ' + n + ' echeance(s) ? Les ' + aRemplacer.length + ' echeance(s) non encaissees existantes seront supprimees et remplacees.'
       : 'Generer ' + n + ' echeance(s) de paiement ?'
-    if (!confirm(msg)) return
+    if (!await appConfirm(msg)) return
 
     setBusy(true)
     const s = createClient()
@@ -239,16 +240,16 @@ export default function ChequesFamillePage() {
     }
     const { error } = await s.from('cheques_prevus').insert(rows)
     setBusy(false)
-    if (error) { alert('Erreur : ' + error.message); return }
+    if (error) { await appAlert('Erreur : ' + error.message); return }
     setShowGen(false)
     setGen({ montant_total: '', nb_echeances: '10', date_premiere: '', mode_paiement: 'cheque', facture_id: '', statut: 'attente_reception' })
     await load()
   }
 
   async function remplacerParReglement(c: Cheque) {
-    const mode = (prompt('Regler cette echeance par : cb / virement / especes', 'cb') || '').trim().toLowerCase()
+    const mode = (await appPrompt('Regler cette echeance par : cb / virement / especes', 'cb') || '').trim().toLowerCase()
     if (!mode) return
-    if (!['cb', 'virement', 'especes'].includes(mode)) { alert('Mode invalide. Utilisez cb, virement ou especes.'); return }
+    if (!['cb', 'virement', 'especes'].includes(mode)) { await appAlert('Mode invalide. Utilisez cb, virement ou especes.'); return }
     setBusy(true)
     const s = createClient()
     await s.from('cheques_prevus').update({
@@ -264,7 +265,7 @@ export default function ChequesFamillePage() {
         mode_paiement: mode,
         notes: 'Remplace l echeance ' + (c.mode_paiement || 'cheque') + ' n' + c.numero_cheque,
       })
-      if (error) { setBusy(false); alert('Echeance annulee, mais erreur sur le reglement : ' + error.message); await load(); return }
+      if (error) { setBusy(false); await appAlert('Echeance annulee, mais erreur sur le reglement : ' + error.message); await load(); return }
     }
     setBusy(false)
     await load()

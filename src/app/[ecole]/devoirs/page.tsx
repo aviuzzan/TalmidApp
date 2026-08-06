@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Classe = { id: string; nom: string; ordre: number }
 type Matiere = { id: string; nom: string; couleur: string | null }
@@ -107,7 +108,7 @@ export default function DevoirsPage() {
   }
 
   async function supprimer(id: string) {
-    if (!confirm('Supprimer ce devoir ?')) return
+    if (!await appConfirm('Supprimer ce devoir ?')) return
     const { error } = await createClient().from('devoirs').delete().eq('id', id)
     if (!error) await load()
   }

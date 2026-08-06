@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import ProgressBar from '@/components/ui/ProgressBar'
 import AidePage from '@/components/ui/AidePage'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function ComptesParentsPage() {
   const ecole = useEcole()
@@ -26,7 +27,7 @@ export default function ComptesParentsPage() {
   async function supprimerCompte(famille: any) {
     const compte = famille.comptes?.[0]
     if (!compte) return
-    if (!confirm(`Supprimer le compte parent de ${famille.nom} ?\n\nLa famille et les données ne seront PAS supprimées, seulement l'accès portail. Le parent ne pourra plus se connecter avec ce compte.`)) return
+    if (!await appConfirm(`Supprimer le compte parent de ${famille.nom} ?\n\nLa famille et les données ne seront PAS supprimées, seulement l'accès portail. Le parent ne pourra plus se connecter avec ce compte.`)) return
     setSupprId(famille.id); setRenvoiMsg(null)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
@@ -49,7 +50,7 @@ export default function ComptesParentsPage() {
       setTimeout(() => setRenvoiMsg(null), 4000)
       return
     }
-    if (!confirm(`Renvoyer le lien d'activation à ${email} ?`)) return
+    if (!await appConfirm(`Renvoyer le lien d'activation à ${email} ?`)) return
     setRenvoyantId(famille.id); setRenvoiMsg(null)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
@@ -161,7 +162,7 @@ export default function ComptesParentsPage() {
   async function inviterToutes() {
     const sansCompteCount = familles.filter(f => f.comptes.length === 0).length
     if (sansCompteCount === 0) { setInviteMsg('Toutes les familles ont deja un compte parent.'); return }
-    if (!confirm(`Creer un compte et envoyer l'email de bienvenue a ${sansCompteCount} famille(s) sans compte ?`)) return
+    if (!await appConfirm(`Creer un compte et envoyer l'email de bienvenue a ${sansCompteCount} famille(s) sans compte ?`)) return
     setInviteRunning(true); setInviteMsg('')
     setInviteProg({ done: 0, total: sansCompteCount, errors: 0 })
     const s = createClient()

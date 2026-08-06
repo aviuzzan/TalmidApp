@@ -20,6 +20,7 @@ import { labelModePaiement } from '@/lib/statuts'
 import { useToast } from '@/components/ui/Toast'
 import { creerContratPapier, genererLignesEcheancier } from '@/lib/contrat-papier'
 import { chargerReportActif, type ReportSoldeActif } from '@/lib/report-solde'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -346,7 +347,7 @@ export default function ContratPapierAdminPage() {
       + `— ${nbEcheances} échéance(s) — ${labelModePaiement(modeReglement)}\n`
       + `— Le contrat sera VALIDÉ immédiatement (facture + échéancier générés)`
       + (contratExistant ? '\n\n⚠ Un contrat existe déjà pour cette famille : il sera remplacé.' : '')
-    if (!window.confirm(msg)) return
+    if (!await appConfirm(msg)) return
     setSaving(true)
     const s = createClient()
     const res = await creerContratPapier(s, {

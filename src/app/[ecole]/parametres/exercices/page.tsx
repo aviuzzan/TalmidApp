@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { logAction } from '@/lib/audit-log'
 import {
+import { appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
   Exercice,
   statutLabel,
   statutColor,
@@ -97,7 +98,7 @@ export default function ExercicesPage() {
   }
 
   async function handleSetCourant(exId: string) {
-    if (!confirm('Définir cet exercice comme exercice courant ? Toutes les nouvelles données seront rattachées à cet exercice par défaut.')) return
+    if (!await appConfirm('Définir cet exercice comme exercice courant ? Toutes les nouvelles données seront rattachées à cet exercice par défaut.')) return
     await changeExerciceCourant(exId)
     setInfo('✓ Exercice courant mis à jour')
     await reload()
@@ -114,7 +115,7 @@ export default function ExercicesPage() {
    */
   async function handleCloturer(ex: Exercice, force = false) {
     setError(''); setInfo('')
-    if (!force && !confirm(
+    if (!force && !await appConfirm(
       `Clôturer l'exercice ${ex.code} ?\n\n`
       + 'La base refusera ensuite toute écriture sur les factures, lignes de facture, règlements, '
       + 'échéances et avoirs de cet exercice.\n\n'
@@ -126,7 +127,7 @@ export default function ExercicesPage() {
     if (!res.ok) {
       // Reports de solde encore à arbitrer : on propose de passer outre en le disant.
       if (res.reportsEnAttente && res.reportsEnAttente > 0) {
-        if (confirm(`${res.error}\n\nClôturer quand même ?`)) {
+        if (await appConfirm(`${res.error}\n\nClôturer quand même ?`)) {
           await handleCloturer(ex, true)
           return
         }
@@ -146,7 +147,7 @@ export default function ExercicesPage() {
   /** Réouverture d'un exercice clôturé : lève le verrou, trace le motif. */
   async function handleRouvrir(ex: Exercice) {
     setError(''); setInfo('')
-    const motif = window.prompt(
+    const motif = await appPrompt(
       `Rouvrir l'exercice ${ex.code} ?\n\nMotif de la réouverture (obligatoire, conservé dans les notes de l'exercice) :`,
     )
     if (motif === null) return

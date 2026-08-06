@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appAlert, appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 type Pret = {
   id: string; type: string; nom_objet: string; reference: string | null;
@@ -70,13 +71,13 @@ export default function PretsPage() {
       ? await s.from('prets_manuels').update(payload).eq('id', editId)
       : await s.from('prets_manuels').insert(payload)
     setSaving(false)
-    if (error) { alert('Erreur : ' + error.message); return }
+    if (error) { await appAlert('Erreur : ' + error.message); return }
     setShowForm(false); setForm(empty); setEditId(null)
     await load()
   }
 
   async function marquerRendu(p: Pret) {
-    const etat = prompt('État au retour ? (bon / moyen / abimé)', 'bon')
+    const etat = await appPrompt('État au retour ? (bon / moyen / abimé)', 'bon')
     if (etat === null) return
     const statut = etat.toLowerCase().includes('abim') || etat.toLowerCase().includes('endomma') ? 'endommage' : 'rendu'
     await createClient().from('prets_manuels').update({
@@ -87,13 +88,13 @@ export default function PretsPage() {
   }
 
   async function marquerPerdu(p: Pret) {
-    if (!confirm(`Marquer "${p.nom_objet}" comme perdu ?`)) return
+    if (!await appConfirm(`Marquer "${p.nom_objet}" comme perdu ?`)) return
     await createClient().from('prets_manuels').update({ statut: 'perdu', updated_at: new Date().toISOString() }).eq('id', p.id)
     await load()
   }
 
   async function supprimer(p: Pret) {
-    if (!confirm(`Supprimer le prêt "${p.nom_objet}" ?`)) return
+    if (!await appConfirm(`Supprimer le prêt "${p.nom_objet}" ?`)) return
     await createClient().from('prets_manuels').delete().eq('id', p.id)
     await load()
   }

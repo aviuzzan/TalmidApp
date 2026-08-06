@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { appAlert, appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 /**
  * Gestion des modes de règlement disponibles dans le contrat de scolarisation.
@@ -57,7 +58,7 @@ export default function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
     const { data, error } = await createClient().from('modes_reglement_ecole').insert({
       ecole_id: ecoleId, type, label, actif: true, ordre: modes.length, config: {},
     }).select().single()
-    if (error) alert('Erreur : ' + error.message)
+    if (error) await appAlert('Erreur : ' + error.message)
     else if (data) setModes(p => [...p, data])
   }
 
@@ -78,20 +79,20 @@ export default function ModesReglementTab({ ecoleId }: { ecoleId: string }) {
     const { data, error } = await createClient().from('modes_reglement_ecole').insert({
       ecole_id: ecoleId, type, label: lab, actif: true, ordre: modes.length, config: {},
     }).select().single()
-    if (error) alert('Erreur ajout : ' + error.message)
+    if (error) await appAlert('Erreur ajout : ' + error.message)
     else if (data) { setModes(p => [...p, data]); setNewLabel('') }
     setSaving(false)
   }
 
   async function renommer(m: any) {
-    const v = prompt('Nouveau libellé :', m.label)
+    const v = await appPrompt('Nouveau libellé :', m.label)
     if (v === null || !v.trim()) return
     await createClient().from('modes_reglement_ecole').update({ label: v.trim() }).eq('id', m.id)
     setModes(p => p.map(x => x.id === m.id ? { ...x, label: v.trim() } : x))
   }
 
   async function supprimer(m: any) {
-    if (!confirm(`Supprimer le mode "${m.label}" ?\nLes règlements déjà saisis avec ce mode resteront.`)) return
+    if (!await appConfirm(`Supprimer le mode "${m.label}" ?\nLes règlements déjà saisis avec ce mode resteront.`)) return
     await createClient().from('modes_reglement_ecole').delete().eq('id', m.id)
     setModes(p => p.filter(x => x.id !== m.id))
   }

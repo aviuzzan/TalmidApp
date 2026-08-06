@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 /**
  * Gestion des options coch ables sur la fiche p dagogique d un enfant
@@ -50,7 +51,7 @@ export default function OptionsEnfantTab({ ecoleId }: { ecoleId: string }) {
   }
 
   async function renommer(opt: any) {
-    const v = prompt('Nouveau libell  :', opt.label)
+    const v = await appPrompt('Nouveau libell  :', opt.label)
     if (v === null || !v.trim()) return
     await createClient().from('options_enfant_config').update({ label: v.trim() }).eq('id', opt.id)
     await load()
@@ -62,7 +63,7 @@ export default function OptionsEnfantTab({ ecoleId }: { ecoleId: string }) {
   }
 
   async function supprimer(opt: any) {
-    if (!confirm(`Supprimer d finitivement l option "${opt.label}" ?\nLes coches d j  enregistr es sur les fiches enfants resteront mais ne seront plus affich es.`)) return
+    if (!await appConfirm(`Supprimer d finitivement l option "${opt.label}" ?\nLes coches d j  enregistr es sur les fiches enfants resteront mais ne seront plus affich es.`)) return
     await createClient().from('options_enfant_config').delete().eq('id', opt.id)
     await load()
   }

@@ -6,6 +6,7 @@ import { fmtDate } from '@/lib/format-date'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import OptionsContratSection from '@/components/OptionsContratSection'
 import { deriverStatutInscription, libelleStatutInscription } from '@/lib/statut-inscription'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function PortailEnfantsPage() {
   const { t, lang } = useI18n()
@@ -212,7 +213,7 @@ function PersonnesAutorisees({ enfantId, familleId }: { enfantId: string; famill
   }
 
   async function supprimer(id: string) {
-    if (!confirm(t('portail.enfants.authorized.confirm_remove'))) return
+    if (!await appConfirm(t('portail.enfants.authorized.confirm_remove'))) return
     await createClient().from('enfant_personnes_autorisees').delete().eq('id', id)
     await load()
   }

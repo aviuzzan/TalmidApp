@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import AidePage from '@/components/ui/AidePage'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Matiere = { id: string; nom: string; code: string | null; couleur: string }
 type Classe = { id: string; nom: string }
@@ -55,7 +56,7 @@ export default function NotesPage() {
 
   async function saveEval(e: React.FormEvent) {
     e.preventDefault()
-    if (!evalForm.titre.trim() || !evalForm.matiere_id || !evalForm.classe_id) return alert('Titre, matière et classe obligatoires')
+    if (!evalForm.titre.trim() || !evalForm.matiere_id || !evalForm.classe_id) return await appAlert('Titre, matière et classe obligatoires')
     const s = createClient()
     const payload: any = {
       ecole_id: ecole.id,
@@ -118,7 +119,7 @@ export default function NotesPage() {
   }
 
   async function deleteEval(id: string) {
-    if (!confirm('Supprimer cette évaluation et toutes ses notes ?')) return
+    if (!await appConfirm('Supprimer cette évaluation et toutes ses notes ?')) return
     await createClient().from('evaluations').delete().eq('id', id)
     await load()
   }

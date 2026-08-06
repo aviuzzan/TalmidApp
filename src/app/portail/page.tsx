@@ -55,7 +55,7 @@ export default function PortailPage() {
           .eq('ecole_id', ecoleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
         supabase.from('contrats_scolarisation').select('id, statut, contrat_enfants(enfant_id)').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
         supabase.from('documents_ecole').select('id, nom, obligatoire').eq('ecole_id', ecoleId).eq('actif', true),
-        supabase.from('documents_famille').select('document_id').eq('famille_id', familleId),
+        supabase.from('documents_famille').select('related_table, related_id').eq('famille_id', familleId),
         supabase.from('demandes_reduction').select('id, statut').eq('famille_id', familleId).eq('annee_scolaire', anneeInscription).maybeSingle(),
       ])
       // Fiches pedagogiques en 2eme passe car depend de la liste des enfants
@@ -127,7 +127,9 @@ export default function PortailPage() {
         }
       })
       // 3) Documents obligatoires
-      const idsFournis = new Set((docsFournis || []).map((d: any) => d.document_id))
+      // dddd1 : la colonne document_id n'existe pas (11 erreurs SQL/jour). Le lien
+      // vers un document requis passe par (related_table='documents_ecole', related_id).
+      const idsFournis = new Set((docsFournis || []).filter((d: any) => d.related_table === 'documents_ecole').map((d: any) => d.related_id))
       ;(docsConfig || []).filter((d: any) => d.obligatoire).forEach((d: any) => {
         const fait = idsFournis.has(d.id)
         taches.push({

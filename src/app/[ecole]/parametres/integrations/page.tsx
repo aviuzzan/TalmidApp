@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type ProviderKey = 'stripe' | 'gocardless' | 'brevo_sms' | 'yousign' | 'paypal'
 
@@ -109,7 +110,7 @@ export default function IntegrationsPage() {
   }
 
   async function supprimer(p: ProviderKey) {
-    if (!confirm('Supprimer toutes les clés de cette intégration ? Cette action est irréversible.')) return
+    if (!await appConfirm('Supprimer toutes les clés de cette intégration ? Cette action est irréversible.')) return
     setSaving(true)
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()

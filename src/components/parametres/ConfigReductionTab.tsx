@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { appAlert, appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 
 export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string; annee: string }) {
   const [docs, setDocs] = useState<any[]>([])
@@ -39,7 +40,7 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
     if (!newQ.label.trim()) return
     // Validation : si liste / case à cocher, exiger au moins 2 options
     if ((newQ.type === 'select' || newQ.type === 'checkbox') && parseOptions(newQ.optionsText).length < 2) {
-      alert('Pour une liste ou des cases à cocher, ajoutez au moins 2 options (une par ligne).')
+      await appAlert('Pour une liste ou des cases à cocher, ajoutez au moins 2 options (une par ligne).')
       return
     }
     setSaving(true)
@@ -59,11 +60,11 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
 
   async function editerOptions(q: any) {
     const current = Array.isArray(q.options) ? q.options.join('\n') : ''
-    const v = prompt('Options (une par ligne) :', current)
+    const v = await appPrompt('Options (une par ligne) :', current)
     if (v === null) return
     const opts = parseOptions(v)
     if (opts.length < 2) {
-      alert('Au moins 2 options sont nécessaires.')
+      await appAlert('Au moins 2 options sont nécessaires.')
       return
     }
     await createClient().from('reduction_questions_config').update({ options: opts }).eq('id', q.id)
@@ -75,7 +76,7 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
   }
 
   async function renommerQuestion(id: string, label: string) {
-    const v = prompt('Nouveau libellé de la question :', label)
+    const v = await appPrompt('Nouveau libellé de la question :', label)
     if (v === null || !v.trim()) return
     await createClient().from('reduction_questions_config').update({ label: v.trim() }).eq('id', id); await load()
   }
@@ -92,7 +93,7 @@ export default function ConfigReductionTab({ ecoleId, annee }: { ecoleId: string
   }
 
   async function supprimerQuestion(id: string) {
-    if (!confirm('Supprimer définitivement cette question ?')) return
+    if (!await appConfirm('Supprimer définitivement cette question ?')) return
     await createClient().from('reduction_questions_config').delete().eq('id', id); await load()
   }
 

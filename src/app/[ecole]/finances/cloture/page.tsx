@@ -20,7 +20,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { useToast } from '@/components/ui/Toast'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
 import { logAction } from '@/lib/audit-log'
 import { chargerParLots, chargerParTranchesEtLots } from '@/lib/pagination'
 import { cloturerExercice, rouvrirExercice, statutLabel, type Exercice } from '@/lib/exercice'
@@ -296,7 +296,7 @@ export default function CloturePage() {
       danger: true,
     })
     if (!ok) return
-    const motif = typeof window !== 'undefined' ? window.prompt('Motif de l\'abandon du report (obligatoire)') : null
+    const motif = typeof window !== 'undefined' ? await appPrompt('Motif de l\'abandon du report (obligatoire)') : null
     if (!motif || !motif.trim()) { toast.error('Report conservé : aucun motif saisi.'); return }
     const res = await annulerReport(createClient(), report.id, motif)
     if (!res.ok) { toast.error(res.error || 'Report non écarté'); return }
@@ -404,7 +404,7 @@ export default function CloturePage() {
 
   async function handleRouvrir(ex: Exercice) {
     const motif = typeof window !== 'undefined'
-      ? window.prompt(`Motif de la réouverture de l'exercice ${ex.code} (obligatoire, tracé dans les notes)`)
+      ? await appPrompt(`Motif de la réouverture de l'exercice ${ex.code} (obligatoire, tracé dans les notes)`)
       : null
     if (!motif || !motif.trim()) { toast.error('Réouverture annulée : aucun motif saisi.'); return }
     setTravailEnCours(true)

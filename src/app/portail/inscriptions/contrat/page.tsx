@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n'
 import { validerIban, formaterIban, nettoyerIban, validerBic } from '@/lib/iban'
 import { trouverClasseSuivante } from '@/lib/scolarite'
 import { fmtDate } from '@/lib/format-date'
+import { appAlert } from '@/components/ui/ConfirmDialog'
 
 // IMPORTANT : Section au niveau module (sinon re-mount + scroll-jump à chaque keystroke).
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -478,22 +479,22 @@ export default function ContratPage() {
   }
 
   async function soumettre() {
-    if (enfantsContrat.filter(e => e.classe_id).length === 0) { alert(t('portail.contrat.err.select_class')); return }
-    if (!modeReglement) { alert(t('portail.contrat.err.select_mode')); return }
+    if (enfantsContrat.filter(e => e.classe_id).length === 0) { await appAlert(t('portail.contrat.err.select_class')); return }
+    if (!modeReglement) { await appAlert(t('portail.contrat.err.select_mode')); return }
     // (caution chèques retirée — plus exigée)
-    if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { alert(t('portail.contrat.err.sepa_missing')); return }
+    if (modeReglement === 'sepa' && (!sepaIban || !sepaBic || !sepaTitulaire)) { await appAlert(t('portail.contrat.err.sepa_missing')); return }
     // FIX audit 28/07 : validation IBAN (format + clé MOD 97) et BIC avant soumission
     if (modeReglement === 'sepa' && !validerIban(sepaIban)) {
-      alert(t('portail.contrat.err.iban_invalide', "L'IBAN saisi est invalide. Vérifiez votre saisie (ex. FR76 3000 6000 0112 3456 7890 189)."))
+      await appAlert(t('portail.contrat.err.iban_invalide', "L'IBAN saisi est invalide. Vérifiez votre saisie (ex. FR76 3000 6000 0112 3456 7890 189)."))
       return
     }
     if (modeReglement === 'sepa' && !validerBic(sepaBic)) {
-      alert(t('portail.contrat.err.bic_invalide', 'Le BIC saisi est invalide : 8 ou 11 caractères attendus (ex. BNPAFRPP).'))
+      await appAlert(t('portail.contrat.err.bic_invalide', 'Le BIC saisi est invalide : 8 ou 11 caractères attendus (ex. BNPAFRPP).'))
       return
     }
-    if (!signatureData) { alert(t('portail.contrat.err.sign')); return }
+    if (!signatureData) { await appAlert(t('portail.contrat.err.sign')); return }
     if (nouvelEnfantEnAttente) {
-      alert(t('portail.contrat.err.child_pending'))
+      await appAlert(t('portail.contrat.err.child_pending'))
       return
     }
 
@@ -514,7 +515,7 @@ export default function ContratPage() {
         })
       })
       if (optionsCompletes.length > 0) {
-        alert(t('portail.contrat.err.option_full', { options: Array.from(new Set(optionsCompletes)).join(' », « ') }))
+        await appAlert(t('portail.contrat.err.option_full', { options: Array.from(new Set(optionsCompletes)).join(' », « ') }))
         setEnfantsContrat(prev => prev.map(e => {
           const postesOk = (e.postes || []).filter((p: any) => !fraiche.get(p.tarif_id)?.complet)
           return { ...e, postes: postesOk, sous_total: postesOk.reduce((sum: number, p: any) => sum + (parseFloat(p.montant) || 0), 0) }
@@ -602,7 +603,7 @@ export default function ContratPage() {
 
     if (rpcErr || !rpcData) {
       setSaving(false)
-      alert(t('portail.contrat.err.submit', { msg: rpcErr?.message || t('portail.common.err.unknown') }))
+      await appAlert(t('portail.contrat.err.submit', { msg: rpcErr?.message || t('portail.common.err.unknown') }))
       return
     }
 
@@ -610,7 +611,7 @@ export default function ContratPage() {
     // (tarif modifié entre-temps, manipulation...), on affiche le total serveur.
     const totalServeur = Number((rpcData as any)?.montant_total)
     if (Number.isFinite(totalServeur) && Math.abs(totalServeur - totalAnnuel) > 0.01) {
-      alert(t('portail.contrat.total_recalcule', { total: totalServeur.toLocaleString('fr-FR') },
+      await appAlert(t('portail.contrat.total_recalcule', { total: totalServeur.toLocaleString('fr-FR') },
         "Le montant total a été recalculé par l'établissement : {total} €. C'est ce montant qui figure sur votre contrat."))
     }
 

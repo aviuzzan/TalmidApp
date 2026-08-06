@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { useI18n } from '@/lib/i18n'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 /**
  * Fiche pédagogique = formulaire pour AJOUTER UN NOUVEL ENFANT à la famille.
@@ -324,9 +325,9 @@ export default function PedagogiqueNouvelEnfantPage() {
   }
 
   // Sortie de page avec confirmation si le formulaire a ete modifie sans etre soumis.
-  function quitter() {
+  async function quitter() {
     if (dirtyRef.current && !submittedRef.current) {
-      const ok = window.confirm(t('portail.peda.confirm_leave', 'Des modifications non enregistrées seront perdues. Quitter cette page ?'))
+      const ok = await appConfirm(t('portail.peda.confirm_leave', 'Des modifications non enregistrées seront perdues. Quitter cette page ?'))
       if (!ok) return
     }
     router.push('/portail/inscriptions')

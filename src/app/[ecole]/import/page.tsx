@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { downloadCSV } from '@/lib/csv-export'
+import { appAlert } from '@/components/ui/ConfirmDialog'
 
 /**
  * Import de la base de données de l'école via fichier CSV.
@@ -200,7 +201,7 @@ export default function ImportPage() {
   async function lancerImport() {
     if (!parsed) return
     if (!exercice?.id) {
-      alert('Aucune année scolaire sélectionnée. Choisissez d\'abord une année dans le sélecteur en haut de page.')
+      await appAlert('Aucune année scolaire sélectionnée. Choisissez d\'abord une année dans le sélecteur en haut de page.')
       return
     }
     setImporting(true); setResultat('')

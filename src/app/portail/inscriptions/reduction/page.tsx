@@ -6,6 +6,7 @@ import { formatStatut } from '@/lib/inscriptions'
 import { useAnneeInscription } from '@/lib/inscription-context'
 import { useParentCtx } from '@/lib/parent-context'
 import { useI18n } from '@/lib/i18n'
+import { appAlert } from '@/components/ui/ConfirmDialog'
 
 // IMPORTANT : Section est défini AU NIVEAU MODULE (hors du composant page).
 // Si on le définit dans le composant, à chaque render React voit une nouvelle
@@ -514,10 +515,10 @@ export default function DemandeReductionPage() {
 
   // ── Soumission ──
   async function soumettre() {
-    if (enfantsDossier.length === 0) { alert(t('portail.reduction.err.select_child')); return }
-    if (!tarifPropose) { alert(t('portail.reduction.err.tarif')); return }
-    if (!attestationLieu) { alert(t('portail.reduction.err.lieu')); return }
-    if (!signatureData) { alert(t('portail.reduction.err.sign')); return }
+    if (enfantsDossier.length === 0) { await appAlert(t('portail.reduction.err.select_child')); return }
+    if (!tarifPropose) { await appAlert(t('portail.reduction.err.tarif')); return }
+    if (!attestationLieu) { await appAlert(t('portail.reduction.err.lieu')); return }
+    if (!signatureData) { await appAlert(t('portail.reduction.err.sign')); return }
 
     // Validation des questions custom obligatoires
     const customManquantes = questionsConfig
@@ -529,7 +530,7 @@ export default function DemandeReductionPage() {
         return v === undefined || v === null || String(v).trim() === ''
       })
     if (customManquantes.length > 0) {
-      alert(t('portail.reduction.err.custom_required') + '\n• ' + customManquantes.map((q: any) => q.label).join('\n• '))
+      await appAlert(t('portail.reduction.err.custom_required') + '\n• ' + customManquantes.map((q: any) => q.label).join('\n• '))
       return
     }
 
@@ -539,11 +540,11 @@ export default function DemandeReductionPage() {
         .filter((d: any) => d.actif !== false && d.obligatoire)
         .filter((d: any) => !docsUploaded[d.id])
       if (docsManquants.length > 0) {
-        alert(t('portail.reduction.err.docs_required') + '\n• ' + docsManquants.map((d: any) => d.label).join('\n• ') + '\n\n' + t('portail.reduction.err.docs_required_hint'))
+        await appAlert(t('portail.reduction.err.docs_required') + '\n• ' + docsManquants.map((d: any) => d.label).join('\n• ') + '\n\n' + t('portail.reduction.err.docs_required_hint'))
         return
       }
     } else if (!pasDeJustificatifDetail.trim()) {
-      alert(t('portail.reduction.err.no_justif_detail'))
+      await appAlert(t('portail.reduction.err.no_justif_detail'))
       return
     }
 
@@ -583,7 +584,7 @@ export default function DemandeReductionPage() {
       if (updErr || !upd || upd.length === 0) {
         savingRef.current = false
         setSaving(false)
-        alert(t('portail.reduction.err.submit', { msg: updErr?.message || t('portail.common.err.no_row') }))
+        await appAlert(t('portail.reduction.err.submit', { msg: updErr?.message || t('portail.common.err.no_row') }))
         return
       }
       await s.from('demandes_reduction_revenus').delete().eq('demande_id', demandeId)
@@ -592,7 +593,7 @@ export default function DemandeReductionPage() {
       if (insErr || !nd) {
         savingRef.current = false
         setSaving(false)
-        alert(t('portail.reduction.err.create', { msg: insErr?.message || t('portail.common.err.unknown') }))
+        await appAlert(t('portail.reduction.err.create', { msg: insErr?.message || t('portail.common.err.unknown') }))
         return
       }
       demandeId = nd.id

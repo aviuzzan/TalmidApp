@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Sanction = {
   id: string
@@ -59,7 +60,7 @@ export default function SanctionsPage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.enfant_id || !form.motif.trim()) return alert('Élève et motif obligatoires')
+    if (!form.enfant_id || !form.motif.trim()) return await appAlert('Élève et motif obligatoires')
     const s = createClient()
     const { data: { session } } = await s.auth.getSession()
     await s.from('sanctions').insert({
@@ -79,7 +80,7 @@ export default function SanctionsPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Supprimer cette sanction définitivement ?')) return
+    if (!await appConfirm('Supprimer cette sanction définitivement ?')) return
     await createClient().from('sanctions').delete().eq('id', id)
     await load()
   }

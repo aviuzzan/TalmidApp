@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Classe = { id: string; nom: string; ordre: number }
 type SmsLog = {
@@ -45,7 +46,7 @@ export default function SmsAdminPage() {
     if (!message.trim()) { setMsg('Message vide'); return }
     if (cibleType === 'classe' && !cibleClasse) { setMsg('Sélectionnez une classe'); return }
     if (cibleType === 'liste' && !telephones.trim()) { setMsg('Saisissez au moins un numéro'); return }
-    if (!confirm(`Envoyer ce SMS ? ${cibleType === 'tous' ? '(tous les parents avec téléphone)' : ''}`)) return
+    if (!await appConfirm(`Envoyer ce SMS ? ${cibleType === 'tous' ? '(tous les parents avec téléphone)' : ''}`)) return
 
     setSending(true); setMsg('')
     const s = createClient()

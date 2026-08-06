@@ -5,6 +5,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
 import AidePage from '@/components/ui/AidePage'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Forfait = { id: string; nom: string; zone: string | null; trajet: string | null; prix: number; actif: boolean; ordre: number }
 
@@ -93,11 +94,11 @@ export default function TransportPage() {
     await createClient().from('transport_forfaits').update({ actif: !actif }).eq('id', id); await load()
   }
   async function deleteForfait(id: string) {
-    if (!confirm('Supprimer ce forfait transport ?')) return
+    if (!await appConfirm('Supprimer ce forfait transport ?')) return
     await createClient().from('transport_forfaits').delete().eq('id', id); await load()
   }
   async function annuler(id: string) {
-    if (!confirm('Annuler cette inscription transport ?')) return
+    if (!await appConfirm('Annuler cette inscription transport ?')) return
     await createClient().from('transport_inscriptions').update({ statut: 'annule' }).eq('id', id); await load()
   }
 

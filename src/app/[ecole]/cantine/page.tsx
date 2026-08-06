@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
 import OptionsDepuisContrats from '@/components/OptionsDepuisContrats'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Forfait = { id: string; nom: string; type: string; jours_par_semaine: number | null; prix: number; actif: boolean; ordre: number }
 type Inscription = { id: string; enfant_id: string; forfait_id: string | null; date_debut: string; date_fin: string | null; jours_choisis: string[] | null; statut: string }
@@ -57,12 +58,12 @@ export default function CantinePage() {
     await load()
   }
   async function deleteForfait(id: string) {
-    if (!confirm('Supprimer ce forfait ? Inscriptions existantes conservées.')) return
+    if (!await appConfirm('Supprimer ce forfait ? Inscriptions existantes conservées.')) return
     await createClient().from('cantine_forfaits').delete().eq('id', id)
     await load()
   }
   async function annulerInscription(id: string) {
-    if (!confirm('Annuler cette inscription cantine ?')) return
+    if (!await appConfirm('Annuler cette inscription cantine ?')) return
     await createClient().from('cantine_inscriptions').update({ statut: 'annule' }).eq('id', id)
     await load()
   }

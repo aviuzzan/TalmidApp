@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { appConfirm } from '@/components/ui/ConfirmDialog'
 
 /**
  * Page "Levy - Assistant virtuel" : configurer activation + ton + FAQ.
@@ -215,8 +216,8 @@ export default function LevyConfigPage() {
     setSections(prev => [...prev, { id, emoji: '📝', titre: 'Nouvelle section', contenu: '' }])
   }
 
-  function supprimerSection(id: string) {
-    if (!confirm('Supprimer cette section et son contenu ?')) return
+  async function supprimerSection(id: string) {
+    if (!await appConfirm('Supprimer cette section et son contenu ?')) return
     setSections(prev => prev.filter(s => s.id !== id))
   }
 

@@ -7,6 +7,7 @@ import { labelStatutFacture, labelModePaiement } from '@/lib/statuts'
 import { logAction } from '@/lib/audit-log'
 import { chargerParLots } from '@/lib/pagination'
 import { estReportComptable, labelModeReport, libelleReport, type ReportSoldeActif } from '@/lib/report-solde'
+import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 /**
  * Phrase explicative sous une ligne de report. Elle DÉPEND de `source` : la
@@ -115,7 +116,7 @@ export default function CompteFamillePage() {
 
   async function saveReglement() {
     if (!form.facture_id || !form.montant || Number(form.montant) <= 0) {
-      alert('Veuillez sélectionner une facture et un montant valide.')
+      await appAlert('Veuillez sélectionner une facture et un montant valide.')
       return
     }
     setSaving(true)
@@ -130,7 +131,7 @@ export default function CompteFamillePage() {
       notes: form.notes || null,
     })
     setSaving(false)
-    if (error) { alert('Erreur: ' + error.message); return }
+    if (error) { await appAlert('Erreur: ' + error.message); return }
     setShowModal(false)
     setForm({
       facture_id: '', montant: '', mode_paiement: 'cheque',
@@ -141,11 +142,11 @@ export default function CompteFamillePage() {
   }
 
   async function supprimerReglement(id: string) {
-    if (!confirm('Supprimer ce règlement ? Cette action est irréversible.')) return
+    if (!await appConfirm('Supprimer ce règlement ? Cette action est irréversible.')) return
     const s = createClient()
     const { data: regAvant } = await s.from('reglements').select('montant, mode_paiement, facture_id, famille_id').eq('id', id).maybeSingle()
     const { error } = await s.from('reglements').delete().eq('id', id)
-    if (error) { alert('Erreur: ' + error.message); return }
+    if (error) { await appAlert('Erreur: ' + error.message); return }
     // Statut facture recalcule par le trigger BDD trg_reglements_statut
     await logAction(s, ecole.id, 'reglement_supprime', {
       reglement_id: id, montant: regAvant?.montant, mode_paiement: regAvant?.mode_paiement,
