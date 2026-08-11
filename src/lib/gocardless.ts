@@ -125,3 +125,89 @@ export function verifyWebhookSignature(payload: string, signature: string | null
     return { ok: false, error: 'Payload non parsable' }
   }
 }
+
+/**
+ * jjjj1 — Crée un Billing Request MANDAT SEUL (sans paiement) + son flow hébergé.
+ * Utilisé par le parcours « signer mon mandat » du portail parent.
+ */
+export async function createMandateOnlyFlow(p: {
+  accessToken: string
+  mode: 'live' | 'test'
+  ecoleNom: string
+  email: string
+  nomFamille: string
+  metadata?: Record<string, string>
+}): Promise<{ flowId: string; redirectUrl: string; billingRequestId: string }> {
+  const brRes = await gcFetch(p.accessToken, p.mode, '/billing_requests', {
+    method: 'POST',
+    body: JSON.stringify({
+      billing_requests: {
+        mandate_request: {
+          scheme: 'sepa_core',
+          currency: 'EUR',
+          description: `Mandat ${p.ecoleNom}`,
+          metadata: p.metadata || {},
+        },
+      },
+    }),
+  })
+  const billingRequestId = brRes?.billing_requests?.id
+  if (!billingRequestId) throw new Error('Création Billing Request (mandat) échouée')
+
+  const flowRes = await gcFetch(p.accessToken, p.mode, '/billing_request_flows', {
+    method: 'POST',
+    body: JSON.stringify({
+      billing_request_flows: {
+        redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'}/portail/factures?mandat_sepa=ok`,
+        exit_uri: `${process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'}/portail/factures?mandat_sepa=annule`,
+        links: { billing_request: billingRequestId },
+        prefilled_customer: { email: p.email, family_name: p.nomFamille },
+        show_redirect_buttons: true,
+      },
+    }),
+  })
+  const flowId = flowRes?.billing_request_flows?.id
+  const redirectUrl = flowRes?.billing_request_flows?.authorisation_url
+  if (!redirectUrl) throw new Error('URL flow GoCardless absente')
+  return { flowId, redirectUrl, billingRequestId }
+}
+
+/**
+ * jjjj1 — Crée un paiement sur un mandat existant (prélèvement d'une échéance par le cron).
+ * Idempotency-Key : GoCardless garantit qu'un rejeu ne débite pas deux fois.
+ */
+export async function createMandatePayment(p: {
+  accessToken: string
+  mode: 'live' | 'test'
+  mandateId: string
+  montantCentimes: number
+  description: string
+  idempotencyKey: string
+  metadata?: Record<string, string>
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const res = await gcFetch(p.accessToken, p.mode, '/payments', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': p.idempotencyKey },
+      body: JSON.stringify({
+        payments: {
+          amount: p.montantCentimes,
+          currency: 'EUR',
+          description: p.description,
+          metadata: p.metadata || {},
+          links: { mandate: p.mandateId },
+        },
+      }),
+    })
+    const id = res?.payments?.id
+    if (!id) return { ok: false, error: 'Réponse GoCardless sans identifiant de paiement' }
+    return { ok: true, id }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Erreur GoCardless' }
+  }
+}
+
+/** jjjj1 — Annule un mandat chez GoCardless (révocation depuis le portail). */
+export async function cancelMandate(accessToken: string, mode: 'live' | 'test', mandateId: string): Promise<void> {
+  await gcFetch(accessToken, mode, `/mandates/${mandateId}/actions/cancel`, { method: 'POST', body: JSON.stringify({}) })
+}

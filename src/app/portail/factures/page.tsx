@@ -40,6 +40,9 @@ export default function PortailFacturesPage() {
   // yyyy3 : mandat de prélèvement automatique par carte
   const [mandatCb, setMandatCb] = useState<any>(null)
   const [mandatBusy, setMandatBusy] = useState(false)
+  // jjjj1 : mandat de prélèvement SEPA (GoCardless)
+  const [mandatSepa, setMandatSepa] = useState<any>(null)
+  const [mandatSepaBusy, setMandatSepaBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setErreur(false)
@@ -60,6 +63,15 @@ export default function PortailFacturesPage() {
         .eq('famille_id', profile.famille_id)
         .maybeSingle()
       setMandatCb(mnd ?? null)
+
+      // jjjj1 : mandat SEPA GoCardless (le plus récent de la famille)
+      const { data: mndGc } = await supabase
+        .from('mandats_gocardless')
+        .select('id, statut, gocardless_mandate_id, derniere_erreur, iban_last4, bank_name')
+        .eq('famille_id', profile.famille_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      setMandatSepa((mndGc && mndGc[0]) ?? null)
 
       const { data: avs } = await supabase
         .from('avoirs_solde').select('*')
@@ -174,6 +186,28 @@ export default function PortailFacturesPage() {
       await load()
     } finally {
       setMandatBusy(false)
+    }
+  }
+
+  // jjjj1 : mandat de prélèvement SEPA (GoCardless)
+  async function gererMandatSepa(action: 'activer' | 'revoquer') {
+    if (action === 'revoquer' && !await appConfirm('Désactiver le prélèvement SEPA automatique ? Vous devrez régler vos échéances manuellement.')) return
+    setMandatSepaBusy(true)
+    try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { await appAlert('Session expirée'); return }
+      const res = await fetch('/api/gocardless/mandat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { await appAlert(data.error || 'Erreur'); return }
+      if (action === 'activer' && data.url) { window.location.href = data.url; return }
+      await load()
+    } finally {
+      setMandatSepaBusy(false)
     }
   }
 
@@ -467,6 +501,49 @@ export default function PortailFacturesPage() {
                   <button onClick={() => gererMandat('activer')} disabled={mandatBusy} className="btn-primary"
                     style={{ minHeight: 44, fontSize: 13, fontWeight: 700, alignSelf: 'flex-start' }}>
                     {mandatBusy ? 'Redirection…' : 'Activer le prélèvement automatique'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {/* jjjj1 : prélèvement automatique SEPA (mandat GoCardless) */}
+          {!parent.estSeparee && gocardlessActif && (
+            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#1E293B' }}>🏦 Prélèvement automatique SEPA</div>
+              {mandatSepa?.statut === 'active' ? (
+                <>
+                  <div style={{ fontSize: 13, color: '#065F46', background: '#ECFDF5', borderRadius: 8, padding: '8px 12px' }}>
+                    ✓ Mandat actif{mandatSepa.iban_last4 ? ` — compte •••• ${mandatSepa.iban_last4}` : ''}.
+                    Vos échéances sont prélevées automatiquement sur votre compte bancaire à leur date.
+                  </div>
+                  <button onClick={() => gererMandatSepa('revoquer')} disabled={mandatSepaBusy}
+                    style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 8, padding: '9px 16px', minHeight: 40, fontSize: 12, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}>
+                    Désactiver
+                  </button>
+                </>
+              ) : mandatSepa?.statut === 'suspendu' ? (
+                <>
+                  <div style={{ fontSize: 13, color: '#991B1B', background: '#FEF2F2', borderRadius: 8, padding: '8px 12px' }}>
+                    ⚠️ Suspendu après plusieurs échecs de prélèvement{mandatSepa.derniere_erreur ? ` (${mandatSepa.derniere_erreur})` : ''}. Signez un nouveau mandat pour le réactiver.
+                  </div>
+                  <button onClick={() => gererMandatSepa('activer')} disabled={mandatSepaBusy} className="btn-primary"
+                    style={{ minHeight: 44, fontSize: 13, fontWeight: 700, alignSelf: 'flex-start' }}>
+                    {mandatSepaBusy ? 'Redirection…' : 'Signer un nouveau mandat'}
+                  </button>
+                </>
+              ) : (mandatSepa?.statut === 'signe' || mandatSepa?.statut === 'pending') && mandatSepa?.gocardless_mandate_id ? (
+                <div style={{ fontSize: 13, color: '#92400E', background: '#FFFBEB', borderRadius: 8, padding: '8px 12px' }}>
+                  ⏳ Mandat signé — activation par la banque en cours (2 à 3 jours ouvrés). Rien à faire de votre côté.
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+                    Signez votre mandat de prélèvement en 2 minutes (page sécurisée GoCardless, sans papier) :
+                    chaque mensualité de votre échéancier sera ensuite prélevée automatiquement sur votre compte bancaire à sa date.
+                  </div>
+                  <button onClick={() => gererMandatSepa('activer')} disabled={mandatSepaBusy} className="btn-primary"
+                    style={{ minHeight: 44, fontSize: 13, fontWeight: 700, alignSelf: 'flex-start' }}>
+                    {mandatSepaBusy ? 'Redirection…' : 'Signer mon mandat de prélèvement'}
                   </button>
                 </>
               )}
