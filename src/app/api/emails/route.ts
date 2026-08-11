@@ -115,9 +115,31 @@ export async function POST(req: NextRequest) {
           continue
         }
 
+        // llll1 : {{lien_magique}} disponible dans les emails personnalisés.
+        // Lien de création/réinitialisation du mot de passe (recovery) généré à la
+        // volée pour le compte portail de la famille — même mécanique que le
+        // renvoi individuel (renvoyer-lien-magique). Repli : page de connexion.
+        let lienMagique = ''
+        const veutLien = contenu_html.includes('{{lien_magique}}') || sujet.includes('{{lien_magique}}')
+        if (veutLien) {
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://talmidapp.fr'
+          lienMagique = baseUrl + '/login'
+          const { data: comptes } = await supabase
+            .from('profiles_with_email').select('email').eq('famille_id', familleId).limit(1)
+          const compteEmail = comptes?.[0]?.email
+          if (compteEmail) {
+            const { data: linkData } = await supabase.auth.admin.generateLink({
+              type: 'recovery',
+              email: compteEmail,
+              options: { redirectTo: baseUrl + '/auth/set-password?invited=1' },
+            })
+            if (linkData?.properties?.action_link) lienMagique = linkData.properties.action_link
+          }
+        }
+
         // Résoudre les variables
-        const sujetResolu = resolveVariables(sujet, vars)
-        const htmlResolu = resolveVariables(contenu_html, vars)
+        const sujetResolu = resolveVariables(sujet, vars).split('{{lien_magique}}').join(lienMagique)
+        const htmlResolu = resolveVariables(contenu_html, vars).split('{{lien_magique}}').join(lienMagique)
 
         // Construire les destinataires
         const to = [{ email: famille.parent1_email, name: `${vars.prenom_parent1} ${vars.nom_parent1}`.trim() }]
