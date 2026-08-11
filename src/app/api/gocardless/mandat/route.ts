@@ -58,6 +58,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
     }
 
+    // kkkk1 : verrou anti double signature — un mandat déjà signé ou actif ne se re-signe pas
+    if (mandat?.statut === 'active') {
+      return NextResponse.json({ error: 'Votre prélèvement automatique est déjà actif — rien à refaire.' }, { status: 400 })
+    }
+    if (mandat?.statut === 'signe' && mandat?.gocardless_mandate_id) {
+      return NextResponse.json({ error: 'Votre mandat est déjà signé — votre banque l\'active sous 2 à 3 jours ouvrés, vous n\'avez rien à refaire.' }, { status: 400 })
+    }
+
     const { data: ecole } = await sb.from('ecoles').select('nom').eq('id', profile.ecole_id).single()
     const { data: fam } = await sb.from('familles').select('nom').eq('id', profile.famille_id).single()
 

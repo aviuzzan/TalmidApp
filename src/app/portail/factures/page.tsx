@@ -43,6 +43,10 @@ export default function PortailFacturesPage() {
   // jjjj1 : mandat de prélèvement SEPA (GoCardless)
   const [mandatSepa, setMandatSepa] = useState<any>(null)
   const [mandatSepaBusy, setMandatSepaBusy] = useState(false)
+  // kkkk1 : confirmation immédiate au retour de la signature GoCardless
+  // (le webhook met quelques secondes — sans ce flash, le bouton « Signer »
+  // réapparaissait et les parents recommençaient la signature)
+  const [mandatSepaFlash, setMandatSepaFlash] = useState<'ok' | 'annule' | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErreur(false)
@@ -138,6 +142,18 @@ export default function PortailFacturesPage() {
   }, [anneeInscription, parent.estSeparee, parent.parentSlot])
 
   useEffect(() => { load() }, [load])
+
+  // kkkk1 : lecture du retour de signature (?mandat_sepa=ok|annule) puis nettoyage de l'URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const flag = params.get('mandat_sepa')
+    if (flag === 'ok' || flag === 'annule') {
+      setMandatSepaFlash(flag as 'ok' | 'annule')
+      params.delete('mandat_sepa')
+      const qs = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    }
+  }, [])
 
   async function payerEnLigne(provider: 'stripe' | 'gocardless' | 'paypal') {
     if (!facture) return
@@ -531,10 +547,26 @@ export default function PortailFacturesPage() {
                     {mandatSepaBusy ? 'Redirection…' : 'Signer un nouveau mandat'}
                   </button>
                 </>
+              ) : mandatSepaFlash === 'ok' ? (
+                <div style={{ fontSize: 13, color: '#065F46', background: '#ECFDF5', borderRadius: 8, padding: '8px 12px' }}>
+                  ✓ Votre mandat a bien été signé — c'est enregistré ! Votre banque l'active sous 2 à 3 jours ouvrés,
+                  puis vos échéances seront prélevées automatiquement à leur date.
+                  <strong> Vous n'avez plus rien à faire — inutile de recommencer la signature.</strong>
+                </div>
               ) : (mandatSepa?.statut === 'signe' || mandatSepa?.statut === 'pending') && mandatSepa?.gocardless_mandate_id ? (
                 <div style={{ fontSize: 13, color: '#92400E', background: '#FFFBEB', borderRadius: 8, padding: '8px 12px' }}>
                   ⏳ Mandat signé — activation par la banque en cours (2 à 3 jours ouvrés). Rien à faire de votre côté.
                 </div>
+              ) : mandatSepaFlash === 'annule' ? (
+                <>
+                  <div style={{ fontSize: 13, color: '#92400E', background: '#FFFBEB', borderRadius: 8, padding: '8px 12px' }}>
+                    Signature annulée — aucun mandat n'a été créé. Vous pouvez recommencer quand vous le souhaitez.
+                  </div>
+                  <button onClick={() => gererMandatSepa('activer')} disabled={mandatSepaBusy} className="btn-primary"
+                    style={{ minHeight: 44, fontSize: 13, fontWeight: 700, alignSelf: 'flex-start' }}>
+                    {mandatSepaBusy ? 'Redirection…' : 'Signer mon mandat de prélèvement'}
+                  </button>
+                </>
               ) : (
                 <>
                   <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
