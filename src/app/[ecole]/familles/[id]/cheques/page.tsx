@@ -200,6 +200,40 @@ export default function ChequesFamillePage() {
     await load()
   }
 
+  // mmmm1 : lissage — répartit le reste dû réel sur les échéances ACTIVES existantes
+  // (même nombre, mêmes dates, mêmes modes), la dernière absorbant l'arrondi.
+  // Règle validée par Avi : on ne supprime pas d'échéances, on recalcule les montants.
+  async function recalculerSurSolde() {
+    if (!solde) return
+    const actives = cheques
+      .filter(c => c.statut === 'prevu' || c.statut === 'attente_reception')
+      .sort((a, b) => (a.date_echeance || '').localeCompare(b.date_echeance || ''))
+    if (actives.length === 0) { await appAlert('Aucune échéance active à recalculer.'); return }
+    const resteDu = Math.round(Math.max(0, solde.soldeRestant) * 100) / 100
+    if (resteDu <= 0) { await appAlert('Le reste dû est nul : annulez plutôt les échéances restantes.'); return }
+    const n = actives.length
+    const unit = Math.round((resteDu / n) * 100) / 100
+    const dernier = Math.round((resteDu - unit * (n - 1)) * 100) / 100
+    const totalActuel = actives.reduce((t, c) => t + Number(c.montant), 0)
+    if (!await appConfirm(
+      'Recalculer l\'échéancier sur le reste dû réel ?\n\n' +
+      n + ' échéance(s) active(s) : ' + fmt(totalActuel) + ' actuellement → ' + fmt(resteDu) + ' après recalcul.\n' +
+      'Nouvelle mensualité : ' + fmt(unit) + (Math.abs(dernier - unit) > 0.004 ? ' (dernière : ' + fmt(dernier) + ')' : '') + '.\n\n' +
+      'Le nombre d\'échéances, les dates et les modes de paiement sont conservés.'
+    )) return
+    setBusy(true)
+    const s = createClient()
+    let erreurs = 0
+    for (let i = 0; i < n; i++) {
+      const montant = i === n - 1 ? dernier : unit
+      const { error } = await s.from('cheques_prevus').update({ montant }).eq('id', actives[i].id)
+      if (error) erreurs++
+    }
+    setBusy(false)
+    if (erreurs > 0) await appAlert(erreurs + ' échéance(s) n\'ont pas pu être mises à jour — réessayez.')
+    await load()
+  }
+
   async function genererEcheancier(e: React.FormEvent) {
     e.preventDefault()
     const total = parseFloat(gen.montant_total)
@@ -296,7 +330,7 @@ export default function ChequesFamillePage() {
         <button onClick={() => router.push('/' + ecole.slug + '/familles/' + familleId)}
           style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>&larr; Retour fiche famille</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Cheques &amp; echeancier</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>Échéancier</h1>
           <p style={{ color: '#64748B', fontSize: 13, margin: '2px 0 0' }}>Famille {familleNom}</p>
         </div>
         <button onClick={() => {
@@ -335,8 +369,22 @@ export default function ChequesFamillePage() {
             <div><span style={{ color: '#64748B', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Échéancier actif</span><div style={{ fontWeight: 700 }}>{fmt(actif)}</div></div>
             {exces > 0.009 && (
               <div style={{ flex: 1, minWidth: 260, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', color: '#991B1B', fontWeight: 600 }}>
-                ⚠️ Sur-encaissement : l&apos;échéancier actif dépasse le reste dû de <strong>{fmt(exces)}</strong>.
-                Des règlements ont déjà été saisis — régénérez l&apos;échéancier sur le reste dû ou annulez les échéances en trop.
+                ⚠️ L&apos;échéancier actif dépasse le reste dû de <strong>{fmt(exces)}</strong> (avoir imputé ou règlement déjà saisi) —
+                la famille paierait trop.
+                <button onClick={recalculerSurSolde} disabled={busy}
+                  style={{ display: 'block', marginTop: 6, background: '#991B1B', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Recalculer l&apos;échéancier sur le reste dû ({fmt(resteDu)})
+                </button>
+              </div>
+            )}
+            {exces < -0.009 && (
+              <div style={{ flex: 1, minWidth: 260, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '8px 12px', color: '#92400E', fontWeight: 600 }}>
+                ⚠️ L&apos;échéancier actif est inférieur au reste dû de <strong>{fmt(Math.abs(exces))}</strong> (ligne ajoutée à la
+                facture après génération ?) — la famille paierait moins que son dû.
+                <button onClick={recalculerSurSolde} disabled={busy}
+                  style={{ display: 'block', marginTop: 6, background: '#B45309', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Recalculer l&apos;échéancier sur le reste dû ({fmt(resteDu)})
+                </button>
               </div>
             )}
           </div>

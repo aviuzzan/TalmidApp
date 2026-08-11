@@ -622,7 +622,7 @@ export default function FamilleDetailPage() {
           ...(canFacturation ? [
             { label: '📒 Compte client (411)', href: `/${ecole.slug}/familles/${id}/compte` },
             { label: '📋 Engagement financier', href: `/${ecole.slug}/familles/${id}/engagement` },
-            { label: '💳 Chèques',           href: `/${ecole.slug}/familles/${id}/cheques` },
+            { label: '📅 Échéancier',        href: `/${ecole.slug}/familles/${id}/cheques` },
             { label: '🎁 Avoirs',            href: `/${ecole.slug}/familles/${id}/avoirs` },
             { label: '🏷️ Définir tranche manuellement', href: '#tranche-manuelle' },
             { label: '📅 Plan paiement',     href: `/${ecole.slug}/familles/${id}/plan-paiement` },
