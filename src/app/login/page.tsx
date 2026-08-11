@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -109,10 +110,9 @@ export default function LoginPage() {
           </div>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>MOT DE PASSE</label>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••" required
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            <PasswordInput
+              value={password} onChange={setPassword}
+              placeholder="••••••••" required autoComplete="current-password"
             />
           </div>
 

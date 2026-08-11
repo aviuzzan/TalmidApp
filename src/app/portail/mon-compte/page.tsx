@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useI18n } from '@/lib/i18n'
+import PasswordInput, { PasswordRules } from '@/components/ui/PasswordInput'
 
 /**
  * Espace parent - Mon compte.
@@ -143,19 +144,27 @@ export default function MonComptePage() {
         <form onSubmit={changerMotDePasse} style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 420 }}>
           <div>
             <label style={lbl}>{t('portail.mon_compte.current_password')}</label>
-            <input required type="password" autoComplete="current-password" value={actuel}
-              onChange={e => setActuel(e.target.value)} style={inp} placeholder={t('portail.mon_compte.current_password_placeholder')} />
+            <PasswordInput required autoComplete="current-password" value={actuel}
+              onChange={setActuel} style={inp} placeholder={t('portail.mon_compte.current_password_placeholder')}
+              showLabel={t('portail.mon_compte.pwd.show')} hideLabel={t('portail.mon_compte.pwd.hide')} />
           </div>
           <div>
             <label style={lbl}>{t('portail.mon_compte.new_password')}</label>
-            <input required type="password" autoComplete="new-password" value={nouveau}
-              onChange={e => setNouveau(e.target.value)} style={inp} placeholder={t('portail.mon_compte.new_password_placeholder')} />
+            <PasswordInput required autoComplete="new-password" value={nouveau}
+              onChange={setNouveau} style={inp} placeholder={t('portail.mon_compte.new_password_placeholder')}
+              showLabel={t('portail.mon_compte.pwd.show')} hideLabel={t('portail.mon_compte.pwd.hide')} />
           </div>
           <div>
             <label style={lbl}>{t('portail.mon_compte.confirm_password')}</label>
-            <input required type="password" autoComplete="new-password" value={confirme}
-              onChange={e => setConfirme(e.target.value)} style={inp} placeholder={t('portail.mon_compte.confirm_password_placeholder')} />
+            <PasswordInput required autoComplete="new-password" value={confirme}
+              onChange={setConfirme} style={inp} placeholder={t('portail.mon_compte.confirm_password_placeholder')}
+              showLabel={t('portail.mon_compte.pwd.show')} hideLabel={t('portail.mon_compte.pwd.hide')} />
           </div>
+
+          <PasswordRules rules={[
+            { label: t('portail.mon_compte.pwd.rule_len'), ok: nouveau.length >= 8 },
+            { label: t('portail.mon_compte.pwd.rule_match'), ok: confirme.length > 0 && nouveau === confirme },
+          ]} />
 
           {error && (
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#DC2626', fontSize: 13 }}>

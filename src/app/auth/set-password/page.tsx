@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import PasswordInput, { PasswordRules } from '@/components/ui/PasswordInput'
 
 /**
  * Page de définition du mot de passe après une invitation.
@@ -138,11 +139,10 @@ export default function SetPasswordPage() {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
               Nouveau mot de passe *
             </label>
-            <input
-              required type="password" autoComplete="new-password"
-              value={password} onChange={e => setPassword(e.target.value)}
+            <PasswordInput
+              required autoComplete="new-password"
+              value={password} onChange={setPassword}
               placeholder="8 caractères minimum"
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
 
@@ -150,13 +150,17 @@ export default function SetPasswordPage() {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
               Confirmer le mot de passe *
             </label>
-            <input
-              required type="password" autoComplete="new-password"
-              value={confirm} onChange={e => setConfirm(e.target.value)}
+            <PasswordInput
+              required autoComplete="new-password"
+              value={confirm} onChange={setConfirm}
               placeholder="Retapez le même mot de passe"
-              style={{ width: '100%', padding: '10px 14px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
+
+          <PasswordRules rules={[
+            { label: 'Au moins 8 caractères', ok: password.length >= 8 },
+            { label: 'Les deux mots de passe sont identiques', ok: confirm.length > 0 && password === confirm },
+          ]} />
 
           <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#1E40AF' }}>
             💡 Choisissez un mot de passe unique. Il vous permettra de vous reconnecter ensuite à tout moment depuis la page de connexion.
