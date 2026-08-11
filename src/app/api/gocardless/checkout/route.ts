@@ -77,10 +77,11 @@ export async function POST(req: NextRequest) {
       montantCentimes: montant,
       email: user.email || '',
       nomFamille: famille?.nom || profile.nom || '',
+      // GoCardless limite les metadata a 3 cles maximum ; facture_id est ajoute
+      // dans createBillingRequestFlow => on n'en passe que 2 ici (3 au total).
       metadata: {
         ecole_id: ecoleId,
         famille_id: profile.famille_id,
-        profile_id: profile.id,
       },
     })
 

@@ -33,8 +33,12 @@ async function gcFetch(accessToken: string, mode: 'live' | 'test', path: string,
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const msg = data?.error?.message || data?.error?.errors?.[0]?.message || `GoCardless ${res.status}`
-    throw new Error(msg)
+    const details = (data?.error?.errors || [])
+      .map((e: any) => [e.field, e.message, e.request_pointer].filter(Boolean).join(' '))
+      .filter(Boolean)
+      .join(' ; ')
+    const base = data?.error?.message || `GoCardless ${res.status}`
+    throw new Error(details ? `${base} — ${details}` : base)
   }
   return data
 }
