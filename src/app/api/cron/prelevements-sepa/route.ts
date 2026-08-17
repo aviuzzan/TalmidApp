@@ -52,9 +52,15 @@ export async function GET(req: NextRequest) {
   // 1. Mandats actifs rattachés à une famille (paginé par principe)
   const mandats: any[] = []
   for (let from = 0; ; from += 1000) {
+    // qqqq1 : inclure les mandats 'signe' (mandate_id present) en plus des 'active'.
+    // Constat du 17/08 : AUCUN mandat n'etait passe 'active' en base (l'event
+    // mandates.active de GoCardless n'arrive pas forcement avant le premier
+    // prelevement pour le SEPA) -> le cron n'aurait preleve PERSONNE le 25/08.
+    // GoCardless accepte la creation de paiements sur un mandat pas encore actif ;
+    // si la charge_date ne peut pas etre tenue, le garde-fou sans charge_date joue.
     const { data, error } = await sb.from('mandats_gocardless')
       .select('*')
-      .eq('statut', 'active')
+      .in('statut', ['active', 'signe'])
       .not('famille_id', 'is', null)
       .not('gocardless_mandate_id', 'is', null)
       .range(from, from + 999)
