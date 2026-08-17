@@ -96,11 +96,15 @@ export async function POST(req: NextRequest) {
 
     // Charger le nom de l'école pour le fromName (toutes les familles partagent normalement la même école)
     let ecoleNom = 'TalmidApp'
+    // rrrr1 : les reponses des parents doivent arriver a l'ecole, pas sur la boite
+    // d'envoi TalmidApp -> Reply-To = email de contact de l'ecole (Parametres > ecole).
+    let ecoleReplyTo = ''
     try {
       const { data: firstFam } = await supabase.from('familles').select('ecole_id').eq('id', famille_ids[0]).single()
       if (firstFam?.ecole_id) {
-        const { data: ec } = await supabase.from('ecoles').select('nom').eq('id', firstFam.ecole_id).single()
+        const { data: ec } = await supabase.from('ecoles').select('nom, email_contact').eq('id', firstFam.ecole_id).single()
         if (ec?.nom) ecoleNom = ec.nom
+        if (ec?.email_contact) ecoleReplyTo = ec.email_contact
       }
     } catch {}
 
@@ -153,6 +157,7 @@ export async function POST(req: NextRequest) {
           subject: sujetResolu,
           html: htmlResolu,
           fromName: ecoleNom,
+          ...(ecoleReplyTo ? { replyTo: ecoleReplyTo } : {}),
         })
 
         if (!result.ok) {
