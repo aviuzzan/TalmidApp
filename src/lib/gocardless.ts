@@ -175,6 +175,11 @@ export async function createMandateOnlyFlow(p: {
 /**
  * jjjj1 — Crée un paiement sur un mandat existant (prélèvement d'une échéance par le cron).
  * Idempotency-Key : GoCardless garantit qu'un rejeu ne débite pas deux fois.
+ * nnnn1 — chargeDate (optionnel, YYYY-MM-DD) : date de prélèvement souhaitée.
+ * Sans chargeDate, GoCardless prélève à la première date possible (~J+3 ouvrés).
+ * Avec chargeDate, le débit a lieu exactement ce jour-là (consigne Avi : prélever
+ * à la date de l'échéance). Si la date est trop proche, GoCardless renvoie une
+ * erreur de validation sur charge_date — l'appelant retente alors sans la date.
  */
 export async function createMandatePayment(p: {
   accessToken: string
@@ -183,6 +188,7 @@ export async function createMandatePayment(p: {
   montantCentimes: number
   description: string
   idempotencyKey: string
+  chargeDate?: string
   metadata?: Record<string, string>
 }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   try {
@@ -195,6 +201,7 @@ export async function createMandatePayment(p: {
           currency: 'EUR',
           description: p.description,
           metadata: p.metadata || {},
+          ...(p.chargeDate ? { charge_date: p.chargeDate } : {}),
           links: { mandate: p.mandateId },
         },
       }),

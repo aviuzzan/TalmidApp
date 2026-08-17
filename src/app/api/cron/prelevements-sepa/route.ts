@@ -9,13 +9,24 @@ export const maxDuration = 60
 /**
  * GET /api/cron/prelevements-sepa  (jjjj1 — quotidien 7h15, cf. vercel.json)
  *
- * Crée les paiements GoCardless des échéances arrivées à date des familles
- * ayant un mandat SEPA actif. IMPORTANT : contrairement au cron CB, le SEPA
- * est asynchrone — AUCUN règlement n'est créé ici. Le règlement est créé par
- * le webhook à payments.confirmed (prélèvement effectif chez la famille), et
- * l'échéance passe « encaisse » à ce moment-là. Les échecs (payments.failed)
- * déclenchent les retries J+3/J+7 et la suspension après 3 tentatives, gérés
- * par le webhook (miroir de la politique CB validée par Avi).
+ * Crée les paiements GoCardless des échéances des familles ayant un mandat SEPA
+ * actif. IMPORTANT : contrairement au cron CB, le SEPA est asynchrone — AUCUN
+ * règlement n'est créé ici. Le règlement est créé par le webhook à
+ * payments.confirmed (prélèvement effectif chez la famille), et l'échéance
+ * passe « encaisse » à ce moment-là. Les échecs (payments.failed) déclenchent
+ * les retries J+3/J+7 et la suspension après 3 tentatives, gérés par le
+ * webhook (miroir de la politique CB validée par Avi).
+ *
+ * nnnn1 — PRÉLÈVEMENT À LA DATE EXACTE DE L'ÉCHÉANCE (consigne Avi) :
+ * le SEPA demande ~3 jours ouvrés de préavis, donc un paiement créé le jour J
+ * n'était débité que vers J+3. Désormais le cron regarde 7 jours en avant et
+ * crée le paiement AVEC charge_date = date de l'échéance : GoCardless débite
+ * la famille pile le bon jour. Garde-fou : si GoCardless refuse la date
+ * (échéance trop proche, week-end/férié bancaire), on recrée immédiatement
+ * SANS charge_date (= première date possible) et ce n'est PAS compté en échec.
+ * Les échéances déjà échues (rattrapage) partent sans charge_date.
+ * NB : une fois le paiement soumis (jusqu'à 7 jours avant la date), modifier
+ * le montant de l'échéance ne change plus le prélèvement en cours.
  *
  * Idempotence : UNIQUE(echeance_id, tentative) en base + Idempotency-Key GoCardless.
  * Un rejeu du cron ne peut ni recréer une tentative ni débiter deux fois.
@@ -34,7 +45,9 @@ export async function GET(req: NextRequest) {
   )
 
   const today = new Date().toISOString().slice(0, 10)
-  const resume = { soumis: 0, echecs: 0, ignores: 0, erreurs: [] as string[] }
+  // nnnn1 : fenêtre d'anticipation — on soumet à J-7 avec charge_date = date d'échéance
+  const horizon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const resume = { soumis: 0, echecs: 0, ignores: 0, sans_charge_date: 0, erreurs: [] as string[] }
 
   // 1. Mandats actifs rattachés à une famille (paginé par principe)
   const mandats: any[] = []
@@ -76,24 +89,28 @@ export async function GET(req: NextRequest) {
     const creds = await gcCreds(mandat.ecole_id)
     if (!creds) { resume.ignores++; continue } // intégration désactivée entre-temps
 
-    // 2a. Nouvelles échéances SEPA dues (aucune tentative existante)
+    // 2a. Nouvelles échéances SEPA à venir sous 7 jours ou échues (aucune tentative existante)
     const { data: dues, error: duesErr } = await sb
       .from('cheques_prevus')
       .select('id, facture_id, montant, date_echeance')
       .eq('famille_id', mandat.famille_id)
       .eq('statut', 'prevu')
       .eq('mode_paiement', 'sepa')
-      .lte('date_echeance', today)
+      .lte('date_echeance', horizon)
       .is('report_solde_id', null)
       .gt('montant', 0)
     if (duesErr) { resume.erreurs.push(`échéances famille ${mandat.famille_id} : ${duesErr.message}`); continue }
 
-    const aTraiter: { echeanceId: string; factureId: string | null; montant: number; tentative: number }[] = []
+    const aTraiter: { echeanceId: string; factureId: string | null; montant: number; tentative: number; chargeDate?: string }[] = []
     for (const e of dues ?? []) {
       const { data: deja } = await sb.from('prelevements_gocardless')
         .select('id').eq('echeance_id', e.id).limit(1)
       if (!deja || deja.length === 0) {
-        aTraiter.push({ echeanceId: e.id, factureId: e.facture_id, montant: Number(e.montant), tentative: 1 })
+        aTraiter.push({
+          echeanceId: e.id, factureId: e.facture_id, montant: Number(e.montant), tentative: 1,
+          // nnnn1 : échéance future -> débit exactement à sa date ; échue/du jour -> au plus tôt
+          chargeDate: e.date_echeance && e.date_echeance > today ? e.date_echeance : undefined,
+        })
       }
     }
 
@@ -133,15 +150,32 @@ export async function GET(req: NextRequest) {
       if (prelErr || !prel?.id) { resume.ignores++; continue } // doublon = déjà traité par un autre run
 
       const ecoleNom = await nomEcole(mandat.ecole_id)
-      const paiement = await createMandatePayment({
+      let paiement = await createMandatePayment({
         accessToken: creds.accessToken,
         mode: creds.mode,
         mandateId: mandat.gocardless_mandate_id,
         montantCentimes,
         description: `${ecoleNom} — échéance du ${t.echeanceId.slice(0, 8)}`,
         idempotencyKey: `prelgc_${t.echeanceId}_t${t.tentative}`,
+        chargeDate: t.chargeDate,
         metadata: { echeance_id: t.echeanceId, prelevement_id: prel.id, mandat_id: mandat.id },
       })
+
+      // nnnn1 (garde-fou validé par Avi) : si GoCardless refuse la charge_date
+      // (trop proche, jour non bancaire), on recrée SANS date — débit au plus tôt —
+      // et ce n'est pas compté comme un échec du mandat.
+      if (!paiement.ok && t.chargeDate && /charge_date/i.test(paiement.error)) {
+        resume.sans_charge_date++
+        paiement = await createMandatePayment({
+          accessToken: creds.accessToken,
+          mode: creds.mode,
+          mandateId: mandat.gocardless_mandate_id,
+          montantCentimes,
+          description: `${ecoleNom} — échéance du ${t.echeanceId.slice(0, 8)}`,
+          idempotencyKey: `prelgc_${t.echeanceId}_t${t.tentative}_nd`,
+          metadata: { echeance_id: t.echeanceId, prelevement_id: prel.id, mandat_id: mandat.id },
+        })
+      }
 
       if (paiement.ok) {
         // Paiement soumis à GoCardless — règlement et encaissement viendront du webhook
@@ -157,7 +191,7 @@ export async function GET(req: NextRequest) {
           provider: 'gocardless',
           gocardless_payment_id: paiement.id,
           statut: 'pending',
-          metadata: { echeance_id: t.echeanceId, prelevement_id: prel.id, mandat_id: mandat.id, cron: 'prelevements-sepa' },
+          metadata: { echeance_id: t.echeanceId, prelevement_id: prel.id, mandat_id: mandat.id, cron: 'prelevements-sepa', ...(t.chargeDate ? { charge_date: t.chargeDate } : {}) },
         })
         if (peErr) resume.erreurs.push(`paiements_en_ligne échéance ${t.echeanceId} : ${peErr.message}`)
         resume.soumis++

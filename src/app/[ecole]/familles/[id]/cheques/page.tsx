@@ -250,9 +250,28 @@ export default function ChequesFamillePage() {
 
     setBusy(true)
     const s = createClient()
-    if (aRemplacer.length > 0) {
-      await s.from('cheques_prevus').delete().in('id', aRemplacer.map(c => c.id))
+
+    // nnnn1 : contrat_id est obligatoire en base (NOT NULL). L'ancien code ne le
+    // renseignait pas -> l'insertion echouait TOUJOURS, apres avoir supprime les
+    // echeances existantes (familles TOUBIAN et LEBAR videes). On reprend le
+    // contrat des echeances remplacees, sinon le contrat valide le plus recent.
+    let contratId: string | null = (aRemplacer.find(c => (c as any).contrat_id) as any)?.contrat_id || null
+    if (!contratId) {
+      const { data: contrats } = await s.from('contrats_scolarisation')
+        .select('id, statut, annee_scolaire')
+        .eq('famille_id', familleId)
+        .neq('statut', 'annule')
+        .order('annee_scolaire', { ascending: false })
+        .limit(10)
+      const valide = (contrats || []).find(c => c.statut === 'valide')
+      contratId = valide?.id || (contrats || [])[0]?.id || null
     }
+    if (!contratId) {
+      setBusy(false)
+      await appAlert('Generation impossible : cette famille n\'a aucun contrat de scolarisation. Creez/validez d\'abord le contrat, puis generez l\'echeancier.\n\nAucune echeance existante n\'a ete touchee.')
+      return
+    }
+
     const base = new Date(gen.date_premiere + 'T00:00:00')
     const jour = base.getDate()
     const unit = Math.round((total / n) * 100) / 100
@@ -263,6 +282,7 @@ export default function ChequesFamillePage() {
       rows.push({
         famille_id: familleId,
         ecole_id: ecole.id,
+        contrat_id: contratId,
         numero_cheque: i + 1,
         montant,
         date_echeance: d.toISOString().split('T')[0],
@@ -272,9 +292,26 @@ export default function ChequesFamillePage() {
         note: 'Echeance ' + (i + 1) + '/' + n,
       })
     }
+
+    // nnnn1 : ordre inverse — on INSERE d'abord les nouvelles echeances, puis on
+    // supprime les anciennes. Si l'insertion echoue, rien n'a ete supprime
+    // (avant : suppression d'abord -> echec d'insert = echeancier perdu).
     const { error } = await s.from('cheques_prevus').insert(rows)
+    if (error) {
+      setBusy(false)
+      await appAlert('Erreur : ' + error.message + '\n\nAucune echeance existante n\'a ete supprimee.')
+      return
+    }
+    if (aRemplacer.length > 0) {
+      const { error: delErr } = await s.from('cheques_prevus').delete().in('id', aRemplacer.map(c => c.id))
+      if (delErr) {
+        setBusy(false)
+        await appAlert('Les ' + n + ' nouvelles echeances sont creees, mais les ' + aRemplacer.length + ' anciennes n\'ont pas pu etre supprimees (' + delErr.message + '). Supprimez-les manuellement dans la liste.')
+        await load()
+        return
+      }
+    }
     setBusy(false)
-    if (error) { await appAlert('Erreur : ' + error.message); return }
     setShowGen(false)
     setGen({ montant_total: '', nb_echeances: '10', date_premiere: '', mode_paiement: 'cheque', facture_id: '', statut: 'attente_reception' })
     await load()

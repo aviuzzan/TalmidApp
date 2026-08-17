@@ -6,7 +6,9 @@
  * - Click notification → ouvre l'URL associée
  */
 
-const CACHE_VERSION = 'talmidapp-v2'
+// nnnn1 : version incrementee -> l'activation purge les anciens caches (chunks
+// perimes qui figeaient les parents sur l'ancienne version de l'app).
+const CACHE_VERSION = 'talmidapp-v3'
 const APP_SHELL = [
   '/',
   '/portail',
