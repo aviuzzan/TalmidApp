@@ -182,7 +182,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <button onClick={() => router.push(`/${ecole.slug}/a-traiter`)}
-          style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)', color: '#fff', border: 'none', borderRadius: 11, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}>
           📥 À traiter
         </button>
       </div>
@@ -203,16 +203,17 @@ export default function DashboardPage() {
               style={{
                 background: accessible ? '#fff' : '#F8FAFC',
                 border: `1px solid ${accessible ? '#E2E8F0' : '#E2E8F0'}`,
-                borderRadius: 14,
+                borderRadius: 16,
                 padding: 22,
+                boxShadow: accessible ? '0 1px 3px rgba(15,23,42,0.05)' : 'none',
                 cursor: accessible ? 'pointer' : 'not-allowed',
                 opacity: accessible ? 1 : 0.55,
                 minHeight: 165,
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
                 transition: 'transform 0.15s, border-color 0.15s, box-shadow 0.15s',
               }}
-              onMouseEnter={e => { if (accessible) { (e.currentTarget as HTMLElement).style.borderColor = cat.couleur.border; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 18px rgba(15,23,42,0.06)' } }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}>
+              onMouseEnter={e => { if (accessible) { (e.currentTarget as HTMLElement).style.borderColor = cat.couleur.border; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 22px rgba(15,23,42,0.10)' } }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(15,23,42,0.05)' }}>
 
               <div>
                 <div style={{

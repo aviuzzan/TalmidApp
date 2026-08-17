@@ -198,7 +198,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 38, height: 38, borderRadius: 10,
-              background: `linear-gradient(135deg, ${primaryColor}, #60A5FA)`,
+              background: `linear-gradient(135deg, ${primaryColor}, #7C3AED)`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 15, fontWeight: 800, color: '#fff', flexShrink: 0,
             }}>
@@ -221,7 +221,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                 padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 marginBottom: 4, fontSize: 14, textAlign: 'left',
                 fontWeight: isBilanActive ? 600 : 400,
-                background: isBilanActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                background: isBilanActive ? 'linear-gradient(90deg, rgba(37,99,235,0.30), rgba(124,58,237,0.16))' : 'transparent',
                 color: isBilanActive ? '#fff' : 'rgba(255,255,255,0.65)',
                 borderLeft: isBilanActive ? '3px solid #60A5FA' : '3px solid transparent',
                 minHeight: 44,
@@ -236,7 +236,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
               padding: '11px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
               marginBottom: 8, fontSize: 14, textAlign: 'left',
               fontWeight: isDashboardActive ? 600 : 400,
-              background: isDashboardActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+              background: isDashboardActive ? 'linear-gradient(90deg, rgba(37,99,235,0.30), rgba(124,58,237,0.16))' : 'transparent',
               color: isDashboardActive ? '#fff' : 'rgba(255,255,255,0.65)',
               borderLeft: isDashboardActive ? '3px solid #60A5FA' : '3px solid transparent',
               minHeight: 44,
@@ -268,7 +268,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                     cursor: accessible ? 'pointer' : 'not-allowed',
                     marginBottom: 2, fontSize: 13, textAlign: 'left',
                     fontWeight: isCatActive ? 600 : 400,
-                    background: isCatActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+                    background: isCatActive ? 'linear-gradient(90deg, rgba(37,99,235,0.30), rgba(124,58,237,0.16))' : 'transparent',
                     color: accessible ? (isCatActive ? '#fff' : 'rgba(255,255,255,0.75)') : 'rgba(255,255,255,0.35)',
                     borderLeft: isCatActive ? `3px solid ${cat.couleur.border}` : '3px solid transparent',
                     minHeight: 40,
@@ -295,7 +295,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
                             fontSize: 12, border: 'none',
                             cursor: modAccessible ? 'pointer' : 'not-allowed',
                             marginBottom: 1,
-                            background: isModActive ? 'rgba(96,165,250,0.18)' : 'transparent',
+                            background: isModActive ? 'rgba(37,99,235,0.28)' : 'transparent',
                             color: modAccessible ? (isModActive ? '#fff' : 'rgba(255,255,255,0.55)') : 'rgba(255,255,255,0.28)',
                             borderLeft: isModActive ? '2px solid #60A5FA' : '2px solid transparent',
                           }}>
@@ -325,7 +325,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <div style={{
               width: 30, height: 30, borderRadius: '50%',
-              background: `linear-gradient(135deg, ${primaryColor}, #60A5FA)`,
+              background: `linear-gradient(135deg, ${primaryColor}, #7C3AED)`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
             }}>{userEmail[0]?.toUpperCase()}</div>

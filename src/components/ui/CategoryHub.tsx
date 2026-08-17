@@ -152,10 +152,12 @@ export default function CategoryHub({ code }: { code: string }) {
 
       {/* Bandeau catégorie — couleur pleine de la catégorie */}
       <div style={{
-        background: cat.couleur.border,
-        borderRadius: 14, padding: '18px 22px',
+        background: `linear-gradient(135deg, ${cat.couleur.border}, ${cat.couleur.fg})`,
+        borderRadius: 16, padding: '18px 22px',
         display: 'flex', alignItems: 'center', gap: 16,
+        position: 'relative', overflow: 'hidden',
       }}>
+        <div style={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', top: -80, right: -60 }} />
         <div style={{
           width: 52, height: 52, borderRadius: 12, flexShrink: 0,
           background: 'rgba(255,255,255,0.18)',
@@ -196,7 +198,8 @@ export default function CategoryHub({ code }: { code: string }) {
               style={{
                 background: ok ? '#fff' : '#F8FAFC',
                 border: '1px solid #E2E8F0',
-                borderRadius: 14, padding: 18,
+                borderRadius: 15, padding: 18,
+                boxShadow: ok ? '0 1px 3px rgba(15,23,42,0.05)' : 'none',
                 cursor: ok ? 'pointer' : 'not-allowed',
                 opacity: ok ? 1 : 0.6,
                 minHeight: 138,
@@ -208,14 +211,14 @@ export default function CategoryHub({ code }: { code: string }) {
                   const el = e.currentTarget as HTMLElement
                   el.style.borderColor = cat!.couleur.border
                   el.style.transform = 'translateY(-2px)'
-                  el.style.boxShadow = `0 6px 16px ${cat!.couleur.border}22`
+                  el.style.boxShadow = `0 8px 20px ${cat!.couleur.border}33`
                 }
               }}
               onMouseLeave={e => {
                 const el = e.currentTarget as HTMLElement
                 el.style.borderColor = '#E2E8F0'
                 el.style.transform = 'translateY(0)'
-                el.style.boxShadow = 'none'
+                el.style.boxShadow = ok ? '0 1px 3px rgba(15,23,42,0.05)' : 'none'
               }}>
               {/* Pastille icône */}
               <div style={{
