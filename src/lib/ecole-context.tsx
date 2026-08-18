@@ -7,6 +7,8 @@ export type Ecole = {
   nom: string
   couleur_primaire: string
   logo_url: string | null
+  // ssss1 (Yeter) : profil d'etablissement — absent = 'ecole'
+  type_etablissement?: string | null
 }
 
 const EcoleContext = createContext<Ecole | null>(null)

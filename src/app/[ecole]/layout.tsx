@@ -17,7 +17,7 @@ export default function EcoleLayout({ children }: { children: React.ReactNode })
     async function load() {
       const { data } = await createClient()
         .from('ecoles')
-        .select('id, slug, nom, couleur_primaire, logo_url')
+        .select('id, slug, nom, couleur_primaire, logo_url, type_etablissement')
         .eq('slug', ecoleSlug)
         .eq('actif', true)
         .single()

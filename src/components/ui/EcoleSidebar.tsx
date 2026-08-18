@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau } from '@/lib/permissions'
 import { useI18n } from '@/lib/i18n'
 import { useAccesFinances } from '@/lib/acces-finances'
+import { estYeter, categorieVisible, YETER_GRADIENT } from '@/lib/etablissement'
 
 type ModuleEntry = { nom: string; href: string; module: string }
 
@@ -149,6 +150,8 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
   }
 
   const primaryColor = ecole.couleur_primaire || '#2563EB'
+  // ssss1 (Yeter) : profil minimum strict + marque Yeter by TalmidApp
+  const yeter = estYeter(ecole.type_etablissement)
 
   return (
     <>
@@ -198,7 +201,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 38, height: 38, borderRadius: 10,
-              background: `linear-gradient(135deg, ${primaryColor}, #7C3AED)`,
+              background: yeter ? YETER_GRADIENT : `linear-gradient(135deg, ${primaryColor}, #7C3AED)`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 15, fontWeight: 800, color: '#fff', flexShrink: 0,
             }}>
@@ -208,7 +211,9 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
               <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', lineHeight: 1.3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {ecole.nom}
               </div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Administration</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+                {yeter ? <span style={{ background: YETER_GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>Yeter by TalmidApp</span> : 'Administration'}
+              </div>
             </div>
           </div>
         </div>
@@ -250,7 +255,7 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
             letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 8px 6px',
           }}>Catégories</div>
 
-          {CATEGORIES.map(cat => {
+          {CATEGORIES.filter(cat => categorieVisible(cat.code, ecole.type_etablissement)).map(cat => {
             const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal, accesFinances)
             const isCatActive = cat.code === activeCategory
             const modules = MODULES_BY_CATEGORY[cat.code] || []

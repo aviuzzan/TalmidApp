@@ -6,6 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
 import { useAccesFinances } from '@/lib/acces-finances'
 import EcoleAppLayout from '@/components/ui/EcoleAppLayout'
+import { categorieVisible } from '@/lib/etablissement'
 
 type ModuleInfo = {
   code: string
@@ -109,6 +110,10 @@ export default function CategoryHub({ code }: { code: string }) {
 
   if (loading) return <EcoleAppLayout><div style={{ padding: 60, textAlign: 'center', color: '#64748B' }}>Chargement…</div></EcoleAppLayout>
   if (!cat) return <EcoleAppLayout><div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Catégorie inconnue</div></EcoleAppLayout>
+  // ssss1 (Yeter) : categorie masquee pour ce profil d'etablissement
+  if (!categorieVisible(cat.code, ecole?.type_etablissement)) {
+    return <EcoleAppLayout><div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Cette section n'est pas disponible pour ce type d'établissement.</div></EcoleAppLayout>
+  }
 
   // Bypass total pour super_admin/admin/admin principal
   // llll2 : 'admin' ne bypasse plus les permissions (sauf aucune perm configurée = compat)

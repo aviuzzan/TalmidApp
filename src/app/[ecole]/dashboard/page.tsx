@@ -13,6 +13,7 @@ import { calcDuADateBatch } from '@/lib/du-a-date'
 import { compterEffectifs } from '@/lib/effectifs'
 import { chargerParLots } from '@/lib/pagination'
 import { useAnneeScolaireActive, useExercice } from '@/lib/exercice-context'
+import { categorieVisible } from '@/lib/etablissement'
 
 type Stats = {
   familles: number
@@ -193,7 +194,7 @@ export default function DashboardPage() {
       <AlertesUrgentes ecoleId={ecole.id} ecoleSlug={ecole.slug} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 260px))', gap: 18, justifyContent: 'center' }}>
-        {CATEGORIES.map(cat => {
+        {CATEGORIES.filter(cat => categorieVisible(cat.code, ecole.type_etablissement)).map(cat => {
           const accessible = hasCategoryAccess(cat, perms, role, isAdminPrincipal, accesFinances)
           const badge = accessible ? categoryBadge(cat) : null
           const onClick = accessible ? () => router.push(`/${ecole.slug}/${cat.hrefHub}`) : undefined
