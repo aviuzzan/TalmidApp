@@ -6,7 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, hasCategoryAccess, loadPermissions, Niveau } from '@/lib/permissions'
 import { useI18n } from '@/lib/i18n'
 import { useAccesFinances } from '@/lib/acces-finances'
-import { estYeter, categorieVisible, YETER_GRADIENT } from '@/lib/etablissement'
+import { estYeter, categorieVisible, moduleVisible, YETER_GRADIENT } from '@/lib/etablissement'
 
 type ModuleEntry = { nom: string; href: string; module: string }
 
@@ -260,7 +260,8 @@ export default function EcoleSidebar({ userEmail, role }: { userEmail: string; r
             const isCatActive = cat.code === activeCategory
             const modules = MODULES_BY_CATEGORY[cat.code] || []
             // Toujours afficher tous les modules — on grise ceux sans accès
-            const visibleModules = modules
+            // ssss2 (Yeter) : sauf les ecrans masques pour ce profil d'etablissement
+            const visibleModules = modules.filter(m => moduleVisible(m.href, ecole.type_etablissement))
 
             return (
               <div key={cat.code}>

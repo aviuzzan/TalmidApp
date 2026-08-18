@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import EcoleSidebar from '@/components/ui/EcoleSidebar'
 import ChatbotWidget from '@/components/ui/ChatbotWidget'
@@ -9,9 +9,11 @@ import ExerciceSelector from '@/components/ui/ExerciceSelector'
 import EspaceSwitcher from '@/components/EspaceSwitcher'
 import { useEcole } from '@/lib/ecole-context'
 import { AccesFinancesProvider } from '@/lib/acces-finances'
+import { routeMasquee } from '@/lib/etablissement'
 
 export default function EcoleAppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const ecole = useEcole()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('')
@@ -103,7 +105,10 @@ export default function EcoleAppLayout({ children }: { children: React.ReactNode
           <ExerciceSelector />
         </div>
         <div style={{ flex: 1 }}>
-          {children}
+          {/* ssss2 (Yeter) : un ecran masque pour ce profil reste inaccessible meme par URL directe */}
+          {routeMasquee(pathname || '', ecole.slug, ecole.type_etablissement)
+            ? <div style={{ padding: 60, textAlign: 'center', color: '#94A3B8' }}>Cette section n'est pas disponible pour ce type d'établissement.</div>
+            : children}
         </div>
       </main>
       <GlobalSearch />

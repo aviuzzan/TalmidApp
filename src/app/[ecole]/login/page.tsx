@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
+import { estYeter, YETER_GRADIENT } from '@/lib/etablissement'
 import { useI18n } from '@/lib/i18n'
 import LangSwitcher from '@/components/LangSwitcher'
 
@@ -11,6 +12,8 @@ type Mode = 'accueil' | 'admin' | 'professeur' | 'parent'
 export default function EcoleLoginPage() {
   const router = useRouter()
   const ecole = useEcole()
+  // ssss2 (Yeter) : pas d'espace professeur, marque Yeter by TalmidApp
+  const yeter = estYeter(ecole.type_etablissement)
   const { t, dir } = useI18n()
   const [mode, setMode] = useState<Mode>('accueil')
   const [email, setEmail] = useState('')
@@ -101,7 +104,7 @@ export default function EcoleLoginPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
             width: 40, height: 40, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
-            background: `linear-gradient(135deg, ${primary}, #60A5FA)`,
+            background: yeter ? YETER_GRADIENT : `linear-gradient(135deg, ${primary}, #60A5FA)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {ecole.logo_url
@@ -111,7 +114,7 @@ export default function EcoleLoginPage() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#1E293B' }}>{ecole.nom}</div>
-            <div style={{ fontSize: 11, color: '#94A3B8' }}>{t('login.school_portal')}</div>
+            <div style={{ fontSize: 11, color: '#94A3B8' }}>{yeter ? 'Yeter by TalmidApp' : t('login.school_portal')}</div>
           </div>
         </div>
         <LangSwitcher compact />
@@ -131,7 +134,7 @@ export default function EcoleLoginPage() {
             </div>
 
             <div className="ecole-login-roles" style={{ display: 'flex', gap: 12, width: '100%' }}>
-              {(['admin', 'professeur'] as const).map(role => {
+              {(['admin', 'professeur'] as const).filter(role => !yeter || role !== 'professeur').map(role => {
                 const cfg = ROLE_CONFIG[role]
                 return (
                   <button key={role} onClick={() => setMode(role)}

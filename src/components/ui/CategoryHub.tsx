@@ -6,7 +6,7 @@ import { useEcole } from '@/lib/ecole-context'
 import { CATEGORIES, loadPermissions, Niveau, Categorie } from '@/lib/permissions'
 import { useAccesFinances } from '@/lib/acces-finances'
 import EcoleAppLayout from '@/components/ui/EcoleAppLayout'
-import { categorieVisible } from '@/lib/etablissement'
+import { categorieVisible, moduleVisible } from '@/lib/etablissement'
 
 type ModuleInfo = {
   code: string
@@ -92,7 +92,8 @@ export default function CategoryHub({ code }: { code: string }) {
   const { acces: accesFinances } = useAccesFinances()
 
   const cat: Categorie | undefined = CATEGORIES.find(c => c.code === code)
-  const modules = MODULES_PAR_CATEGORIE[code] || []
+  // ssss2 (Yeter) : ecrans masques pour ce profil d'etablissement
+  const modules = (MODULES_PAR_CATEGORIE[code] || []).filter(m => moduleVisible(m.href, ecole?.type_etablissement))
 
   useEffect(() => {
     (async () => {
