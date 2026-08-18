@@ -85,3 +85,22 @@ export function routeMasquee(pathname: string, slug: string, type?: string | nul
   const rest = pathname.slice(prefix.length)
   return ROUTES_MASQUEES_YETER.some(r => rest === r || rest.startsWith(r + '/'))
 }
+
+/**
+ * ssss3 — ecran Comptes & acces : pour un etablissement Yeter, seuls les
+ * modules de permissions correspondant aux ecrans reellement visibles sont
+ * proposes, et les templates hors sujet (vie scolaire, compta lourde) sont
+ * retires.
+ */
+const MODULES_PERMISSIONS_YETER = ['dashboard', 'administratif', 'inscriptions', 'facturation', 'messagerie', 'documents', 'parametres']
+const TEMPLATES_YETER = ['admin_principal', 'secretariat']
+
+export function modulePermissionVisible(code: string, type?: string | null): boolean {
+  if (!estYeter(type)) return true
+  return MODULES_PERMISSIONS_YETER.includes(code)
+}
+
+export function templateVisible(cle: string, type?: string | null): boolean {
+  if (!estYeter(type)) return true
+  return TEMPLATES_YETER.includes(cle)
+}

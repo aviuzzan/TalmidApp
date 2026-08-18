@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
 import { Niveau, NIVEAUX, NIVEAU_LABEL, NIVEAU_COLOR, TEMPLATES, loadPermissions } from '@/lib/permissions'
+import { modulePermissionVisible, templateVisible } from '@/lib/etablissement'
 import { appAlert, appConfirm } from '@/components/ui/ConfirmDialog'
 
 type Module = { code: string; nom: string; description: string | null; icone: string; ordre: number }
@@ -62,7 +63,8 @@ export default function ComptesAccesPage() {
     setSecteurs((secs ?? []) as Secteur[])
 
     const { data: mods } = await s.from('modules').select('*').eq('actif', true).order('ordre')
-    setModules((mods ?? []) as Module[])
+    // ssss3 (Yeter) : ne proposer que les modules dont les ecrans existent pour ce profil
+    setModules(((mods ?? []) as Module[]).filter(m => modulePermissionVisible(m.code, ecole.type_etablissement)))
 
     const { data: pms } = await s.from('permissions_modules')
       .select('profile_id, module_code, niveau')
@@ -289,7 +291,7 @@ export default function ComptesAccesPage() {
               <div style={{ background: '#F8FAFC', borderRadius: 8, padding: 10, marginBottom: 14 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Appliquer un template</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {Object.entries(TEMPLATES).map(([key, t]) => (
+                  {Object.entries(TEMPLATES).filter(([key]) => templateVisible(key, ecole.type_etablissement)).map(([key, t]) => (
                     <button key={key} onClick={() => applyTemplate(selectedAdmin.id, key)} title={t.description}
                       style={{ background: '#fff', color: '#1E40AF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '5px 11px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                       {t.label}
@@ -428,7 +430,7 @@ export default function ComptesAccesPage() {
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Profil de permissions</label>
                 <select value={inviteForm.template} onChange={e => setInviteForm(f => ({ ...f, template: e.target.value }))}
                   style={{ width: '100%', padding: '8px 11px', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 13, color: '#1E293B', outline: 'none', background: '#fff' }}>
-                  {Object.entries(TEMPLATES).map(([k, t]) => (
+                  {Object.entries(TEMPLATES).filter(([k]) => templateVisible(k, ecole.type_etablissement)).map(([k, t]) => (
                     <option key={k} value={k}>{t.label} - {t.description}</option>
                   ))}
                 </select>
