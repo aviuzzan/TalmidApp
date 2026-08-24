@@ -104,3 +104,16 @@ export function templateVisible(cle: string, type?: string | null): boolean {
   if (!estYeter(type)) return true
   return TEMPLATES_YETER.includes(cle)
 }
+
+/**
+ * zzzz1 — Plafond d'enfants du plan d'abonnement (ALERTE SOUPLE, jamais
+ * bloquant : aucun ecran ne refuse une inscription). Paliers definis par Avi :
+ * TalmidApp Starter 99 / Pro 250 ; Yeter Starter 49 / Pro 99.
+ * Retourne null pour Enterprise ou plan inconnu (= illimite).
+ */
+export function plafondPlan(plan?: string | null, type?: string | null): number | null {
+  const paliers: Record<string, number> = estYeter(type)
+    ? { starter: 49, pro: 99 }
+    : { starter: 99, pro: 250 }
+  return plan && paliers[plan] !== undefined ? paliers[plan] : null
+}

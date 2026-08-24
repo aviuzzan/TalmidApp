@@ -5,6 +5,7 @@
     { "path": "/api/cron/relances-auto", "schedule": "0 8 * * *" },
     { "path": "/api/cron/messages-cleanup", "schedule": "30 3 * * *" },
     { "path": "/api/cron/prelevements-cb", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/prelevements-sepa", "schedule": "15 7 * * *" }
+    { "path": "/api/cron/prelevements-sepa", "schedule": "15 7 * * *" },
+    { "path": "/api/cron/depassement-plan", "schedule": "45 6 * * *" }
   ]
 }

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { plafondPlan } from '@/lib/etablissement'
 
 type Ecole = {
   id: string
@@ -12,6 +13,8 @@ type Ecole = {
   telephone: string | null
   actif: boolean
   created_at: string
+  plan?: string | null
+  type_etablissement?: string | null
   nb_familles?: number
   nb_enfants?: number
 }
@@ -82,7 +85,20 @@ export default function AdminEcolesListPage() {
                 <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'monospace', marginTop: 2 }}>/{e.slug}</div>
                 {e.ville && <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>📍 {e.ville}</div>}
               </div>
-              {!e.actif && <span style={{ fontSize: 10, fontWeight: 700, color: '#991B1B', background: '#FEE2E2', padding: '3px 8px', borderRadius: 10, textTransform: 'uppercase' }}>Inactive</span>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                {!e.actif && <span style={{ fontSize: 10, fontWeight: 700, color: '#991B1B', background: '#FEE2E2', padding: '3px 8px', borderRadius: 10, textTransform: 'uppercase' }}>Inactive</span>}
+                {/* zzzz1 : alerte souple de depassement de plan (jamais bloquant) */}
+                {(() => {
+                  const plafond = plafondPlan(e.plan, e.type_etablissement)
+                  if (plafond === null || (e.nb_enfants || 0) <= plafond) return null
+                  return (
+                    <span title={`Plan ${e.plan} dépassé : ${e.nb_enfants} enfants pour un plafond de ${plafond}`}
+                      style={{ fontSize: 10, fontWeight: 700, color: '#9A3412', background: '#FFEDD5', padding: '3px 8px', borderRadius: 10, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                      ⚠ {e.plan} · {e.nb_enfants}/{plafond}
+                    </span>
+                  )
+                })()}
+              </div>
             </div>
             {(e.email_contact || e.telephone) && (
               <div style={{ fontSize: 11, color: '#64748B', borderTop: '1px solid #F1F5F9', paddingTop: 8, marginTop: 8 }}>
