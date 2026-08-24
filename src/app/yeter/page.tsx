@@ -35,7 +35,7 @@ export default function YeterLanding() {
             <span style={{ fontSize: 12, color: '#8B87A6', marginInlineStart: 8 }}>by <span style={{ color: '#34D399', fontWeight: 600 }}>TalmidApp</span></span>
           </div>
         </div>
-        <a href="mailto:avi.uzzan@loubavitch.fr?subject=Demande%20de%20demo%20Yeter"
+        <a href="mailto:admin@talmidapp.fr?subject=Demande%20de%20demo%20Yeter"
           style={{ background: GRADIENT, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 13.5, padding: '10px 18px', borderRadius: 10 }}>
           Demander une démo
         </a>
@@ -54,7 +54,7 @@ export default function YeterLanding() {
             Yeter s&apos;occupe de la gestion — vous, occupez-vous des enfants.
           </p>
           <div style={{ marginTop: 32 }}>
-            <a href="mailto:avi.uzzan@loubavitch.fr?subject=Demande%20de%20demo%20Yeter"
+            <a href="mailto:admin@talmidapp.fr?subject=Demande%20de%20demo%20Yeter"
               style={{ background: GRADIENT, color: '#fff', textDecoration: 'none', fontWeight: 800, fontSize: 16, padding: '15px 34px', borderRadius: 13, display: 'inline-block', boxShadow: '0 8px 30px rgba(236,72,153,0.35)' }}>
               Demander une démo gratuite
             </a>
