@@ -204,7 +204,7 @@ export default function RapprochementPage() {
           Collez les lignes au format <code>date;libellé;montant</code> — une ligne par mouvement. Date acceptée en JJ/MM/AAAA ou AAAA-MM-JJ. Crédit/débit indistincts (le signe est ignoré, on travaille en valeur absolue).
         </p>
         <textarea value={csvText} onChange={e => setCsvText(e.target.value)}
-          placeholder={"15/05/2026;VIREMENT UZZAN DYLAN;3600\n12/05/2026;CHEQUE 0001;260\n10/05/2026;VIR SEPA FAM-2026-0001;7200"}
+          placeholder={"15/05/2026;VIREMENT DUPONT JEAN;3600\n12/05/2026;CHEQUE 0001;260\n10/05/2026;VIR SEPA FAM-2026-0001;7200"}
           style={{ width: '100%', minHeight: 120, padding: 12, border: '1px solid #E2E8F0', borderRadius: 8, fontFamily: 'monospace', fontSize: 12, outline: 'none', resize: 'vertical' }} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
           <button onClick={importer} disabled={importing}
