@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { appConfirm } from '@/components/ui/ConfirmDialog'
+import EmailComposer from '@/components/ui/EmailComposer'
 
 type Tab = 'envoyer' | 'templates' | 'historique'
 
@@ -112,7 +113,9 @@ export default function NotificationsPage() {
   }
 
   async function saveTemplate(e: React.FormEvent) {
-    e.preventDefault(); setSavingTpl(true)
+    e.preventDefault()
+    if (!tplForm.contenu_html || !tplForm.contenu_html.replace(/<[^>]*>/g, '').trim()) return
+    setSavingTpl(true)
     if (editTemplate) {
       await supabase.from('email_templates').update({
         nom: tplForm.nom, sujet: tplForm.sujet,
@@ -148,7 +151,7 @@ export default function NotificationsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Notifications Email</h1>
-        <p style={{ color: '#64748B', fontSize: 13 }}>Envoyez des emails personnalisés aux familles via Brevo</p>
+        <p style={{ color: '#64748B', fontSize: 13 }}>Envoyez des emails personnalisés aux familles</p>
       </div>
 
       {/* Tabs */}
@@ -192,13 +195,9 @@ export default function NotificationsPage() {
 
             {/* Contenu */}
             <div className="card">
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>3. Contenu HTML</h3>
-              <textarea
-                style={{ ...inp, height: 280, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
-                value={contenu}
-                onChange={e => setContenu(e.target.value)}
-                placeholder="<h2>Bonjour {{prenom_parent1}},</h2>..."
-              />
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>3. Contenu de l'email</h3>
+              {/* wwww1 : editeur visuel — les admins ecrivent comme dans Word, le HTML est genere */}
+              <EmailComposer value={contenu} onChange={setContenu} height={280} />
             </div>
 
             {/* Destinataires */}
@@ -360,8 +359,8 @@ export default function NotificationsPage() {
               <div><label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Nom du template *</label><input style={inp} value={tplForm.nom} onChange={e => setTplForm(p => ({ ...p, nom: e.target.value }))} required placeholder="Ex: Rappel de solde" /></div>
               <div><label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Description</label><input style={inp} value={tplForm.description} onChange={e => setTplForm(p => ({ ...p, description: e.target.value }))} placeholder="Usage de ce template..." /></div>
               <div><label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Sujet *</label><input style={inp} value={tplForm.sujet} onChange={e => setTplForm(p => ({ ...p, sujet: e.target.value }))} required placeholder="{{nom_famille}} — Rappel scolarité" /></div>
-              <div><label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Contenu HTML *</label>
-                <textarea style={{ ...inp, height: 240, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} value={tplForm.contenu_html} onChange={e => setTplForm(p => ({ ...p, contenu_html: e.target.value }))} required placeholder="<h2>Bonjour {{prenom_parent1}},</h2>..." />
+              <div><label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#64748B', marginBottom: 5 }}>Contenu de l'email *</label>
+                <EmailComposer value={tplForm.contenu_html} onChange={html => setTplForm(prev => ({ ...prev, contenu_html: html }))} height={240} />
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="btn-secondary" onClick={() => setShowTemplateForm(false)}>Annuler</button>

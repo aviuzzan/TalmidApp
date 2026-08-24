@@ -3,6 +3,7 @@
 // IMPORTANT pour les variables : on utilise {var} qu'on remplace cote t() (helper a etendre).
 
 export const portailExtraFr: Record<string, string> = {
+  'portail.factures.gc_oneoff_warn': "\u26a0\ufe0f Vous allez r\u00e9gler la TOTALIT\u00c9 du solde de cette facture ({montant} \u20ac) en UNE SEULE FOIS par pr\u00e9l\u00e8vement.\n\nPour payer en mensualit\u00e9s automatiques, cliquez sur Annuler puis utilisez \u00ab Signer mon mandat de pr\u00e9l\u00e8vement \u00bb en haut de la page : aucun montant n'est d\u00e9bit\u00e9 \u00e0 la signature.\n\nConfirmer le paiement de {montant} \u20ac en une fois ?",
   'portail.common.loading': 'Chargement...',
   'portail.common.loading_dots': 'Chargement…',
   'portail.common.saving': 'Enregistrement...',
@@ -703,6 +704,7 @@ export const portailExtraFr: Record<string, string> = {
 }
 
 export const portailExtraEn: Record<string, string> = {
+  'portail.factures.gc_oneoff_warn': "\u26a0\ufe0f You are about to pay the FULL balance of this invoice ({montant} \u20ac) in ONE single debit.\n\nTo pay in automatic monthly instalments, click Cancel and use 'Sign my direct debit mandate' at the top of the page: nothing is debited when you sign.\n\nConfirm the one-time payment of {montant} \u20ac?",
   'portail.common.loading': 'Loading...',
   'portail.common.loading_dots': 'Loading…',
   'portail.common.saving': 'Saving...',
@@ -1393,6 +1395,7 @@ export const portailExtraEn: Record<string, string> = {
 }
 
 export const portailExtraHe: Record<string, string> = {
+  'portail.factures.gc_oneoff_warn': "\u26a0\ufe0f \u05d0\u05ea\u05dd \u05e2\u05d5\u05de\u05d3\u05d9\u05dd \u05dc\u05e9\u05dc\u05dd \u05d0\u05ea \u05de\u05dc\u05d5\u05d0 \u05d4\u05d9\u05ea\u05e8\u05d4 \u05e9\u05dc \u05d7\u05e9\u05d1\u05d5\u05e0\u05d9\u05ea \u05d6\u05d5 ({montant} \u20ac) \u05d1\u05ea\u05e9\u05dc\u05d5\u05dd \u05d0\u05d7\u05d3.\n\n\u05dc\u05ea\u05e9\u05dc\u05d5\u05dd \u05d1\u05d4\u05d5\u05e8\u05d0\u05ea \u05e7\u05d1\u05e2 \u05d7\u05d5\u05d3\u05e9\u05d9\u05ea, \u05dc\u05d7\u05e6\u05d5 \u05e2\u05dc \u05d1\u05d9\u05d8\u05d5\u05dc \u05d5\u05d4\u05e9\u05ea\u05de\u05e9\u05d5 \u05d1'\u05d7\u05ea\u05d9\u05de\u05d4 \u05e2\u05dc \u05d4\u05e8\u05e9\u05d0\u05ea \u05d7\u05d9\u05d5\u05d1' \u05d1\u05e8\u05d0\u05e9 \u05d4\u05e2\u05de\u05d5\u05d3: \u05dc\u05d0 \u05de\u05d7\u05d5\u05d9\u05d1 \u05e1\u05db\u05d5\u05dd \u05d1\u05e2\u05ea \u05d4\u05d7\u05ea\u05d9\u05de\u05d4.\n\n\u05dc\u05d0\u05e9\u05e8 \u05ea\u05e9\u05dc\u05d5\u05dd \u05d7\u05d3-\u05e4\u05e2\u05de\u05d9 \u05e9\u05dc {montant} \u20ac?",
   'portail.common.loading': 'טוען...',
   'portail.common.loading_dots': 'טוען…',
   'portail.common.saving': 'שומר...',

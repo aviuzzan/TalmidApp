@@ -157,6 +157,14 @@ export default function PortailFacturesPage() {
 
   async function payerEnLigne(provider: 'stripe' | 'gocardless' | 'paypal') {
     if (!facture) return
+    // vvvv1 (24/08) : deux parents ont confondu ce paiement one-off du solde TOTAL
+    // avec la signature du mandat mensuel (ecran bancaire de 3 020 EUR recu en
+    // pensant signer un mandat). Confirmation explicite avant de partir chez
+    // GoCardless, avec renvoi vers le bouton « Signer mon mandat ».
+    if (provider === 'gocardless') {
+      const ok = await appConfirm(t('portail.factures.gc_oneoff_warn', { montant: Number(facture.solde_restant).toLocaleString('fr-FR') }))
+      if (!ok) return
+    }
     setPaying(true)
     try {
       const supabase = createClient()
