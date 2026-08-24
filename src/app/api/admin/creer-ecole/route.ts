@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { nom, slug, adminEmail, adminPrenom, adminNom, adminTelephone, codeUai, siren, adresse, codePostal, ville,
-            couleurPrimaire, emailContact, telephone, plan, notesAdmin } = body
+            couleurPrimaire, emailContact, telephone, plan, notesAdmin, typeEtablissement } = body
     if (!nom || !slug || !adminEmail || !adminPrenom || !adminNom) {
       return NextResponse.json({ error: 'nom, slug, adminEmail, adminPrenom, adminNom requis' }, { status: 400 })
     }
@@ -56,6 +56,9 @@ export async function POST(req: NextRequest) {
       email_contact: emailContact || adminEmail || null,
       telephone: telephone || null,
       plan: plan || 'pro',
+      // yyyy1 : produit choisi dans l'assistant super-admin. 'talmud_torah' (et
+      // club/cantine) declenche l'interface allegee Yeter partout (estYeter).
+      type_etablissement: ['talmud_torah', 'club', 'cantine'].includes(typeEtablissement) ? typeEtablissement : 'ecole',
       notes_admin: notesAdmin || null,
       actif: true,
       date_debut_abonnement: new Date().toISOString().slice(0, 10),

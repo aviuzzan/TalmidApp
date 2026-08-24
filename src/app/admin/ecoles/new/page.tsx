@@ -2,12 +2,21 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { YETER_GRADIENT } from '@/lib/etablissement'
 
-const PLANS = [
-  { value: 'starter', label: 'Starter', desc: 'Jusqu\'à 50 élèves', price: '0.80€/élève' },
-  { value: 'pro', label: 'Pro', desc: 'Jusqu\'à 200 élèves', price: '1€/élève' },
-  { value: 'enterprise', label: 'Enterprise', desc: 'Illimité', price: 'Sur devis' },
-]
+// yyyy1 : plans par produit (TalmidApp ou Yeter), paliers definis par Avi.
+const PLANS: Record<string, { value: string; label: string; desc: string }[]> = {
+  talmidapp: [
+    { value: 'starter', label: 'Starter', desc: 'Jusqu\'à 99 élèves' },
+    { value: 'pro', label: 'Pro', desc: 'Jusqu\'à 250 élèves' },
+    { value: 'enterprise', label: 'Enterprise', desc: 'Au-delà de 250 élèves' },
+  ],
+  yeter: [
+    { value: 'starter', label: 'Starter', desc: 'Jusqu\'à 49 enfants' },
+    { value: 'pro', label: 'Pro', desc: 'Jusqu\'à 99 enfants' },
+    { value: 'enterprise', label: 'Enterprise', desc: 'Au-delà de 99 enfants' },
+  ],
+}
 
 const COULEURS = [
   '#2563EB', '#7C3AED', '#059669', '#DC2626',
@@ -24,6 +33,7 @@ function slugify(str: string) {
 export default function NouvelleEcolePage() {
   const router = useRouter()
   const [form, setForm] = useState({
+    produit: 'talmidapp',
     nom: '',
     slug: '',
     couleur_primaire: '#2563EB',
@@ -74,6 +84,7 @@ export default function NouvelleEcolePage() {
         adresse: form.adresse || null,
         ville: form.ville || null,
         plan: form.plan,
+        typeEtablissement: form.produit === 'yeter' ? 'talmud_torah' : 'ecole',
         notesAdmin: form.notes_admin || null,
         adminPrenom: form.admin_prenom,
         adminNom: form.admin_nom,
@@ -92,7 +103,7 @@ export default function NouvelleEcolePage() {
       admin_id: session.user.id,
       ecole_id: data.ecole?.id,
       action: 'ecole_creee',
-      details: { nom: form.nom, slug: form.slug, plan: form.plan, admin_invite: form.admin_email },
+      details: { nom: form.nom, slug: form.slug, produit: form.produit, plan: form.plan, admin_invite: form.admin_email },
     })
 
     router.push(`/admin/ecoles/${data.ecole?.id}?created=1`)
@@ -139,6 +150,28 @@ export default function NouvelleEcolePage() {
 
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Produit — yyyy1 : TalmidApp (ecole complete) ou Yeter (interface allegee) */}
+            <div>
+              <label style={lbl}>PRODUIT *</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {[
+                  { value: 'talmidapp', label: 'TalmidApp', desc: 'École complète', grad: 'linear-gradient(135deg, #6366F1, #8B5CF6)' },
+                  { value: 'yeter', label: 'Yeter', desc: 'Talmud torah · Club · Cantine', grad: YETER_GRADIENT },
+                ].map(pr => (
+                  <button key={pr.value} onClick={() => set('produit', pr.value)}
+                    style={{
+                      flex: 1, padding: '16px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                      border: form.produit === pr.value ? '2px solid #6366F1' : '1px solid rgba(255,255,255,0.08)',
+                      background: form.produit === pr.value ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
+                      transition: 'all 0.15s',
+                    }}>
+                    <span style={{ display: 'inline-block', padding: '3px 14px', borderRadius: 999, background: pr.grad, color: '#fff', fontSize: 13, fontWeight: 800 }}>{pr.label}</span>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 7 }}>{pr.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Nom */}
             <div>
               <label style={lbl}>NOM DE L'ÉCOLE *</label>
@@ -210,7 +243,7 @@ export default function NouvelleEcolePage() {
             <div>
               <label style={lbl}>PLAN D'ABONNEMENT</label>
               <div style={{ display: 'flex', gap: 10 }}>
-                {PLANS.map(p => (
+                {(PLANS[form.produit] || PLANS.talmidapp).map(p => (
                   <button key={p.value} onClick={() => set('plan', p.value)}
                     style={{
                       flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
@@ -220,7 +253,6 @@ export default function NouvelleEcolePage() {
                     }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: form.plan === p.value ? '#A5B4FC' : '#94A3B8' }}>{p.label}</div>
                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>{p.desc}</div>
-                    <div style={{ fontSize: 12, color: form.plan === p.value ? '#818CF8' : 'rgba(255,255,255,0.25)', marginTop: 4, fontWeight: 600 }}>{p.price}</div>
                   </button>
                 ))}
               </div>
