@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import EcoleFinder from '@/components/vitrine/EcoleFinder'
+import DemandeDemoForm from '@/components/vitrine/DemandeDemoForm'
 
 /**
  * tttt1 — Vitrine Yeter by TalmidApp (servie sur yeter.fr via le middleware).
@@ -13,6 +15,12 @@ export const metadata: Metadata = {
   title: 'Yeter by TalmidApp — Le plus qui change tout',
   description:
     "Inscriptions en ligne, cotisations et prelevement automatique, communication aux familles : la gestion cle en main des talmudei torah, clubs et cantines.",
+  // aaaa2 : favicon dedie — l'onglet yeter.fr affiche le Y du brand board
+  icons: {
+    icon: '/yeter-icon.png',
+    shortcut: '/yeter-icon.png',
+    apple: '/yeter-icon.png',
+  },
 }
 
 const GRADIENT = 'linear-gradient(135deg, #F59E0B, #EC4899 55%, #8B5CF6)'
@@ -38,10 +46,13 @@ export default function YeterLanding() {
             <span style={{ fontSize: 12, color: '#8A86A0', marginInlineStart: 8 }}>by <span style={{ color: '#059669', fontWeight: 600 }}>TalmidApp</span></span>
           </div>
         </div>
-        <a href="mailto:admin@talmidapp.fr?subject=Demande%20de%20demo%20Yeter"
-          style={{ background: GRADIENT, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 13.5, padding: '10px 18px', borderRadius: 10, boxShadow: '0 4px 14px rgba(236,72,153,0.25)' }}>
-          Demander une démo
-        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <EcoleFinder clair />
+          <a href="#demo"
+            style={{ background: GRADIENT, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 13.5, padding: '10px 18px', borderRadius: 10, boxShadow: '0 4px 14px rgba(236,72,153,0.25)' }}>
+            Demander une démo
+          </a>
+        </div>
       </header>
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px 80px' }}>
@@ -61,7 +72,7 @@ export default function YeterLanding() {
             Yeter s&apos;occupe de la gestion — vous, occupez-vous des enfants.
           </p>
           <div style={{ marginTop: 32 }}>
-            <a href="mailto:admin@talmidapp.fr?subject=Demande%20de%20demo%20Yeter"
+            <a href="#demo"
               style={{ background: GRADIENT, color: '#fff', textDecoration: 'none', fontWeight: 800, fontSize: 16, padding: '15px 34px', borderRadius: 13, display: 'inline-block', boxShadow: '0 8px 30px rgba(236,72,153,0.30)' }}>
               Demander une démo gratuite
             </a>
@@ -79,6 +90,16 @@ export default function YeterLanding() {
           ))}
         </section>
 
+        <section id="demo" style={{ marginTop: 72, border: '1px solid #ECEAF4', borderRadius: 20, padding: '40px clamp(20px, 5vw, 48px)', background: '#FFFFFF', boxShadow: '0 2px 12px rgba(30,27,46,0.05)', maxWidth: 720, marginInline: 'auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 26 }}>
+            <div style={{ fontSize: 'clamp(22px, 4vw, 30px)', fontWeight: 900, backgroundImage: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Demander une démo</div>
+            <div style={{ fontSize: 14, color: '#5B5675', marginTop: 8, lineHeight: 1.6 }}>
+              Laissez-nous vos coordonnées, nous vous montrons Yeter sur un cas réel — sans engagement.
+            </div>
+          </div>
+          <DemandeDemoForm clair gradient={GRADIENT} produit="yeter" />
+        </section>
+
         <section style={{ textAlign: 'center', marginTop: 72, border: '1px solid #ECEAF4', borderRadius: 20, padding: '40px 24px', background: '#FFFFFF', boxShadow: '0 2px 12px rgba(30,27,46,0.05)' }}>
           <div style={{ fontSize: 15, color: '#5B5675' }}>Déjà utilisé au quotidien par des établissements gérant</div>
           <div style={{ fontSize: 'clamp(26px, 5vw, 38px)', fontWeight: 900, marginTop: 8, backgroundImage: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
@@ -89,6 +110,11 @@ export default function YeterLanding() {
       </main>
 
       <footer style={{ borderTop: '1px solid #ECEAF4', padding: '26px 24px', textAlign: 'center', fontSize: 12.5, color: '#8A86A0', background: '#FFFFFF' }}>
+        <div style={{ display: 'flex', gap: 18, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+          <a href="https://talmidapp.fr/mentions-legales" style={{ color: '#8A86A0', textDecoration: 'none' }}>Mentions légales</a>
+          <a href="https://talmidapp.fr/cgu" style={{ color: '#8A86A0', textDecoration: 'none' }}>CGU</a>
+          <a href="https://talmidapp.fr/confidentialite" style={{ color: '#8A86A0', textDecoration: 'none' }}>Confidentialité</a>
+        </div>
         Yeter by <a href="https://talmidapp.fr" style={{ color: '#059669', textDecoration: 'none', fontWeight: 600 }}>TalmidApp</a> © 2026 · La gestion scolaire réinventée
       </footer>
     </div>
