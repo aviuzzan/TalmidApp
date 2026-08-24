@@ -156,7 +156,7 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/logo-icon.png" alt="TalmidApp" style={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }} />
+          <img src="/logo-icon-square.png" alt="TalmidApp" style={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 16, color: '#1E293B', letterSpacing: '-0.01em' }}>TalmidApp</div>
             <div style={{ fontSize: 11, color: '#94A3B8' }}>{t('portail.nav.family_space')}</div>

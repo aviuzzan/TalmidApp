@@ -38,7 +38,7 @@ export default function TalmidAppLanding() {
       <header style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-icon.png" alt="TalmidApp" width={42} height={42} style={{ objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(59,130,246,0.35))' }} />
+          <img src="/logo-icon-square.png" alt="TalmidApp" width={42} height={42} style={{ objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(59,130,246,0.35))' }} />
           <span style={{ fontWeight: 800, fontSize: 19, letterSpacing: '-0.02em', backgroundImage: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>TalmidApp</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -53,7 +53,7 @@ export default function TalmidAppLanding() {
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px 80px' }}>
         <section style={{ textAlign: 'center', padding: '32px 0 56px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-icon.png" alt="TalmidApp" width={76} height={76} style={{ objectFit: 'contain', filter: 'drop-shadow(0 8px 28px rgba(59,130,246,0.4))', marginBottom: 20 }} />
+          <img src="/logo-icon-square.png" alt="TalmidApp" width={84} height={84} style={{ objectFit: 'contain', filter: 'drop-shadow(0 8px 28px rgba(59,130,246,0.4))', marginBottom: 20 }} />
           <div style={{ display: 'block' }}>
             <span style={{ display: 'inline-block', border: '1px solid rgba(37,99,235,0.4)', background: 'rgba(37,99,235,0.08)', color: '#93C5FD', borderRadius: 999, fontSize: 12, fontWeight: 600, padding: '6px 14px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               La plateforme des écoles juives
