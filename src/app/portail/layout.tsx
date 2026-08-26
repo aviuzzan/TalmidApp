@@ -82,7 +82,11 @@ export default function PortailLayout({ children }: { children: React.ReactNode 
         parentSlot: slot,
         estSeparee: sep,
         estPrincipal: !sep || (fam?.parent_principal || 'parent1') === slot,
-        partPct: !sep ? 100 : Number((slot === 'parent1' ? fam?.part_pere : fam?.part_mere) ?? 50),
+        // bbbb1 : quand la repartition n'est pas saisie, TOUTE l'app (fiche admin,
+        // factures PDF, relances, exports) applique Parent 1 = 100% / Parent 2 = 0%.
+        // Le portail etait le seul a supposer 50/50 -> un parent separe voyait la
+        // moitie de la facture (cas ABICHID/COHEN). On aligne sur le meme defaut.
+        partPct: !sep ? 100 : Number((slot === 'parent1' ? fam?.part_pere : fam?.part_mere) ?? (slot === 'parent1' ? 100 : 0)),
       })
       setEmail(session.user.email ?? '')
       setFamille(fam)
