@@ -17,7 +17,8 @@ export default function DemandeDemoForm({ clair = false, gradient, produit }: { 
   const secondaire = clair ? '#5B5675' : '#A9B4C8'
   const bord = clair ? '#ECEAF4' : 'rgba(255,255,255,0.1)'
   const inp = {
-    width: '100%', boxSizing: 'border-box' as const, padding: '11px 14px', borderRadius: 10, fontSize: 14,
+    // dddd5 : 16px minimum, sinon iOS zoome automatiquement sur le champ a la saisie
+    width: '100%', boxSizing: 'border-box' as const, padding: '11px 14px', borderRadius: 10, fontSize: 16,
     background: clair ? '#FAFAFD' : 'rgba(255,255,255,0.05)', border: '1px solid ' + bord, color: texte, outline: 'none',
   }
   const lbl = { fontSize: 12, fontWeight: 600 as const, color: secondaire, display: 'block', marginBottom: 6 }

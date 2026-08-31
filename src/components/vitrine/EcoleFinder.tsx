@@ -8,6 +8,10 @@ import { useEffect, useRef, useState } from 'react'
  * nom/slug/ville, 8 max), et le clic l'emmene sur /<slug>/login. Depuis un
  * autre hote que talmidapp.fr (ex. yeter.fr), la redirection est ABSOLUE vers
  * https://talmidapp.fr pour que la session Supabase vive sur un seul domaine.
+ * dddd5 (31/08/2026, bug mobile remonte par Avi) : sur petit ecran le panneau
+ * 320px aligne a droite du bouton sortait de l'ecran a gauche -> en dessous de
+ * 520px il passe en position:fixed pleine largeur (marges 12px), et le champ
+ * passe a 16px pour empecher le zoom automatique d'iOS a la saisie.
  */
 export default function EcoleFinder({ clair = false }: { clair?: boolean }) {
   const [open, setOpen] = useState(false)
@@ -17,6 +21,17 @@ export default function EcoleFinder({ clair = false }: { clair?: boolean }) {
   const [cherche, setCherche] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [mobile, setMobile] = useState(false)
+  const [topFixe, setTopFixe] = useState(0)
+
+  // dddd5 : detection petit ecran (le rendu serveur suppose desktop, corrige au mount)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 520px)')
+    const maj = () => setMobile(mq.matches)
+    maj()
+    mq.addEventListener('change', maj)
+    return () => mq.removeEventListener('change', maj)
+  }, [])
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -54,7 +69,10 @@ export default function EcoleFinder({ clair = false }: { clair?: boolean }) {
 
   return (
     <div ref={boxRef} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)}
+      <button onClick={() => {
+        if (boxRef.current) setTopFixe(boxRef.current.getBoundingClientRect().bottom + 10)
+        setOpen(o => !o)
+      }}
         style={{
           background: 'transparent', border: '1px solid ' + (clair ? '#D8D4E8' : 'rgba(255,255,255,0.2)'),
           borderRadius: 10, padding: '9px 18px', color: texte, fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
@@ -63,7 +81,10 @@ export default function EcoleFinder({ clair = false }: { clair?: boolean }) {
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 10px)', insetInlineEnd: 0, width: 320, zIndex: 200,
+          ...(mobile
+            ? { position: 'fixed' as const, top: topFixe, insetInline: 12, width: 'auto' }
+            : { position: 'absolute' as const, top: 'calc(100% + 10px)', insetInlineEnd: 0, width: 320 }),
+          zIndex: 200,
           background: fond, border: '1px solid ' + bord, borderRadius: 14, padding: 14,
           boxShadow: clair ? '0 12px 40px rgba(30,27,46,0.14)' : '0 12px 40px rgba(0,0,0,0.5)',
         }}>
@@ -71,7 +92,7 @@ export default function EcoleFinder({ clair = false }: { clair?: boolean }) {
           <input autoFocus value={q} onChange={e => setQ(e.target.value)}
             placeholder="Nom de votre établissement…"
             style={{
-              width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 9, fontSize: 13.5,
+              width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 9, fontSize: mobile ? 16 : 13.5,
               background: clair ? '#FAFAFD' : 'rgba(255,255,255,0.06)', border: '1px solid ' + bord, color: texte, outline: 'none',
             }} />
           <div style={{ marginTop: 8, maxHeight: 240, overflowY: 'auto' }}>
