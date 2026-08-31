@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { saisirReportSolde } from '@/lib/report-solde'
 import { useEcole } from '@/lib/ecole-context'
 import { useExercice } from '@/lib/exercice-context'
 import { downloadCSV } from '@/lib/csv-export'
@@ -47,6 +48,13 @@ const COLUMNS: Col[] = [
   { label: 'Eleve - Instruction religieuse (oui/non)', entity: 'enfant', field: 'instruction_religieuse' },
   { label: 'Eleve - Etude/garderie (oui/non)', entity: 'enfant', field: 'etude_garderie' },
   { label: 'Eleve - INE', entity: 'enfant', field: 'ine' },
+  // hhhh5 (31/08/2026, demande d'Avi pour l'onboarding des nouvelles ecoles) :
+  // reliquat de l'annee precedente geree HORS TalmidApp. Positif = la famille
+  // doit, negatif = trop-percu. Cree un report de solde (source 'importe',
+  // meme mecanique que l'etape 7 de l'ecran Cloture), repris ensuite dans
+  // l'echeancier via « Appliquer les reports » une fois les contrats signes.
+  // Colonne famille : sur une fratrie, remplir sur une seule ligne suffit.
+  { label: 'Solde a reprendre N-1 (EUR, positif = la famille doit)', entity: 'famille', field: 'solde_reprise' },
 ]
 
 // --- Parsing CSV robuste (gere ; ou , et les champs entre guillemets) ---
@@ -105,6 +113,14 @@ function normaliserSituation(s: string): string | null {
   if (v.startsWith('veuf') || v.startsWith('veuve')) return 'veuf'
   if (v === 'non_connu' || v === 'inconnu' || v === 'nc' || v === 'autre') return 'non_connu'
   return null
+}
+
+// hhhh5 : montant du solde N-1 ("1 234,56" ou "1234.56" -> 1234.56 ; vide/invalide -> 0)
+function parseMontantSolde(v: string | null | undefined): number {
+  const brut = (v || '').replace(/\s|\u00a0|€|EUR/gi, '').replace(',', '.')
+  if (!brut) return 0
+  const n = Number(brut)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0
 }
 
 type ParsedFamille = {
@@ -179,6 +195,9 @@ export default function ImportPage() {
       const key = famille.parent1_email.toLowerCase()
       if (!groupes.has(key)) {
         groupes.set(key, { key, famille, enfants: [], existe: false })
+      } else if (famille.solde_reprise && !groupes.get(key)!.famille.solde_reprise) {
+        // hhhh5 : solde rempli sur une ligne suivante de la fratrie
+        groupes.get(key)!.famille.solde_reprise = famille.solde_reprise
       }
       groupes.get(key)!.enfants.push(enfant)
     })
@@ -207,8 +226,38 @@ export default function ImportPage() {
     setImporting(true); setResultat('')
     const s = createClient()
     const aImporter = parsed.filter(g => !g.existe)
-    let okFam = 0, okEnf = 0, echecs = 0
+    let okFam = 0, okEnf = 0, echecs = 0, okSoldes = 0
     const erreursDetail: string[] = []
+
+    // hhhh5 : exercice N-1 pour les soldes a reprendre — resolu (et cree si
+    // besoin, directement Cloture : c'est l'annee d'avant l'outil) UNIQUEMENT
+    // si au moins un solde est renseigne dans le fichier.
+    let origineId: string | null = null
+    async function resoudreExerciceOrigine(): Promise<string | null> {
+      if (origineId) return origineId
+      const m = /^(\d{4})-(\d{4})$/.exec(exercice?.code || '')
+      if (!m) return null
+      const codeN1 = `${Number(m[1]) - 1}-${Number(m[2]) - 1}`
+      const { data: exN1 } = await s.from('exercices')
+        .select('id').eq('ecole_id', ecole.id).eq('code', codeN1).maybeSingle()
+      if (exN1?.id) { origineId = exN1.id; return origineId }
+      const { data: cree, error: creaErr } = await s.from('exercices').insert({
+        ecole_id: ecole.id,
+        code: codeN1,
+        libelle: `Année ${codeN1} (avant TalmidApp)`,
+        date_debut: `${Number(m[1]) - 1}-09-01`,
+        date_fin: `${m[1]}-08-31`,
+        statut: 'cloture',
+        date_cloture: new Date().toISOString(),
+        notes: 'Créé automatiquement par l\'import pour porter les soldes à reprendre (année gérée hors TalmidApp).',
+      }).select('id').single()
+      if (creaErr || !cree) {
+        erreursDetail.push(`Soldes N-1 : impossible de créer l'exercice ${codeN1} (${creaErr?.message || 'aucune ligne'}). Saisissez les soldes via l'écran Clôture.`)
+        return null
+      }
+      origineId = cree.id
+      return origineId
+    }
 
     for (const g of aImporter) {
       const f = g.famille
@@ -248,6 +297,27 @@ export default function ImportPage() {
         continue
       }
       okFam++
+
+      // hhhh5 : solde N-1 a reprendre -> report de solde (source 'importe'),
+      // meme mecanique que l'etape 7 de l'ecran Cloture. Idempotent cote SQL.
+      const soldeN1 = parseMontantSolde(f.solde_reprise)
+      if (soldeN1 !== 0) {
+        const orig = await resoudreExerciceOrigine()
+        if (orig) {
+          const rep = await saisirReportSolde(s, {
+            familleId: nouvelleFam.id,
+            exerciceOrigineId: orig,
+            exerciceCibleId: exercice.id,
+            montant: soldeN1,
+            note: 'Solde repris à l\'import des données',
+            source: 'importe',
+          })
+          if (rep.ok) okSoldes++
+          else if (erreursDetail.length < 10) {
+            erreursDetail.push(`Solde N-1 famille "${f.nom}" (${soldeN1} EUR) : ${rep.error || 'échec'} — à saisir via l'écran Clôture.`)
+          }
+        }
+      }
 
       for (const e of g.enfants) {
         const classeMatch = classes.find(c => (c.nom || '').toLowerCase() === (e.classe || '').toLowerCase())
@@ -298,6 +368,7 @@ export default function ImportPage() {
 
     setImporting(false)
     setResultat(`Import termine : ${okFam} famille(s) et ${okEnf} eleve(s) ajoute(s) sur l'annee ${exercice?.code || ''}.` +
+      (okSoldes > 0 ? ` ${okSoldes} solde(s) N-1 repris — une fois les contrats signes, ouvrez Finances > Cloture d'exercice et cliquez « Appliquer les reports a l'echeancier ».` : '') +
       (echecs > 0 ? ` ${echecs} ligne(s) en echec.` : '') +
       (parsed.length - aImporter.length > 0 ? ` ${parsed.length - aImporter.length} famille(s) deja presente(s), ignoree(s).` : ''))
     setErreurs(erreursDetail)
@@ -323,7 +394,7 @@ export default function ImportPage() {
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>1. Telecharger le modele</div>
         <p style={{ fontSize: 13, color: '#64748B', marginTop: 0, marginBottom: 14 }}>
-          Une ligne par eleve. Pour une fratrie, repetez les colonnes de la famille (meme email du parent 1).
+          Une ligne par eleve. Pour une fratrie, repetez les colonnes de la famille (meme email du parent 1). La derniere colonne « Solde a reprendre N-1 » est optionnelle : si la famille doit encore de l'argent de l'annee precedente (geree hors TalmidApp), indiquez le montant (positif = la famille doit, negatif = trop-percu) — il sera repris automatiquement comme solde d'ouverture, puis integre a l'echeancier depuis l'ecran Cloture une fois les contrats signes.
           Colonnes obligatoires : nom de famille, email du parent 1, prenom et nom de l&apos;eleve.
         </p>
         <button onClick={telechargerModele} className="btn-secondary">Telecharger le modele CSV</button>
