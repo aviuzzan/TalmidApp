@@ -39,6 +39,7 @@ export default function EcoleLoginPage() {
         .from('profiles').select('role').eq('id', session.user.id).single()
       if (annule) return
       const role = profile?.role
+      try { localStorage.setItem('talmidapp_derniere_ecole', ecole.slug) } catch { /* stockage indisponible */ }
       if (role === 'admin' || role === 'super_admin' || role === 'agent') { setReprise(true); router.replace(`/${ecole.slug}/dashboard`) }
       else if (role === 'teacher') { setReprise(true); router.replace('/portail/prof') }
       else if (role === 'parent') { setReprise(true); router.replace('/portail') }
@@ -63,6 +64,9 @@ export default function EcoleLoginPage() {
 
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setError(t('login.error')); setLoading(false); return }
+
+    // gggg5 : memorise l'ecole pour la porte d'entree PWA (/app) hors session
+    try { localStorage.setItem('talmidapp_derniere_ecole', ecole.slug) } catch { /* stockage indisponible */ }
 
     // MULTI-ECOLES (gggg2) : la carte choisie (Direction / Professeur / Parent)
     // determine l'espace. On active le rattachement correspondant a CETTE ecole
