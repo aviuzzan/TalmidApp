@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     try {
       const nb = ((fiche.fichiers || []) as any[]).length
       await sendEmail({
-        to: 'admin@talmidapp.fr',
+        to: { email: 'admin@talmidapp.fr', name: 'TalmidApp' },
         subject: `Fiche de bienvenue soumise — ${fiche.nom_ecole}`,
         html: `<p>La fiche de bienvenue de <b>${fiche.nom_ecole}</b> (${fiche.produit}) vient d'être soumise.</p>`
           + `<p>${nb} fichier(s) joint(s). À examiner et valider dans le portail super admin &gt; Fiches de bienvenue.</p>`,
