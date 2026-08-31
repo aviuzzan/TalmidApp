@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
@@ -21,6 +21,31 @@ export default function EcoleLoginPage() {
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [reprise, setReprise] = useState(false)
+
+  // ffff5 (31/08/2026, demande d'Avi « rester connecté ») : la page affichait
+  // TOUJOURS le formulaire, même avec une session Supabase vivante — sur
+  // téléphone on retapait donc le mot de passe à chaque visite alors qu'on
+  // était encore connecté. Au chargement : session existante -> redirection
+  // directe vers l'espace du profil actif (même aiguillage que le fallback
+  // historique du handleLogin). Pas de session ou rôle inconnu -> formulaire.
+  useEffect(() => {
+    let annule = false
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || annule) return
+      const { data: profile } = await supabase
+        .from('profiles').select('role').eq('id', session.user.id).single()
+      if (annule) return
+      const role = profile?.role
+      if (role === 'admin' || role === 'super_admin' || role === 'agent') { setReprise(true); router.replace(`/${ecole.slug}/dashboard`) }
+      else if (role === 'teacher') { setReprise(true); router.replace('/portail/prof') }
+      else if (role === 'parent') { setReprise(true); router.replace('/portail') }
+    })()
+    return () => { annule = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const primary = ecole.couleur_primaire || '#2563EB'
 
@@ -122,7 +147,14 @@ export default function EcoleLoginPage() {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
 
-        {mode === 'accueil' && (
+        {/* ffff5 : session deja active -> message pendant la redirection, pas de formulaire */}
+        {reprise && (
+          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 15, fontWeight: 600, lineHeight: 1.6 }}>
+            {t('login.deja_connecte')}
+          </div>
+        )}
+
+        {!reprise && mode === 'accueil' && (
           <div style={{ width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
               <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1E293B', letterSpacing: '-0.02em', margin: 0 }}>
@@ -192,7 +224,7 @@ export default function EcoleLoginPage() {
           </div>
         )}
 
-        {mode !== 'accueil' && (
+        {!reprise && mode !== 'accueil' && (
           <div style={{ width: '100%', maxWidth: 420 }}>
             <button onClick={back}
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 13, marginBottom: 24, padding: 0 }}>
