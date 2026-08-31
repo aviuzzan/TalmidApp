@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 const NAV = [
   { href: '/admin/dashboard', icon: '◈', label: 'Vue d\'ensemble' },
   { href: '/admin/ecoles', icon: '🏫', label: 'Écoles' },
+  { href: '/admin/onboarding', icon: '📝', label: 'Fiches de bienvenue' },
   { href: '/admin/logs', icon: '📋', label: 'Activité' },
 ]
 
