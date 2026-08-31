@@ -14,6 +14,7 @@
  */
 
 import { chargerImputations, imputer } from './comptabilite'
+import { lisserEcheancierFamille } from './echeance'
 
 type AnySupabase = any
 
@@ -482,8 +483,9 @@ export async function calculerEcartFactureContrat(
 
 /**
  * Régénère les lignes de la facture existante depuis le contrat actuel.
- * Refuse si la facture est verrouillée. Resynchronise l'échéancier (échéance
- * de régularisation si le nouveau total n'est plus couvert).
+ * Refuse si la facture est verrouillée. Resynchronise l'échéancier par
+ * LISSAGE du reste dû sur les échéances actives (règle mmmm1 — jamais
+ * d'échéance de régularisation ajoutée).
  */
 export async function regenererFactureDepuisContrat(
   s: AnySupabase,
@@ -510,34 +512,13 @@ export async function regenererFactureDepuisContrat(
   const { error: insErr } = await s.from('facture_lignes').insert(lignes)
   if (insErr) return { ok: false, facture_id: facture.id, numero: facture.numero, error: 'Lignes : ' + insErr.message }
 
-  // Resync échéancier : échéance de régularisation si le total n'est plus couvert
-  try {
-    const { data: echeances } = await s.from('cheques_prevus')
-      .select('id, montant, numero_cheque, date_echeance, mode_paiement, contrat_id')
-      .eq('famille_id', contrat.famille_id)
-    const totalFacture = lignes.reduce((sum: number, l: any) => sum + (parseFloat(l.montant) || 0), 0)
-    const totalEch = ((echeances || []) as any[]).reduce((sum: number, e: any) => sum + (parseFloat(e.montant) || 0), 0)
-    const ecartEch = Math.round((totalFacture - totalEch) * 100) / 100
-    if ((echeances || []).length > 0 && ecartEch > 1) {
-      const maxNum = Math.max(...(echeances as any[]).map((e: any) => e.numero_cheque || 0))
-      const derniereDate = (echeances as any[]).map((e: any) => e.date_echeance).sort().pop()
-      const modeEch = (echeances as any[])[0]?.mode_paiement || 'virement'
-      const { error: chqErr } = await s.from('cheques_prevus').insert({
-        contrat_id: (echeances as any[])[0]?.contrat_id || contrat.id,
-        famille_id: contrat.famille_id,
-        ecole_id: ecoleId,
-        numero_cheque: maxNum + 1,
-        montant: ecartEch,
-        date_echeance: derniereDate,
-        statut: modeEch === 'cheque' ? 'attente_reception' : 'prevu',
-        mode_paiement: modeEch,
-        note: 'Régularisation auto : régénération facture depuis contrat',
-        facture_id: facture.id,
-      })
-      // Reste « best effort » (la facture est correcte), mais l'echec n'est plus muet.
-      if (chqErr) console.error('[regenererFactureDepuisContrat] insert cheques_prevus failed:', chqErr.message)
-    }
-  } catch (e: any) { console.error('[regenererFactureDepuisContrat] resync echeancier:', e?.message) }
+  // Resync échéancier — LISSAGE (règle mmmm1 d'Avi, appliquée au serveur le
+  // 31/08/2026) : on ne crée plus d'échéance de régularisation en fin
+  // d'échéancier ; le reste dû réel (règlements et avoirs imputés déduits) est
+  // réparti sur les échéances actives existantes — même nombre, mêmes dates,
+  // mêmes modes — la dernière absorbant l'arrondi. Best effort, échec non muet.
+  const lissage = await lisserEcheancierFamille(s, contrat.famille_id)
+  if (!lissage.ok) console.error('[regenererFactureDepuisContrat] lissage echeancier:', lissage.message)
 
   return { ok: true, facture_id: facture.id, numero: facture.numero }
 }

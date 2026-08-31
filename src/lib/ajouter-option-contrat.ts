@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { chargerImputations, imputer } from './comptabilite'
+import { lisserEcheancierFamille } from './echeance'
 
 export interface AjouterOptionResult {
   ok: boolean
@@ -316,54 +317,17 @@ export async function ajouterOptionAuContrat(
     }
   }
 
-  // 10. Resynchroniser l'echeancier : si la somme des echeances ne couvre plus
-  // le nouveau total de la facture, ajouter une echeance de regularisation.
-  // (Sans ca, les prelevements/cheques prevus encaissent moins que le du —
-  // constat de l'audit facturation du 24/07/2026.)
-  //
-  // Cette etape reste « best effort » (la facture, elle, est correcte), MAIS
-  // l'echec n'est plus muet : il est remonte dans `avertissement`.
+  // 10. Resynchroniser l'echeancier — LISSAGE (regle mmmm1 d'Avi, appliquee au
+  // serveur le 31/08/2026) : on ne cree plus d'echeance de regularisation ; le
+  // reste du reel (reglements et avoirs imputes deduits) est reparti sur les
+  // echeances actives existantes — meme nombre, memes dates, memes modes — la
+  // derniere absorbant l'arrondi. Best effort : la facture, elle, est correcte ;
+  // l'echec n'est pas muet, il est remonte dans `avertissement`.
   let avertissement: string | undefined
-  try {
-    const [lignesRes, echeancesRes] = await Promise.all([
-      sb.from('facture_lignes').select('montant').eq('facture_id', facture.id),
-      sb.from('cheques_prevus').select('id, montant, numero_cheque, date_echeance, mode_paiement, contrat_id, ecole_id').eq('famille_id', enfant.famille_id),
-    ])
-    if (lignesRes.error || echeancesRes.error) {
-      const m = lignesRes.error?.message || echeancesRes.error?.message || 'lecture refusee'
-      avertissement = `Echeancier non resynchronise (lecture impossible : ${m}). Verifier les echeances de la famille.`
-      console.error('[ajouterOptionAuContrat] lecture resync echeancier failed:', m)
-    } else {
-      const lignesFinales = lignesRes.data
-      const echeances = echeancesRes.data
-      const totalFacture = (lignesFinales || []).reduce((s: number, l: any) => s + (parseFloat(l.montant) || 0), 0)
-      const totalEch = (echeances || []).reduce((s: number, e: any) => s + (parseFloat(e.montant) || 0), 0)
-      const ecartEch = Math.round((totalFacture - totalEch) * 100) / 100
-      if ((echeances || []).length > 0 && ecartEch > 1) {
-        const maxNum = Math.max(...(echeances || []).map((e: any) => e.numero_cheque || 0))
-        const derniereDate = (echeances || []).map((e: any) => e.date_echeance).sort().pop()
-        const modeEch = (echeances || [])[0]?.mode_paiement || 'virement'
-        const { error: chqErr } = await sb.from('cheques_prevus').insert({
-          contrat_id: (echeances || [])[0]?.contrat_id || contrat.id,
-          famille_id: enfant.famille_id,
-          ecole_id: ecoleId,
-          numero_cheque: maxNum + 1,
-          montant: ecartEch,
-          date_echeance: derniereDate,
-          statut: modeEch === 'cheque' ? 'attente_reception' : 'prevu',
-          mode_paiement: modeEch,
-          note: `Régularisation auto : ajout option ${tarif.nom_poste}`,
-          facture_id: facture.id,
-        })
-        if (chqErr) {
-          avertissement = `Facture ${facture.numero} mise a jour, mais l'echeance de regularisation de ${ecartEch.toFixed(2)} EUR n'a pas pu etre creee (${chqErr.message}). A ajouter manuellement dans l'echeancier.`
-          console.error('[ajouterOptionAuContrat] insert cheques_prevus failed:', chqErr.message)
-        }
-      }
-    }
-  } catch (e: any) {
-    avertissement = `Echeancier non resynchronise : ${e?.message || 'erreur inconnue'}. Verifier les echeances de la famille.`
-    console.error('[ajouterOptionAuContrat] resync echeancier exception:', e?.message)
+  const lissage = await lisserEcheancierFamille(sb, enfant.famille_id)
+  if (!lissage.ok) {
+    avertissement = `Facture ${facture.numero} mise a jour, mais l'echeancier n'a pas pu etre lisse (${lissage.message}). Utiliser « Recalculer l'echeancier sur le reste du » depuis la page Echeancier de la famille.`
+    console.error('[ajouterOptionAuContrat] lissage echeancier failed:', lissage.message)
   }
 
   return {
