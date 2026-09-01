@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
           if (mdConf.echeance_id) {
             const { error: echErr } = await sb.from('cheques_prevus')
               .update({ statut: 'encaisse', encaisse_le: new Date().toISOString() })
-              .eq('id', mdConf.echeance_id).eq('statut', 'prevu')
+              .eq('id', mdConf.echeance_id).in('statut', ['prevu', 'rejete']) // mmmm5 : relance réussie après impayé
             if (echErr) echecs.push(`echeance ${mdConf.echeance_id} : ${echErr.message}`)
             if (mdConf.prelevement_id) {
               await sb.from('prelevements_gocardless').update({
@@ -241,7 +241,8 @@ export async function POST(req: NextRequest) {
               await sb.from('mandats_gocardless').update({ echecs_consecutifs: 0, derniere_erreur: null, updated_at: new Date().toISOString() }).eq('id', mdConf.mandat_id)
             }
           }
-        } else if (action === 'failed' || action === 'cancelled') {
+        } else if (action === 'failed' || action === 'cancelled' || action === 'late_failure' || action === 'charged_back') {
+          // mmmm5 : late_failure / charged_back = impayé APRÈS confirmation, traité comme un rejet
           const { error: upFailErr } = await sb.from('paiements_en_ligne').update({
             statut: 'failed',
             gocardless_payment_id: paymentId,
@@ -258,8 +259,32 @@ export async function POST(req: NextRequest) {
           const erreurGc = ev?.details?.description || ev?.details?.cause || action
           if (mdFail.echeance_id && mdFail.prelevement_id) {
             const { data: prow } = await sb.from('prelevements_gocardless')
-              .select('id, mandat_id, tentative, montant, statut').eq('id', mdFail.prelevement_id).maybeSingle()
+              .select('id, mandat_id, tentative, montant, statut, reglement_id, echeance_id, facture_id, famille_id').eq('id', mdFail.prelevement_id).maybeSingle()
             if (prow && prow.statut !== 'echec') {
+              // mmmm5 (arbitrage Avi 01/09) : le prélèvement avait été REMIS (règlement
+              // créé à la date d'échéance) -> on constate l'IMPAYÉ par un règlement
+              // négatif (trace comptable, comme un chèque rejeté) et l'échéance passe
+              // en « rejeté ». La relance J+3/J+7 ci-dessous crée ensuite un nouveau
+              // paiement, donc un nouveau règlement positif si elle aboutit.
+              if (prow.reglement_id && prow.facture_id) {
+                const refImp = `IMPAYE ${paymentId?.slice(0, 12) || ''}`
+                const { data: dejaImp } = await sb.from('reglements').select('id').eq('facture_id', prow.facture_id).eq('reference', refImp).maybeSingle()
+                if (!dejaImp?.id) {
+                  const { error: impErr } = await sb.from('reglements').insert({
+                    facture_id: prow.facture_id,
+                    famille_id: prow.famille_id,
+                    montant: -Math.abs(Number(prow.montant || 0)),
+                    mode_paiement: 'sepa',
+                    date_reglement: new Date().toISOString().slice(0, 10),
+                    reference: refImp,
+                    notes: `Prélèvement SEPA impayé (${erreurGc})`,
+                  })
+                  if (impErr) echecs.push(`impayé ${paymentId} : ${impErr.message}`)
+                }
+                if (prow.echeance_id) {
+                  await sb.from('cheques_prevus').update({ statut: 'rejete' }).eq('id', prow.echeance_id)
+                }
+              }
               const derniere = prow.tentative >= 3
               const prochaine = derniere ? null : prow.tentative === 1
                 ? new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
