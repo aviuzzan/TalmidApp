@@ -9,7 +9,12 @@
  * L'année d'inscription est l'exercice qui SUIT l'exercice courant :
  *  1. le suivant chaîné (exercice_suivant_id) de l'exercice courant ;
  *  2. sinon l'exercice en statut 'preparation' le plus récent ;
- *  3. sinon, calcul de secours (année scolaire suivante).
+ *  3. sinon (jjjj5, 01/09/2026) L'EXERCICE COURANT LUI-MÊME : entre la rentrée
+ *     et la préparation de N+1 (mai/juin), les familles doivent voir l'année en
+ *     cours — enfants, contrat, factures. Avant ce fix, le lendemain de la
+ *     bascule de rentrée, le portail retombait sur le calcul de date et
+ *     affichait 2027-2028 : « 0 élèves inscrits » pour TOUTES les familles ;
+ *  4. sinon, calcul de secours (année scolaire suivante) — école sans exercice.
  */
 
 export type AnneeInscription = {
@@ -71,6 +76,11 @@ export async function getExerciceInscription(
     return { code: prep.code, exercice_id: prep.id, date_debut: prep.date_debut, date_fin: prep.date_fin }
   }
 
-  // 4. Secours : calcul de date
+  // 4. jjjj5 : pas de N+1 préparé -> l'année d'inscription est l'année courante
+  if (courant) {
+    return { code: courant.code, exercice_id: courant.id, date_debut: courant.date_debut, date_fin: courant.date_fin }
+  }
+
+  // 5. Secours : calcul de date (école sans aucun exercice)
   return { code: anneeSuivanteCalculee(), exercice_id: null, date_debut: null, date_fin: null }
 }
