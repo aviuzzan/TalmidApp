@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useEcole } from '@/lib/ecole-context'
@@ -25,7 +25,25 @@ type Cheque = {
   note: string | null
   famille_id: string
   familles: { nom: string; numero: string; parent1_nom: string | null; parent1_prenom: string | null } | null
+  // kkkk5 : photo + contrôle du chèque avant remise
+  photo_recto_path?: string | null
+  photo_verso_path?: string | null
+  controle?: any
+  controle_le?: string | null
 }
+
+// kkkk5 (01/09/2026, demande d'Avi) — contrôle INDICATIF du chèque au moment de
+// la remise : rien de bloquant, juste des repères ; photo recto/verso prise
+// avec le téléphone (preuve de ce qui part à la banque) ; anomalie libre.
+const CHECKS_CHEQUE: { k: string; label: string }[] = [
+  { k: 'ordre', label: 'À l\'ordre de l\'association (libellé exact)' },
+  { k: 'montant_chiffres', label: 'Montant en chiffres = montant attendu' },
+  { k: 'montant_lettres', label: 'Montant en lettres cohérent' },
+  { k: 'date', label: 'Date présente et de moins d\'un an' },
+  { k: 'signature', label: 'Signature présente' },
+  { k: 'sans_rature', label: 'Aucune rature / surcharge' },
+  { k: 'endosse', label: 'Endossé au dos (signature + n° de compte)' },
+]
 
 const PRINT_CSS = `
 @page { size: A4 portrait; margin: 1.5cm; }
@@ -52,6 +70,72 @@ export default function BordereauPage() {
   const [erreurChargement, setErreurChargement] = useState('')
   const [soldes, setSoldes] = useState<Map<string, SoldeFamille>>(new Map())
   const [deposeEnCours, setDeposeEnCours] = useState(false)
+  // kkkk5
+  const [infosEcole, setInfosEcole] = useState<{ ordre_cheque: string | null; iban_ecole: string | null; bic_ecole: string | null } | null>(null)
+  const [ouvert, setOuvert] = useState<string | null>(null)
+  const [photos, setPhotos] = useState<{ recto: string | null; verso: string | null }>({ recto: null, verso: null })
+  const [coches, setCoches] = useState<Record<string, boolean>>({})
+  const [anomalie, setAnomalie] = useState('')
+  const [ctrlBusy, setCtrlBusy] = useState(false)
+  const [ctrlMsg, setCtrlMsg] = useState('')
+
+  useEffect(() => {
+    if (!ecole?.id) return
+    createClient().from('ecoles').select('ordre_cheque, iban_ecole, bic_ecole').eq('id', ecole.id).single()
+      .then(({ data }) => setInfosEcole(data || null))
+  }, [ecole?.id])
+
+  async function bearerKkkk5() {
+    const { data: { session } } = await createClient().auth.getSession()
+    return session?.access_token || ''
+  }
+
+  async function ouvrirControle(c: Cheque) {
+    if (ouvert === c.id) { setOuvert(null); return }
+    setOuvert(c.id)
+    setCoches(c.controle?.coches || {})
+    setAnomalie(c.controle?.anomalie || '')
+    setCtrlMsg('')
+    setPhotos({ recto: null, verso: null })
+    if (c.photo_recto_path || c.photo_verso_path) {
+      const res = await fetch('/api/cheques/photo?chequeId=' + c.id, { headers: { Authorization: 'Bearer ' + await bearerKkkk5() } })
+      const json = await res.json()
+      if (res.ok) setPhotos(json.photos)
+    }
+  }
+
+  async function envoyerPhotoCheque(chequeId: string, face: 'recto' | 'verso', file: File | null) {
+    if (!file) return
+    setCtrlBusy(true); setCtrlMsg('')
+    const form = new FormData()
+    form.append('chequeId', chequeId); form.append('face', face); form.append('fichier', file)
+    try {
+      const res = await fetch('/api/cheques/photo', { method: 'POST', headers: { Authorization: 'Bearer ' + await bearerKkkk5() }, body: form })
+      const json = await res.json()
+      if (!res.ok) setCtrlMsg('⚠️ ' + (json.error || 'Envoi échoué'))
+      else {
+        setPhotos(json.photos)
+        setCtrlMsg('✅ Photo ' + face + ' enregistrée')
+        setCheques(cs => cs.map(x => x.id === chequeId ? { ...x, [`photo_${face}_path`]: 'ok' } : x))
+      }
+    } catch { setCtrlMsg('⚠️ Erreur réseau pendant l\'envoi de la photo') }
+    setCtrlBusy(false)
+  }
+
+  async function enregistrerControleCheque(chequeId: string) {
+    setCtrlBusy(true)
+    const s = createClient()
+    const { data: { session } } = await s.auth.getSession()
+    const controle = { coches, anomalie: anomalie.trim() || null, nb_coches: Object.values(coches).filter(Boolean).length, total: CHECKS_CHEQUE.length }
+    const { error } = await s.from('cheques_prevus')
+      .update({ controle, controle_le: new Date().toISOString(), controle_par: session?.user?.id || null })
+      .eq('id', chequeId)
+    setCtrlBusy(false)
+    if (error) { setCtrlMsg('⚠️ ' + error.message); return }
+    setCheques(cs => cs.map(x => x.id === chequeId ? { ...x, controle, controle_le: new Date().toISOString() } : x))
+    setCtrlMsg('✅ Contrôle enregistré')
+    setOuvert(null)
+  }
   // Exercice piloté par le sélecteur global (même source que /finances).
   const annee = useAnneeScolaireActive()
   const { loading: exerciceLoading } = useExercice()
@@ -161,6 +245,16 @@ export default function BordereauPage() {
     <>
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
 
+      {/* kkkk5 — rappel d'endossement, toujours visible à l'écran, jamais imprimé */}
+      <div className="no-print" style={{ background: 'linear-gradient(135deg,#1E3A8A,#5B21B6)', color: '#fff', borderRadius: 12, padding: '12px 16px', fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', opacity: .85 }}>Avant la remise en banque</div>
+        <div><b>À l&apos;ordre de :</b> {infosEcole?.ordre_cheque || ecole.nom} · <b>Au dos de chaque chèque :</b> signature + n° de compte à créditer :{' '}
+          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{infosEcole?.iban_ecole || 'IBAN à renseigner dans Paramètres école'}</span>
+          {infosEcole?.bic_ecole ? <span style={{ opacity: .85 }}> · BIC {infosEcole.bic_ecole}</span> : null}
+        </div>
+        <div style={{ opacity: .85, fontSize: 12 }}>Bouton « Contrôler » sur chaque ligne : photo recto/verso avec le téléphone + vérifications indicatives (rien de bloquant).</div>
+      </div>
+
       {/* CONTROLS - hidden when printing */}
       <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -242,7 +336,7 @@ export default function BordereauPage() {
                 <th style={{ padding: '10px 12px', width: 40 }}>
                   <input type="checkbox" checked={selected.size === cheques.length && cheques.length > 0} onChange={toggleAll} />
                 </th>
-                {['N° chèque', 'Émetteur (Famille)', 'Montant', 'Reste dû famille', 'Échéance', 'Statut', 'Note'].map(h => (
+                {['N° chèque', 'Émetteur (Famille)', 'Montant', 'Reste dû famille', 'Échéance', 'Statut', 'Note', 'Contrôle'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '10px 12px', fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -253,7 +347,8 @@ export default function BordereauPage() {
                   ? `${c.familles.parent1_prenom || ''} ${c.familles.parent1_nom}`.trim()
                   : (c.familles?.nom ? `Famille ${c.familles.nom}` : '—')
                 return (
-                  <tr key={c.id} style={{ borderTop: '1px solid #F1F5F9', cursor: 'pointer' }}
+                  <Fragment key={c.id}>
+                  <tr style={{ borderTop: '1px solid #F1F5F9', cursor: 'pointer' }}
                       onClick={() => toggle(c.id)}>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
@@ -284,7 +379,48 @@ export default function BordereauPage() {
                       </span>
                     </td>
                     <td style={{ padding: '10px 12px', fontSize: 11, color: '#64748B', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.note || ''}>{c.note || '—'}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => ouvrirControle(c)}
+                        style={{ background: ouvert === c.id ? '#2563EB' : '#EEF2FF', color: ouvert === c.id ? '#fff' : '#4338CA', border: '1px solid #C7D2FE', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        {c.photo_recto_path ? '📷 ' : ''}{c.controle_le ? '✓ ' : ''}{c.controle?.anomalie ? '⚠️ ' : ''}Contrôler
+                      </button>
+                    </td>
                   </tr>
+                  {ouvert === c.id && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '12px 16px 16px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          {(['recto', 'verso'] as const).map(face => (
+                            <label key={face} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#EEF2FF', color: '#4338CA', border: '1px dashed #A5B4FC', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                              📷 {photos[face] ? `Refaire le ${face}` : `Photo ${face}`}
+                              <input type="file" accept="image/*" capture="environment" disabled={ctrlBusy} style={{ display: 'none' }}
+                                onChange={e => { envoyerPhotoCheque(c.id, face, e.target.files?.[0] || null); e.target.value = '' }} />
+                            </label>
+                          ))}
+                          {photos.recto && <a href={photos.recto} target="_blank" rel="noreferrer">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={photos.recto} alt="Recto" style={{ height: 72, borderRadius: 8, border: '1px solid #E2E8F0' }} /></a>}
+                          {photos.verso && <a href={photos.verso} target="_blank" rel="noreferrer">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={photos.verso} alt="Verso" style={{ height: 72, borderRadius: 8, border: '1px solid #E2E8F0' }} /></a>}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '4px 16px', marginTop: 12 }}>
+                          {CHECKS_CHEQUE.map(ch => (
+                            <label key={ch.k} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1E293B', padding: '5px 0', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={!!coches[ch.k]} onChange={e => setCoches({ ...coches, [ch.k]: e.target.checked })} style={{ width: 18, height: 18 }} />
+                              {ch.label}
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                          <input value={anomalie} onChange={e => setAnomalie(e.target.value)} placeholder="Anomalie / remarque (facultatif) : non signé, ordre incorrect…"
+                            style={{ flex: 1, minWidth: 240, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 16 }} />
+                          <button disabled={ctrlBusy} onClick={() => enregistrerControleCheque(c.id)}
+                            style={{ background: 'linear-gradient(135deg,#2563EB,#7C3AED)', color: '#fff', border: 'none', borderRadius: 9, padding: '10px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: ctrlBusy ? .6 : 1 }}>
+                            Enregistrer le contrôle
+                          </button>
+                          {ctrlMsg && <span style={{ fontSize: 12.5, color: ctrlMsg.startsWith('✅') ? '#047857' : '#B45309' }}>{ctrlMsg}</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>
