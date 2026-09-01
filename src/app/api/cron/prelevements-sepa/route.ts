@@ -44,10 +44,18 @@ export async function GET(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // llll5 (01/09/2026) : rattacher les échéances orphelines à leur facture AVANT de
+  // prélever. Les échéanciers générés depuis un contrat pouvaient ne pas porter
+  // facture_id (1 268 échéances Eschel) → prélèvement réel mais AUCUN règlement
+  // créé (ce fichier et le webhook GoCardless exigent facture_id). Filet en base
+  // (trigger + fonction) ; ici on force le rattachement au démarrage du cron.
+  const { error: rattErr } = await sb.rpc('rattacher_factures_echeances')
+  if (rattErr) console.error('[cron] rattacher_factures_echeances:', rattErr.message)
+
   const today = new Date().toISOString().slice(0, 10)
   // nnnn1 : fenêtre d'anticipation — on soumet à J-7 avec charge_date = date d'échéance
   const horizon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-  const resume = { soumis: 0, echecs: 0, ignores: 0, sans_charge_date: 0, erreurs: [] as string[] }
+  const resume = { soumis: 0, echecs: 0, ignores: 0, sans_charge_date: 0, remis: 0, erreurs: [] as string[] }
 
   // 1. Mandats actifs rattachés à une famille (paginé par principe)
   const mandats: any[] = []
@@ -220,6 +228,51 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // mmmm5 (01/09/2026, arbitrage Avi) — REMISE des prélèvements à la date
+  // d'échéance, comme un chèque remis en banque : le règlement est créé le
+  // jour du débit (pas 2-3 jours plus tard à la confirmation GoCardless), et
+  // un éventuel rejet est constaté ensuite par le webhook (règlement négatif
+  // « IMPAYE », échéance rejetée). Le bilan du jour et le rapprochement
+  // bancaire collent ainsi à la date réelle du relevé.
+  // Idempotent : référence « GoCardless <12 premiers caractères du payment> »,
+  // la même que le webhook (qui ne recrée donc rien à la confirmation).
+  try {
+    const { data: aRemettre, error: remErr } = await sb.from('prelevements_gocardless')
+      .select('id, echeance_id, facture_id, famille_id, montant, gocardless_payment_id')
+      .eq('statut', 'soumis').is('reglement_id', null).not('gocardless_payment_id', 'is', null)
+      .not('facture_id', 'is', null).limit(500)
+    if (remErr) resume.erreurs.push('remises : ' + remErr.message)
+    for (const p of (aRemettre || []) as any[]) {
+      const { data: ech } = await sb.from('cheques_prevus').select('id, date_echeance, statut').eq('id', p.echeance_id).maybeSingle()
+      if (!ech?.date_echeance || ech.date_echeance > today) continue // pas encore la date du débit
+      const refGc = `GoCardless ${String(p.gocardless_payment_id).slice(0, 12)}`
+      let reglementId: string | null = null
+      const { data: deja } = await sb.from('reglements').select('id').eq('facture_id', p.facture_id).eq('reference', refGc).maybeSingle()
+      if (deja?.id) reglementId = deja.id
+      else {
+        const { data: regl, error: reglErr } = await sb.from('reglements').insert({
+          facture_id: p.facture_id,
+          famille_id: p.famille_id,
+          montant: Number(p.montant),
+          mode_paiement: 'sepa',
+          date_reglement: ech.date_echeance,
+          reference: refGc,
+          notes: 'Prélèvement SEPA remis (GoCardless) — en attente de confirmation',
+        }).select('id').single()
+        if (reglErr || !regl?.id) { resume.erreurs.push(`remise ${p.id} : ${reglErr?.message || 'insert vide'}`); continue }
+        reglementId = regl.id
+      }
+      await sb.from('prelevements_gocardless').update({ reglement_id: reglementId, updated_at: new Date().toISOString() }).eq('id', p.id)
+      await sb.from('paiements_en_ligne').update({ reglement_id: reglementId, updated_at: new Date().toISOString() })
+        .eq('gocardless_payment_id', p.gocardless_payment_id).is('reglement_id', null)
+      if (ech.statut === 'prevu' || ech.statut === 'rejete') { // rejete = nouvelle tentative après un impayé
+        await sb.from('cheques_prevus').update({ statut: 'encaisse', encaisse_le: new Date().toISOString() }).eq('id', ech.id)
+      }
+      resume.remis++
+    }
+  } catch (e: any) { resume.erreurs.push('remises : ' + (e?.message || 'erreur')) }
 
   return NextResponse.json({ ok: true, date: today, ...resume })
 }

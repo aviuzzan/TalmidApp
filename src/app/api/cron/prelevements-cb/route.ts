@@ -32,6 +32,14 @@ export async function GET(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // llll5 (01/09/2026) : rattacher les échéances orphelines à leur facture AVANT de
+  // prélever. Les échéanciers générés depuis un contrat pouvaient ne pas porter
+  // facture_id (1 268 échéances Eschel) → prélèvement réel mais AUCUN règlement
+  // créé (ce fichier et le webhook GoCardless exigent facture_id). Filet en base
+  // (trigger + fonction) ; ici on force le rattachement au démarrage du cron.
+  const { error: rattErr } = await sb.rpc('rattacher_factures_echeances')
+  if (rattErr) console.error('[cron] rattacher_factures_echeances:', rattErr.message)
+
   const today = new Date().toISOString().slice(0, 10)
   const resume = { preleves: 0, echecs: 0, suspendus: 0, ignores: 0, erreurs: [] as string[] }
 
