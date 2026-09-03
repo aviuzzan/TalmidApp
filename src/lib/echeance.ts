@@ -37,15 +37,18 @@ export function dateEcheance(annee: number, mois1a12: number, jour: number | nul
  * Reste dû = somme des solde_restant (vue factures_solde) des factures non
  * annulées de la famille — règlements ET avoirs imputés déjà déduits.
  * Best effort : ne lève jamais ; retourne ok=false + message en cas de souci.
- * NB : un prélèvement SEPA déjà soumis à GoCardless (fenêtre J-7) n'est pas
- * modifié par un changement de montant d'échéance — comme pour le bouton UI.
+ * nnnn5 (03/09/2026) : les échéances VERROUILLÉES (prélèvement SEPA soumis,
+ * CB en cours, impayé en nouvelle tentative, export SEPA — RPC
+ * cheques_prevus_verrous) gardent leur montant ; on lisse le reste dû DIMINUÉ
+ * de ces montants déjà en route sur les échéances libres. Miroir exact du
+ * bouton « Recalculer » de la page Échéancier famille (cas MORALI).
  */
 export async function lisserEcheancierFamille(
   s: any,
   familleId: string,
 ): Promise<{ ok: boolean; message?: string }> {
   try {
-    const [echRes, soldeRes] = await Promise.all([
+    const [echRes, soldeRes, verrouRes] = await Promise.all([
       s.from('cheques_prevus')
         .select('id, montant, date_echeance, numero_cheque, statut')
         .eq('famille_id', familleId)
@@ -55,15 +58,21 @@ export async function lisserEcheancierFamille(
       s.from('factures_solde')
         .select('solde_restant, statut')
         .eq('famille_id', familleId),
+      s.rpc('cheques_prevus_verrous', { p_famille_id: familleId }),
     ])
     if (echRes.error) return { ok: false, message: 'lecture echeances : ' + echRes.error.message }
     if (soldeRes.error) return { ok: false, message: 'lecture soldes : ' + soldeRes.error.message }
-    const actives = (echRes.data || []) as any[]
-    if (actives.length === 0) return { ok: true, message: 'aucune echeance active' }
+    if (verrouRes.error) return { ok: false, message: 'lecture verrous : ' + verrouRes.error.message }
+    const verrous = new Set(((verrouRes.data || []) as any[]).map((v: any) => v.echeance_id))
+    const toutes = (echRes.data || []) as any[]
+    const verrouillees = toutes.filter((c: any) => verrous.has(c.id))
+    const actives = toutes.filter((c: any) => !verrous.has(c.id))
+    if (actives.length === 0) return { ok: true, message: toutes.length > 0 ? 'toutes les echeances actives sont verrouillees (prelevement en cours)' : 'aucune echeance active' }
+    const montantVerrou = verrouillees.reduce((t: number, c: any) => t + (parseFloat(c.montant) || 0), 0)
     const resteDu = Math.round(
-      ((soldeRes.data || []) as any[])
+      (((soldeRes.data || []) as any[])
         .filter((f: any) => f.statut !== 'annule')
-        .reduce((t: number, f: any) => t + (parseFloat(f.solde_restant) || 0), 0) * 100
+        .reduce((t: number, f: any) => t + (parseFloat(f.solde_restant) || 0), 0) - montantVerrou) * 100
     ) / 100
     if (resteDu <= 0) return { ok: true, message: 'reste du nul - echeancier laisse tel quel' }
     const totalActives = actives.reduce((t: number, c: any) => t + (parseFloat(c.montant) || 0), 0)

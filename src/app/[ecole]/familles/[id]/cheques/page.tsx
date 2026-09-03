@@ -10,8 +10,15 @@ import { useEcole } from '@/lib/ecole-context'
 // le reste dû réel de la famille face au total de l'échéancier actif.
 import { encaisserEcheance, soldesParFamille, calculerDepassement, bilanEncaissements, type SoldeFamille } from '@/lib/encaissement'
 import { appAlert, appConfirm, appPrompt } from '@/components/ui/ConfirmDialog'
+// nnnn5 (03/09/2026) — VERROUILLAGE des échéances déjà engagées (cas MORALI) :
+// une échéance soumise à GoCardless / CB en cours / impayé avec nouvelle tentative
+// programmée / encaissée / exportée SEPA est VERROUILLÉE : exclue de « Générer /
+// régénérer » et de « Recalculer », Edit/Suppr/Encaisser grisés. Les verrous
+// viennent de la base (RPC cheques_prevus_verrous) et un trigger
+// (trg_cheques_prevus_garde_verrou) refuse de toute façon suppression et
+// changement de montant/date/mode, quel que soit l'écran.
 
-type Statut = 'attente_reception' | 'prevu' | 'encaisse' | 'rejete' | 'restitue' | 'annule'
+type Statut = 'attente_reception' | 'prevu' | 'encaisse' | 'rejete' | 'restitue' | 'annule' | 'exporte'
 
 type Cheque = {
   id: string
@@ -33,6 +40,7 @@ const STATUTS: { value: Statut; label: string; bg: string; fg: string }[] = [
   { value: 'rejete', label: 'Rejete', bg: '#FEF2F2', fg: '#991B1B' },
   { value: 'restitue', label: 'Restitue', bg: '#EFF6FF', fg: '#1E40AF' },
   { value: 'annule', label: 'Annule', bg: '#F8FAFC', fg: '#94A3B8' },
+  { value: 'exporte', label: 'Exporte SEPA', bg: '#EEF2FF', fg: '#3730A3' },
 ]
 
 const MODES = [
@@ -71,22 +79,37 @@ export default function ChequesFamillePage() {
   })
   // Solde réel de la famille (factures non annulées, règlements + avoirs déduits).
   const [solde, setSolde] = useState<SoldeFamille | null>(null)
+  // nnnn5 : échéance id -> motif de verrou (absent = libre).
+  const [verrous, setVerrous] = useState<Map<string, string>>(new Map())
 
   const load = useCallback(async () => {
     setLoading(true)
     const s = createClient()
-    const [{ data: f }, { data: chk }, { data: fact }, { soldes }] = await Promise.all([
+    const [{ data: f }, { data: chk }, { data: fact }, { soldes }, { data: vr }] = await Promise.all([
       s.from('familles').select('nom').eq('id', familleId).single(),
       s.from('cheques_prevus').select('*').eq('famille_id', familleId).order('date_echeance', { ascending: true }),
       s.from('factures').select('id, numero, annee_scolaire').eq('famille_id', familleId).order('date_emission', { ascending: false }),
       soldesParFamille(createClient(), [familleId]),
+      s.rpc('cheques_prevus_verrous', { p_famille_id: familleId }),
     ])
     if (f) setFamilleNom(f.nom || '')
     setCheques(chk || [])
     setFactures(fact || [])
     setSolde(soldes.get(familleId) ?? null)
+    setVerrous(new Map(((vr || []) as { echeance_id: string; verrou: string }[]).map(v => [v.echeance_id, v.verrou])))
     setLoading(false)
   }, [familleId])
+
+  // nnnn5 : motif de verrou d'une échéance ('' = libre).
+  const verrou = (c: Cheque) => verrous.get(c.id) || ''
+  const estActive = (c: Cheque) => c.statut === 'prevu' || c.statut === 'attente_reception'
+  // Échéances verrouillées dont le montant reste À PERCEVOIR (prélèvement en cours,
+  // impayé en nouvelle tentative, export SEPA) : elles sont déjà comptées dans le
+  // reste dû mais ne doivent pas être ré-échelonnées.
+  const verrouilleesEnCours = cheques.filter(c => verrou(c) && c.statut !== 'encaisse')
+  const montantVerrouEnCours = Math.round(verrouilleesEnCours.reduce((t, c) => t + Number(c.montant), 0) * 100) / 100
+  // Reste à échelonner = reste dû réel − ce qui est déjà en route.
+  const resteAEchelonner = solde ? Math.max(0, Math.round((Math.max(0, solde.soldeRestant) - montantVerrouEnCours) * 100) / 100) : 0
 
   useEffect(() => { load() }, [load])
 
@@ -97,6 +120,7 @@ export default function ChequesFamillePage() {
   }
 
   function openEdit(c: Cheque) {
+    if (verrou(c)) { appAlert('Échéance verrouillée : ' + verrou(c) + '.\n\nSon montant, sa date et son mode ne sont plus modifiables.'); return }
     setForm({
       numero_cheque: c.numero_cheque || '',
       montant: String(c.montant || ''),
@@ -129,6 +153,8 @@ export default function ChequesFamillePage() {
       mode_paiement: form.mode_paiement,
     }
     if (editId) {
+      const v = verrous.get(editId)
+      if (v) return await appAlert('Échéance verrouillée : ' + v + '. Modification refusée.')
       const { error } = await s.from('cheques_prevus').update(payload).eq('id', editId)
       if (error) return await appAlert('Erreur : ' + error.message)
     } else {
@@ -140,8 +166,11 @@ export default function ChequesFamillePage() {
   }
 
   async function remove(id: string) {
+    const v = verrous.get(id)
+    if (v) { await appAlert('Échéance verrouillée : ' + v + '. Suppression impossible.'); return }
     if (!await appConfirm('Supprimer cette echeance ?')) return
-    await createClient().from('cheques_prevus').delete().eq('id', id)
+    const { error } = await createClient().from('cheques_prevus').delete().eq('id', id)
+    if (error) await appAlert('Suppression refusée : ' + error.message)
     await load()
   }
 
@@ -160,6 +189,7 @@ export default function ChequesFamillePage() {
     if (statut === 'encaisse') {
       const c = cheques.find(x => x.id === id)
       if (!c) return
+      if (verrou(c)) { await appAlert('Échéance verrouillée : ' + verrou(c) + '.\n\nElle sera encaissée automatiquement par le prélèvement en cours — ne pas la saisir à la main (doublon).'); return }
       const avert = avertissementDepassement([c])
       if (avert && !await appConfirm('Encaisser cette échéance de ' + fmt(c.montant) + ' ?' + avert)) return
       setBusy(true)
@@ -176,8 +206,8 @@ export default function ChequesFamillePage() {
   }
 
   async function bulkUpdate(fromStatuts: Statut[], toStatut: Statut, libelle: string) {
-    const sel = cheques.filter(c => fromStatuts.includes(c.statut))
-    if (sel.length === 0) { await appAlert('Aucune echeance concernee.'); return }
+    const sel = cheques.filter(c => fromStatuts.includes(c.statut) && !verrou(c))
+    if (sel.length === 0) { await appAlert('Aucune echeance concernee' + (verrouilleesEnCours.length > 0 ? ' (les échéances verrouillées — prélèvement en cours — sont ignorées).' : '.')); return }
     // AUDIT P1 : « Tout encaisser » passe par la brique partagée (règlements créés,
     // idempotence par référence) avec avertissement explicite en cas de dépassement du dû.
     if (toStatut === 'encaisse') {
@@ -205,12 +235,14 @@ export default function ChequesFamillePage() {
   // Règle validée par Avi : on ne supprime pas d'échéances, on recalcule les montants.
   async function recalculerSurSolde() {
     if (!solde) return
+    // nnnn5 : les échéances verrouillées (prélèvement déjà parti...) gardent leur
+    // montant ; on lisse le reste dû DIMINUÉ de ce qui est déjà en route.
     const actives = cheques
-      .filter(c => c.statut === 'prevu' || c.statut === 'attente_reception')
+      .filter(c => estActive(c) && !verrou(c))
       .sort((a, b) => (a.date_echeance || '').localeCompare(b.date_echeance || ''))
-    if (actives.length === 0) { await appAlert('Aucune échéance active à recalculer.'); return }
-    const resteDu = Math.round(Math.max(0, solde.soldeRestant) * 100) / 100
-    if (resteDu <= 0) { await appAlert('Le reste dû est nul : annulez plutôt les échéances restantes.'); return }
+    if (actives.length === 0) { await appAlert('Aucune échéance active modifiable à recalculer' + (verrouilleesEnCours.length > 0 ? ' : toutes sont verrouillées (prélèvement en cours).' : '.')); return }
+    const resteDu = resteAEchelonner
+    if (resteDu <= 0) { await appAlert('Le reste dû est nul' + (montantVerrouEnCours > 0 ? ' une fois les ' + fmt(montantVerrouEnCours) + ' déjà en cours de prélèvement déduits' : '') + ' : annulez plutôt les échéances restantes.'); return }
     const n = actives.length
     const unit = Math.round((resteDu / n) * 100) / 100
     const dernier = Math.round((resteDu - unit * (n - 1)) * 100) / 100
@@ -218,6 +250,7 @@ export default function ChequesFamillePage() {
     if (!await appConfirm(
       'Recalculer l\'échéancier sur le reste dû réel ?\n\n' +
       n + ' échéance(s) active(s) : ' + fmt(totalActuel) + ' actuellement → ' + fmt(resteDu) + ' après recalcul.\n' +
+      (verrouilleesEnCours.length > 0 ? verrouilleesEnCours.length + ' échéance(s) verrouillée(s) (' + fmt(montantVerrouEnCours) + ', prélèvement déjà en cours) conservée(s) telle(s) quelle(s).\n' : '') +
       'Nouvelle mensualité : ' + fmt(unit) + (Math.abs(dernier - unit) > 0.004 ? ' (dernière : ' + fmt(dernier) + ')' : '') + '.\n\n' +
       'Le nombre d\'échéances, les dates et les modes de paiement sont conservés.'
     )) return
@@ -242,10 +275,18 @@ export default function ChequesFamillePage() {
       await appAlert('Montant total, nombre d echeances et date de la 1ere echeance sont obligatoires.')
       return
     }
-    const aRemplacer = cheques.filter(c => c.statut === 'attente_reception' || c.statut === 'prevu')
-    const msg = aRemplacer.length > 0
+    // nnnn5 : les échéances verrouillées ne sont JAMAIS remplacées.
+    const aRemplacer = cheques.filter(c => estActive(c) && !verrou(c))
+    const conservees = cheques.filter(c => estActive(c) && verrou(c))
+    if (solde && total > resteAEchelonner + 0.009 && conservees.length > 0) {
+      if (!await appConfirm('⚠️ Le montant saisi (' + fmt(total) + ') dépasse le reste à échelonner (' + fmt(resteAEchelonner) + ') : ' +
+        fmt(montantVerrouEnCours) + ' sont déjà en cours de prélèvement sur ' + conservees.length + ' échéance(s) verrouillée(s). La famille paierait ' +
+        fmt(Math.round((total - resteAEchelonner) * 100) / 100) + ' de trop.\n\nContinuer quand même ?')) return
+    }
+    const msg = (aRemplacer.length > 0
       ? 'Generer ' + n + ' echeance(s) ? Les ' + aRemplacer.length + ' echeance(s) non encaissees existantes seront supprimees et remplacees.'
-      : 'Generer ' + n + ' echeance(s) de paiement ?'
+      : 'Generer ' + n + ' echeance(s) de paiement ?') +
+      (conservees.length > 0 ? '\n\n🔒 ' + conservees.length + ' echeance(s) verrouillee(s) (' + fmt(montantVerrouEnCours) + ') sont conservees telles quelles.' : '')
     if (!await appConfirm(msg)) return
 
     setBusy(true)
@@ -255,7 +296,7 @@ export default function ChequesFamillePage() {
     // renseignait pas -> l'insertion echouait TOUJOURS, apres avoir supprime les
     // echeances existantes (familles TOUBIAN et LEBAR videes). On reprend le
     // contrat des echeances remplacees, sinon le contrat valide le plus recent.
-    let contratId: string | null = (aRemplacer.find(c => (c as any).contrat_id) as any)?.contrat_id || null
+    let contratId: string | null = ([...aRemplacer, ...conservees].find(c => (c as any).contrat_id) as any)?.contrat_id || null
     if (!contratId) {
       const { data: contrats } = await s.from('contrats_scolarisation')
         .select('id, statut, annee_scolaire')
@@ -354,7 +395,7 @@ export default function ChequesFamillePage() {
   )
   const montantRetard = enRetard.reduce((s, c) => s + Number(c.montant), 0)
   const nbARecevoir = cheques.filter(c => c.statut === 'attente_reception').length
-  const nbPrevu = cheques.filter(c => c.statut === 'prevu').length
+  const nbPrevu = cheques.filter(c => c.statut === 'prevu' && !verrou(c)).length
 
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }
@@ -375,8 +416,9 @@ export default function ChequesFamillePage() {
           // (règlements et avoirs déjà saisis déduits), plus jamais un champ vide
           // qui invitait à ressaisir le montant du contrat déjà partiellement payé.
           setShowGen(v => {
-            if (!v && !gen.montant_total && solde && solde.soldeRestant > 0) {
-              setGen(g => ({ ...g, montant_total: String(Math.round(solde.soldeRestant * 100) / 100) }))
+            // nnnn5 : pré-rempli avec le reste À ÉCHELONNER (reste dû − prélèvements en cours).
+            if (!v && !gen.montant_total && solde && resteAEchelonner > 0) {
+              setGen(g => ({ ...g, montant_total: String(resteAEchelonner) }))
             }
             return !v
           })
@@ -464,6 +506,12 @@ export default function ChequesFamillePage() {
           <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 14px' }}>
             Cree N echeances mensuelles de montant egal. Les echeances a recevoir et prevu existantes seront remplacees (les encaissees sont conservees).
           </p>
+          {verrouilleesEnCours.length > 0 && (
+            <div style={{ fontSize: 12, color: '#3730A3', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 8, padding: '8px 12px', margin: '0 0 14px', fontWeight: 600 }}>
+              🔒 {verrouilleesEnCours.length} échéance(s) verrouillée(s) pour {fmt(montantVerrouEnCours)} (prélèvement déjà parti / en cours) : elles sont conservées.
+              Reste à échelonner : <strong>{fmt(resteAEchelonner)}</strong>{solde ? ' (reste dû ' + fmt(Math.max(0, solde.soldeRestant)) + ' − ' + fmt(montantVerrouEnCours) + ')' : ''}.
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
             <div>
               <label style={lbl}>Montant total a echelonner *</label>
@@ -504,10 +552,12 @@ export default function ChequesFamillePage() {
             </div>
           )}
           {/* AUDIT P1 : garde-fou visuel — le total saisi dépasse le reste dû réel. */}
-          {solde && gen.montant_total && (parseFloat(gen.montant_total) || 0) > Math.max(0, solde.soldeRestant) + 0.009 && (
+          {solde && gen.montant_total && (parseFloat(gen.montant_total) || 0) > resteAEchelonner + 0.009 && (
             <div style={{ fontSize: 12, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 12px', marginTop: 8, fontWeight: 600 }}>
-              ⚠️ Ce total dépasse le reste dû de la famille ({fmt(Math.max(0, solde.soldeRestant))}) de {fmt((parseFloat(gen.montant_total) || 0) - Math.max(0, solde.soldeRestant))}.
-              Des règlements ont déjà été saisis sur les factures : échelonner ce montant conduirait à un sur-encaissement.
+              ⚠️ Ce total dépasse le reste à échelonner ({fmt(resteAEchelonner)}) de {fmt(Math.round(((parseFloat(gen.montant_total) || 0) - resteAEchelonner) * 100) / 100)}.
+              {montantVerrouEnCours > 0
+                ? ' ' + fmt(montantVerrouEnCours) + ' sont déjà en cours de prélèvement sur des échéances verrouillées : échelonner ce montant ferait payer la famille deux fois.'
+                : ' Des règlements ont déjà été saisis sur les factures : échelonner ce montant conduirait à un sur-encaissement.'}
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -596,9 +646,13 @@ export default function ChequesFamillePage() {
                 const fact = factures.find(f => f.id === c.facture_id)
                 const modeLabel = MODES.find(m => m.value === c.mode_paiement)?.label || c.mode_paiement || '-'
                 const retard = !!c.date_echeance && c.date_echeance < TODAY && (c.statut === 'prevu' || c.statut === 'attente_reception')
+                const v = verrou(c)
+                const btnOff: React.CSSProperties = { background: '#F8FAFC', color: '#CBD5E1', border: '1px solid #E2E8F0', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'not-allowed' }
                 return (
-                  <tr key={c.id} style={{ borderTop: '1px solid #F1F5F9', background: retard ? '#FEF2F2' : undefined }}>
-                    <td style={{ padding: '10px 14px', fontSize: 13, fontFamily: 'monospace', fontWeight: 600 }}>{c.numero_cheque}</td>
+                  <tr key={c.id} style={{ borderTop: '1px solid #F1F5F9', background: retard && !v ? '#FEF2F2' : v && c.statut !== 'encaisse' ? '#F5F7FF' : undefined }}>
+                    <td style={{ padding: '10px 14px', fontSize: 13, fontFamily: 'monospace', fontWeight: 600 }}>
+                      {v && <span title={v} style={{ marginRight: 5, cursor: 'help' }}>🔒</span>}{c.numero_cheque}
+                    </td>
                     <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>{fmt(c.montant)}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12, color: retard ? '#991B1B' : '#475569', fontWeight: retard ? 700 : 400 }}>
                       {c.date_echeance ? new Date(c.date_echeance).toLocaleDateString('fr-FR') : '-'}
@@ -607,6 +661,7 @@ export default function ChequesFamillePage() {
                     <td style={{ padding: '10px 14px', fontSize: 12, color: '#475569' }}>{modeLabel}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: sc.fg, background: sc.bg, padding: '3px 10px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{sc.label}</span>
+                      {v && c.statut !== 'encaisse' && <div style={{ fontSize: 10, color: '#3730A3', marginTop: 3, fontWeight: 600 }}>{v}</div>}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, color: '#475569' }}>{c.encaisse_le ? new Date(c.encaisse_le).toLocaleDateString('fr-FR') : '-'}</td>
                     <td style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'monospace', color: '#64748B' }}>{fact?.numero || '-'}</td>
@@ -615,22 +670,31 @@ export default function ChequesFamillePage() {
                         <button onClick={() => quickUpdateStatut(c.id, 'prevu')} title="Marquer recu"
                           style={{ background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Recu</button>
                       )}
-                      {(c.statut === 'prevu' || c.statut === 'attente_reception') && (
+                      {(c.statut === 'prevu' || c.statut === 'attente_reception') && !v && (
                         <button onClick={() => quickUpdateStatut(c.id, 'encaisse')} title="Marquer encaisse"
                           style={{ background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Encaisser</button>
                       )}
-                      {(c.statut === 'prevu' || c.statut === 'attente_reception') && (
+                      {(c.statut === 'prevu' || c.statut === 'attente_reception') && !v && (
                         <button onClick={() => remplacerParReglement(c)} title="Regler en CB / virement / especes (annule cette echeance)"
                           style={{ background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Regler autrement</button>
                       )}
-                      {c.statut === 'prevu' && (
+                      {c.statut === 'prevu' && !v && (
                         <button onClick={() => quickUpdateStatut(c.id, 'restitue')} title="Restituer (caution)"
                           style={{ background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Restituer</button>
                       )}
-                      <button onClick={() => openEdit(c)} title="Modifier"
-                        style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
-                      <button onClick={() => remove(c.id)} title="Supprimer"
-                        style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Suppr</button>
+                      {v ? (
+                        <>
+                          <button disabled title={'Verrouillée : ' + v} style={btnOff}>Edit</button>
+                          <button disabled title={'Verrouillée : ' + v} style={btnOff}>Suppr</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => openEdit(c)} title="Modifier"
+                            style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
+                          <button onClick={() => remove(c.id)} title="Supprimer"
+                            style={{ background: '#FEF2F2', color: '#991B1B', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>Suppr</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 )
