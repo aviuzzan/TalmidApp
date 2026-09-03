@@ -79,6 +79,9 @@ export default function ContratPage() {
   const [enfants, setEnfants] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [tarifs, setTarifs] = useState<any[]>([])
+  // pppp5 : tranche par defaut de l'ecole (RPC tranche_par_defaut) — repli
+  // DETERMINISTE identique a celui du serveur quand la famille n'a pas de tranche.
+  const [trancheDefautEcole, setTrancheDefautEcole] = useState<string | null>(null)
   const [modes, setModes] = useState<any[]>([])
   const [paiementConfig, setPaiementConfig] = useState<any>(null)
   const [datesEncaissement, setDatesEncaissement] = useState<any[]>([])
@@ -212,8 +215,17 @@ export default function ContratPage() {
       setSepaTitulaire(`${fam.parent1_prenom || ''} ${fam.parent1_nom || ''}`.trim())
     }
 
-    // Tranche effective : tranche de la famille, sinon première tranche présente dans les tarifs
+    // Tranche effective : tranche de la famille, sinon tranche PAR DEFAUT de l'ecole
+    // (pppp5 — l'ancien repli "premiere tranche des tarifs" departageait les ex aequo
+    // au hasard, differemment du serveur : cas BENZAQUI, "Option tarifaire invalide").
+    let trancheDefaut: string | null = null
+    if (!fam?.tranche_id) {
+      const { data: td } = await s.rpc('tranche_par_defaut', { p_ecole_id: profile.ecole_id })
+      trancheDefaut = (td as string | null) || null
+    }
+    setTrancheDefautEcole(trancheDefaut)
     const trancheFamilleLoad: string | null = fam?.tranche_id
+      || trancheDefaut
       || (Array.from(new Set((tar ?? []).map((t: any) => t.tranche_id).filter(Boolean)))[0] as string | undefined)
       || null
 
@@ -326,9 +338,10 @@ export default function ContratPage() {
   }
 
   // Tranche effective de la famille : sa tranche_id si définie, sinon la tranche
-  // par défaut de l'école (la première par ordre, typiquement "Officiel").
+  // par défaut de l'école (pppp5 : RPC tranche_par_defaut, même règle que le serveur).
   const trancheEffective = (() => {
     if (famille?.tranche_id) return famille.tranche_id
+    if (trancheDefautEcole) return trancheDefautEcole
     const tranchesUtilisees = Array.from(new Set(tarifs.map((t: any) => t.tranche_id).filter(Boolean)))
     return tranchesUtilisees[0] || null
   })()

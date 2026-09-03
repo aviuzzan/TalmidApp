@@ -61,6 +61,19 @@ export default function TranchesTab({ ecoleId }: { ecoleId: string }) {
     await load()
   }
 
+  // pppp5 (03/09/2026) : tranche PAR DEFAUT — appliquee d'office a toute nouvelle
+  // famille (trigger trg_familles_tranche_defaut) et utilisee par le portail et la
+  // RPC de soumission quand une famille n'a pas de tranche. Une seule par ecole.
+  async function definirParDefaut(id: string) {
+    const s = createClient()
+    const { error: e1 } = await s.from('tranches_facturation').update({ par_defaut: false }).eq('ecole_id', ecoleId).eq('par_defaut', true)
+    if (e1) { toast.error(e1.message); return }
+    const { error: e2 } = await s.from('tranches_facturation').update({ par_defaut: true }).eq('id', id)
+    if (e2) { toast.error(e2.message); return }
+    toast.success('Tranche par défaut enregistrée')
+    await load()
+  }
+
   async function supprimer(id: string) {
     const ok = await confirmDialog({ title: 'Supprimer cette tranche ?', message: 'Les tarifs et scolarités liés seront détachés (tranche_id = NULL).', danger: true })
     if (!ok) return
@@ -80,6 +93,10 @@ export default function TranchesTab({ ecoleId }: { ecoleId: string }) {
         Les <strong>tranches de facturation</strong> permettent d&apos;avoir des tarifs différenciés par revenu (ou autre critère).
         Affectez ensuite chaque tranche à un tarif et à un élève (sur sa scolarité de l&apos;année).
         Exemples : <code>T1</code> (revenu faible), <code>T2</code> (revenu moyen), <code>TP</code> (tarif plein).
+        <br />La tranche <strong>par défaut</strong> est appliquée d&apos;office à toute nouvelle famille (inscription en ligne ou création manuelle) ; vous pouvez ensuite la changer famille par famille.
+        {tranches.length > 0 && !tranches.some(t => t.par_defaut) && (
+          <div style={{ marginTop: 6, color: '#B45309', fontWeight: 600 }}>⚠️ Aucune tranche par défaut : choisissez-en une ci-dessous, sinon la première par ordre sera utilisée.</div>
+        )}
       </div>
 
       <div style={{ background: '#F8FAFC', borderRadius: 10, padding: 14 }}>
@@ -97,14 +114,20 @@ export default function TranchesTab({ ecoleId }: { ecoleId: string }) {
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead><tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-            {['Code', 'Libellé', 'Description', ''].map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>)}
+            {['Par défaut', 'Code', 'Libellé', 'Description', ''].map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>{h}</th>)}
           </tr></thead>
           <tbody>
             {tranches.map((t, i) => {
               const isEditing = editId === t.id
               const v = edit[t.id] || { code: '', libelle: '', description: '' }
               return (
-                <tr key={t.id} style={{ borderBottom: i < tranches.length - 1 ? '1px solid #F8FAFC' : 'none' }}>
+                <tr key={t.id} style={{ borderBottom: i < tranches.length - 1 ? '1px solid #F8FAFC' : 'none', background: t.par_defaut ? '#F5F3FF' : undefined }}>
+                  <td style={{ padding: '11px 14px' }}>
+                    <label title={t.par_defaut ? 'Tranche appliquée d\'office aux nouvelles familles' : 'Définir comme tranche par défaut'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: t.par_defaut ? '#4338CA' : '#94A3B8' }}>
+                      <input type="radio" name="tranche_defaut" checked={!!t.par_defaut} onChange={() => definirParDefaut(t.id)} style={{ accentColor: '#4338CA' }} />
+                      {t.par_defaut ? 'Par défaut' : ''}
+                    </label>
+                  </td>
                   <td style={{ padding: '11px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#4338CA' }}>
                     {isEditing ? <input style={{ ...inp, padding: '5px 8px', fontSize: 12 }} value={v.code} onChange={e => setField(t.id, 'code', e.target.value)} /> : t.code}
                   </td>
