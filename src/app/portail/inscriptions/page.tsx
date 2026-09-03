@@ -85,7 +85,7 @@ function DossierTab({ router }: { router: any }) {
 
       const [{ data: fam }, { data: enf }, { data: cfg }, { data: red }, { data: cont }] = await Promise.all([
         s.from('familles').select('*').eq('id', profile.famille_id).single(),
-        s.from('enfants').select('*').eq('famille_id', profile.famille_id).order('prenom'),
+        s.from('enfants').select('*, classe_ref:classes!enfants_classe_id_fkey(nom)').eq('famille_id', profile.famille_id).order('prenom'), // oooo5 : nom de la classe reelle
         s.from('inscriptions_config').select('*').eq('ecole_id', profile.ecole_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
         s.from('demandes_reduction').select('*').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
         s.from('contrats_scolarisation').select('*, contrat_enfants(enfant_id)').eq('famille_id', profile.famille_id).eq('annee_scolaire', anneeInscription).maybeSingle(),
@@ -267,7 +267,7 @@ function DossierTab({ router }: { router: any }) {
                   <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>{enfant.prenom?.[0]?.toUpperCase()}</div>
                   <div style={{ flex: '1 1 140px', minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{enfant.prenom} {enfant.nom}</div>
-                    {enfant.classe && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{enfant.classe}</div>}
+                    {(enfant.classe_ref?.nom ?? enfant.classe) && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{enfant.classe_ref?.nom ?? enfant.classe}</div>}
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 600, color: badgeColor, background: badgeBg, borderRadius: 20, padding: '4px 10px', whiteSpace: 'nowrap' }}>{badgeLabel}</span>
                 </div>

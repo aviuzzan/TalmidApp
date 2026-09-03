@@ -43,8 +43,11 @@ export default function PortailEnfantsPage() {
         }
       }
 
+      // oooo5 (03/09/2026) : la classe affichee est celle de la classe reelle
+      // (classe_id -> classes.nom), plus le champ texte legacy enfants.classe
+      // qui restait fige sur l'annee precedente apres la bascule de rentree.
       const { data } = await supabase
-        .from('enfants').select('*')
+        .from('enfants').select('*, classe_ref:classes!enfants_classe_id_fkey(nom)')
         .eq('famille_id', profile.famille_id)
         .order('nom')
 
@@ -155,7 +158,7 @@ export default function PortailEnfantsPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' }}>
                 {[
-                  [t('portail.enfants.field.class'), e.classe ?? '—'],
+                  [t('portail.enfants.field.class'), e.classe_ref?.nom ?? e.classe ?? '—'],
                   [t('portail.enfants.field.regime'), REGIME[e.regime] ?? e.regime ?? '—'],
                   [t('portail.enfants.field.year'), e.annee_scolaire ?? '—'],
                   [t('portail.enfants.field.entry'), e.date_entree ? fmtDate(e.date_entree, lang) : '—'],
