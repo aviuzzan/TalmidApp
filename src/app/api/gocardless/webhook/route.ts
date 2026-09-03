@@ -176,6 +176,16 @@ export async function POST(req: NextRequest) {
             echecs.push(`paiement ${paymentId} submitted : ${upSubErr.message}`)
           }
         } else if (action === 'confirmed' || action === 'paid_out') {
+          // qqqq5 (03/09/2026) : evenement PERIME — GoCardless rejoue les webhooks non
+          // acquittes (parfois des jours plus tard). Cas GOLDBERG : l'impaye du 01/09 avait
+          // ete constate (regl. IMPAYE, echeance rejetee, relance programmee), puis un
+          // "confirmed" rejoue a 13h22 a remis l'echeance en encaissee et le prelevement
+          // en reussi -> plus de relance, 180 EUR perdus en silence. Un paiement deja
+          // marque failed ne peut plus etre confirme : on ignore.
+          if (pe.statut === 'failed') {
+            console.warn('[gocardless webhook] confirmed/paid_out ignore : paiement deja en echec', paymentId)
+            continue
+          }
           // Idempotent : si un reglement est deja lie (confirmed puis paid_out), ne rien recreer
           let reglementId = pe.reglement_id
           if (pe.facture_id && !reglementId) {
