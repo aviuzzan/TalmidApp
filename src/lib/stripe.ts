@@ -111,7 +111,13 @@ export async function createSetupCheckoutSession(p: {
   cancelUrl: string
   metadata?: Record<string, string>
 }): Promise<{ id: string; url: string }> {
-  const body = encodeForm({
+  // rrrr5 (09/09/2026, regle d'Avi) : l'authentification bancaire (3D Secure) est
+  // demandee UNE fois, a l'enregistrement de la carte (0 EUR). Les prelevements
+  // automatiques suivants sont alors des paiements "initiés par le marchand"
+  // couverts par cette authentification, et ne redeclenchent plus de 3DS que la
+  // famille ne peut pas valider la nuit (cas BENTOLILA : 2 echecs
+  // "authentication_required" sur 767 EUR). Repli sans l'option si Stripe la refuse.
+  const base = {
     mode: 'setup',
     payment_method_types: ['card'],
     customer: p.customerId,
@@ -119,9 +125,18 @@ export async function createSetupCheckoutSession(p: {
     cancel_url: p.cancelUrl,
     setup_intent_data: { metadata: p.metadata || {} },
     metadata: p.metadata || {},
-  })
-  const session = await stripeFetch(p.secretKey, '/checkout/sessions', { method: 'POST', body })
-  return { id: session.id, url: session.url }
+  }
+  try {
+    const session = await stripeFetch(p.secretKey, '/checkout/sessions', {
+      method: 'POST',
+      body: encodeForm({ ...base, payment_method_options: { card: { request_three_d_secure: 'any' } } }),
+    })
+    return { id: session.id, url: session.url }
+  } catch (e: any) {
+    console.error('[stripe] setup session avec 3DS force refusee, repli sans option :', e?.message)
+    const session = await stripeFetch(p.secretKey, '/checkout/sessions', { method: 'POST', body: encodeForm(base) })
+    return { id: session.id, url: session.url }
+  }
 }
 
 export async function retrieveSetupIntent(secretKey: string, setupIntentId: string): Promise<any> {

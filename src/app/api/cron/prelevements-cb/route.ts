@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
     for (const t of aTraiter) {
       const montantCentimes = Math.round(t.montant * 100)
       if (montantCentimes < 50) { resume.ignores++; continue }
+      if (mandat.statut === 'suspendu') { resume.ignores++; continue } // rrrr5 : suspendu dans ce run
 
       // Journal AVANT l'appel Stripe (UNIQUE echeance+tentative = anti-course)
       const { data: prel, error: prelErr } = await sb.from('prelevements_cb').insert({
@@ -188,21 +189,32 @@ export async function GET(req: NextRequest) {
         resume.preleves++
       } else {
         resume.echecs++
-        const derniere = t.tentative >= 3
+        // rrrr5 : la banque exige une validation 3D Secure que personne ne peut faire
+        // la nuit -> retenter en aveugle echouerait a l'identique (cas BENTOLILA).
+        // On suspend la carte tout de suite et on demande a la famille de la
+        // reenregistrer (validation bancaire a 0 EUR, cf. lib/stripe) ; le
+        // webhook remet alors la tentative a aujourd'hui et le cron reprend.
+        const authRequise = paiement.code === 'authentication_required'
+          || /on-session|authenticat/i.test(paiement.error || '')
+        const derniere = authRequise || t.tentative >= 3
         const prochaine = derniere ? null : t.tentative === 1
           ? new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)   // J+3
           : new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10)   // J+7 depuis l'origine
+        const erreurLisible = authRequise
+          ? 'Validation bancaire (3D Secure) exigée par la banque : carte à réenregistrer par la famille'
+          : paiement.error
         await sb.from('prelevements_cb').update({
-          statut: 'echec', erreur: paiement.error, stripe_payment_intent_id: paiement.paymentIntentId || null,
+          statut: 'echec', erreur: erreurLisible, stripe_payment_intent_id: paiement.paymentIntentId || null,
           prochaine_tentative: prochaine, updated_at: new Date().toISOString(),
         }).eq('id', prel.id)
         await sb.from('mandats_cb').update({
           echecs_consecutifs: (mandat.echecs_consecutifs || 0) + 1,
-          derniere_erreur: paiement.error,
+          derniere_erreur: erreurLisible,
           ...(derniere ? { statut: 'suspendu' } : {}),
           updated_at: new Date().toISOString(),
         }).eq('id', mandat.id)
         if (derniere) resume.suspendus++
+        if (derniere) mandat.statut = 'suspendu' // les echeances suivantes de ce mandat ne sont plus tentees dans ce run
 
         // Email parent à CHAQUE échec, avec lien de paiement manuel
         const { data: famMail } = await sb.from('familles')
@@ -213,10 +225,18 @@ export async function GET(req: NextRequest) {
           await sendEmail({
             to: destinataires,
             fromName: ecoleNomMail,
-            subject: derniere
+            subject: authRequise
+              ? `${ecoleNomMail} — votre banque demande une validation de votre carte`
+              : derniere
               ? `${ecoleNomMail} — prélèvement impossible, action requise`
               : `${ecoleNomMail} — échec du prélèvement de ${t.montant.toFixed(2)} €`,
-            html: `<p>Bonjour,</p>
+            html: authRequise
+              ? `<p>Bonjour,</p>
+<p>Le prélèvement automatique de <strong>${t.montant.toFixed(2)} €</strong> n'a pas pu être effectué : <strong>votre banque exige une validation 3D Secure</strong> (code SMS ou application bancaire), ce qui ne peut pas se faire automatiquement.</p>
+<p>Il suffit de <strong>réenregistrer votre carte une fois</strong> depuis votre espace parents : votre banque vous demandera une validation à 0 €, puis les prélèvements suivants passeront automatiquement, y compris celui-ci.</p>
+<p><a href="${baseUrl}/portail/factures">Réenregistrer ma carte</a></p>
+<p>${ecoleNomMail}</p>`
+              : `<p>Bonjour,</p>
 <p>Le prélèvement automatique de <strong>${t.montant.toFixed(2)} €</strong> prévu sur votre carte a échoué${paiement.error ? ` (${paiement.error})` : ''}.</p>
 ${derniere
   ? `<p><strong>Après trois tentatives, le prélèvement automatique est suspendu.</strong> Merci de mettre à jour votre carte ou de régler directement depuis votre espace, puis de réactiver le prélèvement automatique.</p>`
@@ -236,7 +256,10 @@ ${derniere
               to: adminMails,
               fromName: 'TalmidApp',
               subject: `Prélèvement CB suspendu — famille ${famMail?.nom || mandat.famille_id}`,
-              html: `<p>Le prélèvement automatique de la famille <strong>${famMail?.nom || ''}</strong> a échoué 3 fois (${paiement.error || 'raison inconnue'}).</p>
+              html: authRequise
+                ? `<p>Le prélèvement automatique de la famille <strong>${famMail?.nom || ''}</strong> est bloqué : sa banque exige une validation 3D Secure que le prélèvement automatique ne peut pas faire.</p>
+<p>La famille a reçu un email lui demandant de réenregistrer sa carte (validation bancaire à 0 €) ; le prélèvement de <strong>${t.montant.toFixed(2)} €</strong> repartira automatiquement ensuite. Si elle ne le fait pas, proposez-lui le mandat SEPA.</p>`
+                : `<p>Le prélèvement automatique de la famille <strong>${famMail?.nom || ''}</strong> a échoué 3 fois (${paiement.error || 'raison inconnue'}).</p>
 <p>Le mandat est suspendu : la famille doit mettre à jour sa carte. Montant en attente : <strong>${t.montant.toFixed(2)} €</strong>.</p>`,
             }).catch(() => null)
           }

@@ -94,6 +94,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ received: false, error: 'upsert mandat failed' }, { status: 500 })
           }
 
+          // rrrr5 : carte reenregistree (validation bancaire faite) -> les prelevements
+          // laisses en echec sans relance (authentification requise, ou suspension apres
+          // 3 echecs) sont reprogrammes pour le prochain passage du cron.
+          const { error: relErr } = await supabaseAdmin.from('prelevements_cb')
+            .update({ prochaine_tentative: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() })
+            .eq('famille_id', familleId)
+            .eq('statut', 'echec')
+            .is('prochaine_tentative', null)
+            .lt('tentative', 3)
+          if (relErr) console.error('[stripe webhook] reprogrammation prelevements_cb:', relErr.message)
+
           // Bascule les échéances FUTURES non réglées de la famille en mode CB —
           // SAUF les chèques (des chèques physiques peuvent déjà être entre les
           // mains de l'école : les prélever en plus = double encaissement).
