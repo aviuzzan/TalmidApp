@@ -33,7 +33,7 @@ export default function BulletinsPage() {
     const s = createClient()
     const [{ data: cls }, { data: enf }] = await Promise.all([
       s.from('classes').select('id, nom, ordre').eq('ecole_id', ecole.id).order('ordre'),
-      s.from('enfants').select('id, prenom, nom, classe_id').eq('ecole_id', ecole.id).eq('annee_scolaire', annee).order('nom'),
+      s.from('enfants').select('id, prenom, nom, classe_id').eq('ecole_id', ecole.id).eq('annee_scolaire', annee).neq('statut_inscription', 'sorti').order('nom'), // uuuu5
     ])
     setClasses((cls ?? []) as Classe[])
     setEnfants((enf ?? []) as Enfant[])

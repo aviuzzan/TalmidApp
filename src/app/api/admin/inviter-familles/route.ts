@@ -75,7 +75,8 @@ export async function POST(req: NextRequest) {
     const [{ data: familles }, { data: parentProfiles }] = await Promise.all([
       supabaseAdmin.from('familles')
         .select('id, nom, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email, situation_maritale')
-        .eq('ecole_id', ecoleId),
+        .eq('ecole_id', ecoleId)
+        .is('archivee_le', null), // uuuu5
       supabaseAdmin.from('profiles')
         .select('famille_id, parent_slot').eq('ecole_id', ecoleId).eq('role', 'parent'),
     ])

@@ -23,6 +23,7 @@ const MODULES_PAR_CATEGORIE: Record<string, ModuleInfo[]> = {
     { code: 'administratif', nom: 'Tableau de bord direction', description: 'Vue d\'ensemble : effectifs, finances, indicateurs', icone: '📊', href: 'direction' },
     { code: 'administratif', nom: 'Familles', description: 'Liste, fiche détaillée, contacts', icone: '👨‍👩‍👧', href: 'familles' },
     { code: 'administratif', nom: 'Élèves', description: 'Liste, fiches, classes', icone: '🎓', href: 'enfants' },
+    { code: 'administratif', nom: 'Historique / Archives', description: 'Familles archivées et élèves sortis, avec dates et motifs', icone: '🗄️', href: 'archives' },
     { code: 'administratif', nom: 'Passages de classe', description: 'Réaffecter les élèves vers leur classe suivante', icone: '🎒', href: 'passages-de-classe' },
     { code: 'administratif', nom: 'Comptes parents', description: 'Création et gestion des accès parents', icone: '👥', href: 'comptes-parents' },
     { code: 'inscriptions', nom: 'Demandes de nouvelles inscriptions', description: 'Nouvelles familles : demandes reçues par lien et leur traitement', icone: '📨', href: 'demandes-inscription' },

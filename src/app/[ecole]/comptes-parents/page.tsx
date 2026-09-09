@@ -77,6 +77,7 @@ export default function ComptesParentsPage() {
       .from('familles')
       .select('id, nom, numero, parent1_prenom, parent1_nom, parent1_email, parent2_prenom, parent2_nom, parent2_email')
       .eq('ecole_id', ecole.id)
+      .is('archivee_le', null) // uuuu5
       .order('nom')
 
     // Récupérer les profiles parents liés (via la vue qui joint auth.users.email)

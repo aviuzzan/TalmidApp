@@ -217,11 +217,11 @@ async function contexteAdmin(
     { data: classes },
     { data: ecoleData },
   ] = await Promise.all([
-    supabase.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecoleId),
+    supabase.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecoleId).is('archivee_le', null), // uuuu5
     // FIX secu cccc4 (G7) : le filtre ecole manquait. Le client est service_role
     // (RLS contournee par conception), donc rien ne rattrapait l'oubli : Levy
     // repondait a l'admin de l'ecole A avec les effectifs des 2 ecoles cumules.
-    supabase.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecoleId),
+    supabase.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecoleId).neq('statut_inscription', 'sorti'), // uuuu5
     supabase.from('classes').select('id, nom, niveau, capacite').eq('ecole_id', ecoleId).order('ordre'),
     supabase.from('ecoles').select('nom, adresse, telephone, email, siren, code_uai').eq('id', ecoleId).single(),
   ])
@@ -280,6 +280,7 @@ async function contexteAdmin(
     .from('familles')
     .select('nom, numero, parent1_prenom, parent1_nom, parent1_email')
     .eq('ecole_id', ecoleId)
+    .is('archivee_le', null)
     .order('created_at', { ascending: false })
     .limit(30)
 

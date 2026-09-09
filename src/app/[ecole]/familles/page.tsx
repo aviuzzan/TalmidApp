@@ -40,6 +40,8 @@ export default function FamillesPage() {
   const [secteurScope, setSecteurScope] = useState<{ id: string; nom: string | null } | null>(null)
   const [sortBy, setSortBy] = useState<'numero' | 'nom' | 'tranche' | 'parent1'>('nom')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  // uuuu5 : les familles archivées (parties) sont masquées par défaut
+  const [showArchivees, setShowArchivees] = useState(false)
   function toggleSort(col: 'numero' | 'nom' | 'tranche' | 'parent1') {
     if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortBy(col); setSortDir('asc') }
@@ -100,7 +102,9 @@ export default function FamillesPage() {
 
   useEffect(() => { load() }, [load])
 
+  const nbArchivees = familles.filter(f => f.archivee_le).length
   const filtered = familles
+    .filter(f => showArchivees || !f.archivee_le)
     .filter(f =>
       f.nom?.toLowerCase().includes(search.toLowerCase()) ||
       f.numero?.includes(search) ||
@@ -206,7 +210,15 @@ export default function FamillesPage() {
               </span>
             )}
           </div>
-          <p style={{ color: '#64748B', fontSize: 13 }}>{familles.length} famille{familles.length > 1 ? 's' : ''}</p>
+          <p style={{ color: '#64748B', fontSize: 13 }}>
+            {familles.length - nbArchivees} famille{familles.length - nbArchivees > 1 ? 's' : ''}
+            {nbArchivees > 0 && (
+              <label style={{ marginLeft: 12, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+                <input type="checkbox" checked={showArchivees} onChange={e => setShowArchivees(e.target.checked)} style={{ marginRight: 5 }} />
+                Afficher les {nbArchivees} archivée{nbArchivees > 1 ? 's' : ''}
+              </label>
+            )}
+          </p>
         </div>
         <button className="btn-primary" onClick={() => { setForm(empty); setEditId(null); setShowForm(true); setError('') }}>
           {t('pages.familles.new', '+ Nouvelle famille')}
@@ -268,6 +280,12 @@ export default function FamillesPage() {
                   {/* CRÉANCE DOUTEUSE (xxxx2) : pastille discrète — le détail
                       (depuis quand, motif) est sur la fiche famille. Ici il
                       s'agit seulement de repérer le dossier dans la liste. */}
+                  {f.archivee_le && (
+                    <span title={`Archivée le ${new Date(f.archivee_le).toLocaleDateString('fr-FR')}${f.archive_motif ? ' — ' + f.archive_motif : ''}`}
+                      style={{ marginLeft: 8, background: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', borderRadius: 6, padding: '1px 7px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      🗄️ Archivée
+                    </span>
+                  )}
                   {f.douteux && (
                     <span
                       title={`Créance douteuse${f.douteux_depuis ? ' depuis le ' + new Date(f.douteux_depuis).toLocaleDateString('fr-FR') : ''}${f.douteux_motif ? ' — Motif : ' + f.douteux_motif : ''}`}

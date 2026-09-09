@@ -92,6 +92,7 @@ export default function ExportsPage() {
       let query = s.from('familles')
         .select('id, numero, nom, situation_maritale, statut_dossier, mode_paiement, part_pere, part_mere, garde, autorite_parentale, tranche_id, tranches_facturation(code, libelle), parent1_adresse, parent1_code_postal, parent1_ville, parent1_prenom, parent1_nom, parent1_email, parent1_telephone, parent1_emploi, parent2_prenom, parent2_nom, parent2_email, parent2_telephone, parent2_emploi, parent2_adresse, parent2_code_postal, parent2_ville')
         .eq('ecole_id', ecole.id)
+        .is('archivee_le', null) // uuuu5 : familles archivees hors export
       if (filtreTrancheFamilles) query = query.eq('tranche_id', filtreTrancheFamilles)
       return query.order('nom').order('id').range(debut, fin)
     })

@@ -79,7 +79,7 @@ export default function DashboardPage() {
         // les trois ecrans affichaient donc trois chiffres differents. On utilise
         // desormais la meme source de verite unique : lib/effectifs.ts.
         exerciceId ? compterEffectifs(s, ecole.id, exerciceId) : Promise.resolve({ eleves: 0, familles: 0 }),
-        s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet'),
+        s.from('familles').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_dossier', 'incomplet').is('archivee_le', null), // uuuu5
         s.from('enfants').select('*', { count: 'exact', head: true }).eq('ecole_id', ecole.id).eq('statut_inscription', 'en_attente'),
         // Factures avec solde (non annulées) : sert au solde annuel + calcul du "dû à date"
         // FIX audit 29/07/2026 (#7) : filtre d'EXERCICE ajoute (`annee_scolaire` = code de

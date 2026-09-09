@@ -46,7 +46,7 @@ export default function NotificationsPage() {
   const load = useCallback(async () => {
     const [{ data: tpl }, { data: fam }, { data: lg }] = await Promise.all([
       supabase.from('email_templates').select('*').eq('actif', true).order('date_creation'),
-      supabase.from('familles').select('id, nom, numero, parent1_email').order('nom'),
+      supabase.from('familles').select('id, nom, numero, parent1_email').is('archivee_le', null).order('nom'), // uuuu5 : archivees exclues des envois
       supabase.from('email_logs').select('*, familles(nom), email_templates(nom)').order('date_envoi', { ascending: false }).limit(50),
     ])
     setTemplates(tpl ?? [])

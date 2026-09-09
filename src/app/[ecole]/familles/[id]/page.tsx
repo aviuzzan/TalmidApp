@@ -53,6 +53,11 @@ export default function FamilleDetailPage() {
   const [showDouteuxModal, setShowDouteuxModal] = useState(false)
   const [douteuxMotif, setDouteuxMotif] = useState('')
   const [savingDouteux, setSavingDouteux] = useState(false)
+  // uuuu5 : archivage de la famille (depart / jamais venu)
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [archiveMotif, setArchiveMotif] = useState('')
+  const [archiveDate, setArchiveDate] = useState(new Date().toISOString().slice(0, 10))
+  const [savingArchive, setSavingArchive] = useState(false)
   const [tarifs, setTarifs] = useState<any[]>([])
   const [modesPaiement, setModesPaiement] = useState<any[]>([])
   const [exercicesDispo, setExercicesDispo] = useState<{ id: string; code: string; libelle?: string }[]>([])
@@ -536,6 +541,38 @@ export default function FamilleDetailPage() {
     load()
   }
 
+  /**
+   * uuuu5 — ARCHIVAGE (demande d'Avi, cas GOLDBERG) : une famille partie ne doit
+   * plus apparaître dans les listes, seulement dans l'Historique. Tout passe par
+   * la route /api/admin/archiver-famille : annulation des mandats GoCardless,
+   * puis RPC archiver_famille (garde-fous solde/échéances, sortie des enfants,
+   * mandats révoqués, familles.archivee_le). Réactivation par la même route.
+   */
+  async function archiverOuReactiver(action: 'archiver' | 'reactiver') {
+    if (!famille) return
+    if (action === 'archiver' && archiveMotif.trim().length < 3) { toast.error('Le motif est obligatoire (3 caractères minimum).'); return }
+    setSavingArchive(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { toast.error('Session expirée'); setSavingArchive(false); return }
+    const res = await fetch('/api/admin/archiver-famille', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ familleId: id, action, motif: archiveMotif.trim(), dateSortie: archiveDate || null }),
+    })
+    const j = await res.json().catch(() => ({}))
+    setSavingArchive(false)
+    if (!res.ok) { toast.error(j.error || 'Archivage refusé'); return }
+    if (action === 'archiver') {
+      toast.success('Famille archivée' + (j.enfants_sortis ? ` — ${j.enfants_sortis} élève(s) marqué(s) sorti(s)` : ''))
+      if (Array.isArray(j.avertissements) && j.avertissements.length > 0) toast.info(j.avertissements.join(' '))
+    } else {
+      toast.success('Famille réactivée — les élèves sont en attente d\'affectation de classe')
+    }
+    setShowArchiveModal(false)
+    setArchiveMotif('')
+    load()
+  }
+
   // SECTEUR (llll2) : fiche hors du secteur de l'agent → pas de crash, message clair
   if (horsSecteur) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
@@ -634,13 +671,34 @@ export default function FamilleDetailPage() {
           ...(accesFinancesProfile ? [
             { label: famille.douteux ? '↩️ Retirer le statut douteux' : '⚠️ Passer en créance douteuse', href: '#douteux' },
           ] : []),
+          ...(canAdministratif ? [
+            { label: famille.archivee_le ? '♻️ Réactiver la famille' : '🗄️ Archiver la famille (départ)', href: '#archiver' },
+          ] : []),
           { label: '🛡️ RGPD — Export / Anonymisation', href: `/${ecole.slug}/familles/${id}/rgpd` },
         ]} onNav={(h) => {
           if (h === '#tranche-manuelle') { setShowTrancheModal(true) }
+          else if (h === '#archiver') { setArchiveMotif(''); setArchiveDate(new Date().toISOString().slice(0, 10)); setShowArchiveModal(true) }
           else if (h === '#douteux') { setDouteuxMotif(''); setShowDouteuxModal(true) }
           else { router.push(h) }
         }} />
       </div>
+
+      {/* uuuu5 : bandeau famille archivée */}
+      {famille.archivee_le && (
+        <div style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 12, padding: '14px 18px', display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>🗄️ Famille archivée</div>
+          <div style={{ fontSize: 12, color: '#475569' }}>
+            Le {new Date(famille.archivee_le).toLocaleDateString('fr-FR')}{famille.archive_motif ? <> · Motif : <strong>{famille.archive_motif}</strong></> : null}
+            {' '}· N&apos;apparaît plus dans les listes ni les envois. Historique conservé (scolarités, factures, règlements).
+          </div>
+          {canAdministratif && (
+            <button onClick={() => archiverOuReactiver('reactiver')} disabled={savingArchive}
+              style={{ marginLeft: 'auto', background: '#0F766E', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              {savingArchive ? '…' : '♻️ Réactiver'}
+            </button>
+          )}
+        </div>
+      )}
 
       {estSeparee && (
         <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '14px 18px', display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
@@ -1136,6 +1194,57 @@ export default function FamilleDetailPage() {
       )}
 
       {/* Modal : bascule en créance douteuse (xxxx2) */}
+      {/* uuuu5 : modale d'archivage */}
+      {showArchiveModal && famille && (
+        <div onClick={() => !savingArchive && setShowArchiveModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, maxWidth: 540, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{ fontSize: 26 }}>{famille.archivee_le ? '♻️' : '🗄️'}</div>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 800, color: '#1E293B', margin: 0 }}>{famille.archivee_le ? 'Réactiver la famille' : 'Archiver la famille'}</h3>
+                <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0' }}>Famille <strong>{famille.nom}</strong> {famille.numero ? `(${famille.numero})` : ''}</p>
+              </div>
+            </div>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#475569', lineHeight: 1.55, marginTop: 6 }}>
+              {famille.archivee_le ? (
+                <>La famille réapparaît dans les listes ; ses enfants repassent en <strong>attente d&apos;affectation</strong> de classe.</>
+              ) : (
+                <>
+                  Tous les enfants sont marqués <strong>sortis</strong> à la date indiquée, les mandats SEPA / carte sont révoqués,
+                  et la famille disparaît des listes, effectifs, envois et relances. Tout l&apos;historique reste consultable
+                  dans <strong>Historique / Archives</strong>. Réversible.
+                  <div style={{ marginTop: 8, color: '#991B1B' }}>
+                    Refusé s&apos;il reste un solde dû ou des échéances actives : annulez d&apos;abord la facture (ou faites un avoir) et les échéances.
+                  </div>
+                </>
+              )}
+            </div>
+            {!famille.archivee_le && (
+              <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 160px', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Motif <span style={{ color: '#DC2626' }}>*</span></label>
+                  <input value={archiveMotif} onChange={e => setArchiveMotif(e.target.value)} autoFocus placeholder="Ex : jamais venu, déménagement, changement d'établissement"
+                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Date de sortie</label>
+                  <input type="date" value={archiveDate} onChange={e => setArchiveDate(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={() => setShowArchiveModal(false)} disabled={savingArchive}
+                style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, cursor: savingArchive ? 'not-allowed' : 'pointer' }}>Annuler</button>
+              <button onClick={() => archiverOuReactiver(famille.archivee_le ? 'reactiver' : 'archiver')} disabled={savingArchive || (!famille.archivee_le && archiveMotif.trim().length < 3)}
+                style={{ background: famille.archivee_le ? '#0F766E' : '#334155', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (savingArchive || (!famille.archivee_le && archiveMotif.trim().length < 3)) ? 0.5 : 1 }}>
+                {savingArchive ? '…' : famille.archivee_le ? '✓ Réactiver' : '✓ Archiver la famille'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDouteuxModal && famille && (
         <div onClick={() => !savingDouteux && setShowDouteuxModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, maxWidth: 540, width: '100%' }}>

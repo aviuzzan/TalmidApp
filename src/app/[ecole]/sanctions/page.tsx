@@ -50,7 +50,7 @@ export default function SanctionsPage() {
     const s = createClient()
     const [{ data: sans }, { data: enfs }] = await Promise.all([
       s.from('sanctions').select('*, enfants(prenom, nom, famille_id, classes(nom))').eq('ecole_id', ecole.id).order('date_fait', { ascending: false }),
-      s.from('enfants').select('id, prenom, nom').eq('ecole_id', ecole.id).order('nom'),
+      s.from('enfants').select('id, prenom, nom').eq('ecole_id', ecole.id).neq('statut_inscription', 'sorti').order('nom'), // uuuu5
     ])
     setSanctions((sans as any) || [])
     setEleves(enfs || [])

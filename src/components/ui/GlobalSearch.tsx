@@ -69,11 +69,13 @@ export default function GlobalSearch() {
       supabase.from('familles')
         .select('id, nom, numero, parent1_email, parent1_nom, parent1_prenom')
         .eq('ecole_id', ecole.id)
+        .is('archivee_le', null) // uuuu5 : familles archivees -> Historique / Archives
         .or(`nom.ilike.${term},numero.ilike.${term},parent1_nom.ilike.${term},parent1_email.ilike.${term}`)
         .limit(8),
       supabase.from('enfants')
         .select('id, prenom, nom, classes(nom), familles(nom)')
         .eq('ecole_id', ecole.id)
+        .neq('statut_inscription', 'sorti') // uuuu5
         .or(`prenom.ilike.${term},nom.ilike.${term}`)
         .limit(8),
       chercheFactures
