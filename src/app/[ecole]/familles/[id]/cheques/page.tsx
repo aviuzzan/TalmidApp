@@ -122,7 +122,7 @@ export default function ChequesFamillePage() {
   function openEdit(c: Cheque) {
     if (verrou(c)) { appAlert('Échéance verrouillée : ' + verrou(c) + '.\n\nSon montant, sa date et son mode ne sont plus modifiables.'); return }
     setForm({
-      numero_cheque: c.numero_cheque || '',
+      numero_cheque: c.numero_cheque === null || c.numero_cheque === undefined ? '' : String(c.numero_cheque), // tttt5 : entier en base, .trim() plantait
       montant: String(c.montant || ''),
       date_echeance: c.date_echeance || '',
       statut: c.statut || 'prevu',
@@ -138,12 +138,17 @@ export default function ChequesFamillePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.numero_cheque.trim() || !form.montant) return await appAlert('Nchq et montant obligatoires')
+    // tttt5 (09/09/2026, cas GOLDBERG) : numero_cheque est un ENTIER en base ; les
+    // echeances generees arrivaient sous forme de nombre et .trim() plantait en
+    // silence -> "Edit" ne sauvegardait jamais. On normalise et on valide.
+    const numeroTxt = String(form.numero_cheque ?? '').trim()
+    if (!numeroTxt || !form.montant) return await appAlert('N° / réf et montant obligatoires')
+    if (!/^\d{1,9}$/.test(numeroTxt)) return await appAlert('Le n° / réf doit être un nombre (9 chiffres max) : le n° de chèque sans espaces, ou le rang de l\'échéance.')
     const s = createClient()
     const payload: any = {
       famille_id: familleId,
       ecole_id: ecole.id,
-      numero_cheque: form.numero_cheque.trim(),
+      numero_cheque: parseInt(numeroTxt, 10),
       montant: parseFloat(form.montant),
       date_echeance: form.date_echeance || null,
       statut: form.statut,
@@ -396,6 +401,8 @@ export default function ChequesFamillePage() {
   const montantRetard = enRetard.reduce((s, c) => s + Number(c.montant), 0)
   const nbARecevoir = cheques.filter(c => c.statut === 'attente_reception').length
   const nbPrevu = cheques.filter(c => c.statut === 'prevu' && !verrou(c)).length
+  // tttt5 : annulation en masse (depart d'un eleve, facture annulee...) — actives non verrouillees
+  const nbAnnulables = cheques.filter(c => (c.statut === 'prevu' || c.statut === 'attente_reception' || c.statut === 'rejete') && !verrou(c)).length
 
   const inp: React.CSSProperties = { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }
@@ -487,6 +494,12 @@ export default function ChequesFamillePage() {
           disabled={busy || nbPrevu === 0}
           style={{ background: nbPrevu === 0 ? '#F8FAFC' : '#ECFDF5', color: nbPrevu === 0 ? '#CBD5E1' : '#065F46', border: '1px solid #A7F3D0', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: nbPrevu === 0 ? 'not-allowed' : 'pointer' }}>
           Tout encaisser {nbPrevu > 0 ? '(' + nbPrevu + ')' : ''}
+        </button>
+        <button onClick={() => bulkUpdate(['prevu', 'attente_reception', 'rejete'], 'annule', 'Annuler toutes les echeances restantes (a recevoir, prevues, rejetees) — aucune suppression, elles passent au statut Annule')}
+          disabled={busy || nbAnnulables === 0}
+          title="Départ d'un élève, facture annulée : toutes les échéances restantes passent en Annulé (les verrouillées sont conservées)"
+          style={{ background: nbAnnulables === 0 ? '#F8FAFC' : '#FEF2F2', color: nbAnnulables === 0 ? '#CBD5E1' : '#991B1B', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: nbAnnulables === 0 ? 'not-allowed' : 'pointer' }}>
+          Tout annuler {nbAnnulables > 0 ? '(' + nbAnnulables + ')' : ''}
         </button>
       </div>
 
@@ -677,6 +690,10 @@ export default function ChequesFamillePage() {
                       {(c.statut === 'prevu' || c.statut === 'attente_reception') && !v && (
                         <button onClick={() => remplacerParReglement(c)} title="Regler en CB / virement / especes (annule cette echeance)"
                           style={{ background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Regler autrement</button>
+                      )}
+                      {(c.statut === 'prevu' || c.statut === 'attente_reception' || c.statut === 'rejete') && !v && (
+                        <button onClick={() => quickUpdateStatut(c.id, 'annule')} title="Annuler cette echeance (conservee, statut Annule)"
+                          style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Annuler</button>
                       )}
                       {c.statut === 'prevu' && !v && (
                         <button onClick={() => quickUpdateStatut(c.id, 'restitue')} title="Restituer (caution)"
