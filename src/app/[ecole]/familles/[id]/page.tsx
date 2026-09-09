@@ -799,17 +799,21 @@ export default function FamilleDetailPage() {
           ) : (
             <>
               {(() => {
-                const totalAvoirs = imputations.reduce((s: number, i: any) => s + Number(i.montant), 0)
-                const totalFact = Number(facture.total_facture)
+                // ssss5 (09/09/2026, cas GOLDBERG) : une facture ANNULEE ne constitue plus une
+                // creance -> total facture 0 et solde 0 dans l'en-tete (la vue factures_solde
+                // renvoie deja solde_restant = 0 pour une facture annulee).
+                const annulee = facture.statut === 'annule'
+                const totalAvoirs = annulee ? 0 : imputations.reduce((s: number, i: any) => s + Number(i.montant), 0)
+                const totalFact = annulee ? 0 : Number(facture.total_facture)
                 const totalNet = totalFact - totalAvoirs
                 // Depuis la refonte de la vue `factures_solde`, `total_regle` EXCLUT déjà
                 // les règlements de type avoir → on l'utilise tel quel (vrais paiements).
                 const totalRegleReel = Number(facture.total_regle)
-                const solde = Number(facture.solde_restant)
+                const solde = annulee ? 0 : Number(facture.solde_restant)
                 return (
                   <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '14px 20px' }}>
                     {[
-                      { label: 'Total facturé', value: totalFact, color: '#1E293B', bold: true },
+                      { label: annulee ? 'Total facturé (facture annulée)' : 'Total facturé', value: totalFact, color: '#1E293B', bold: true },
                       ...(totalAvoirs > 0 ? [{ label: 'Avoirs / réductions', value: -totalAvoirs, color: '#059669', bold: false }] : []),
                       ...(totalAvoirs > 0 ? [{ label: 'Net à régler', value: totalNet, color: '#1E293B', bold: true, separator: true }] : []),
                       { label: 'Total réglé', value: totalRegleReel, color: '#059669', bold: false },
